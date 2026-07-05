@@ -80,9 +80,9 @@ itself; don't repeat it in prompts.
 
 Early. Implemented: jobs, detached runner, claude + fake adapters, status-block
 contract, workspaces/checkpoints/diff/close, runs + narration, notifier, context
-tracking, `guide`. Planned (see [DESIGN.md](DESIGN.md)): codex adapter, approval
-gates, session fork/interrogation, `gc`, terminal dashboard, read-only web UI,
-concurrency limits.
+tracking, timeouts, `guide` + skill. What's next lives in
+[ROADMAP.md](ROADMAP.md) (including rejected ideas and why); the full design
+rationale in [DESIGN.md](DESIGN.md).
 
 ## License
 
