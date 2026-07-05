@@ -1,4 +1,6 @@
-package main
+// Package e2e is the contract test suite: it builds the real binary and
+// drives it exactly as an orchestrator would, fake agent behind it.
+package e2e
 
 import (
 	"encoding/json"
@@ -18,7 +20,7 @@ func TestMain(m *testing.M) {
 		panic(err)
 	}
 	binPath = filepath.Join(dir, "legwork")
-	if out, err := exec.Command("go", "build", "-o", binPath, ".").CombinedOutput(); err != nil {
+	if out, err := exec.Command("go", "build", "-o", binPath, "github.com/whoislikemiha/legwork").CombinedOutput(); err != nil {
 		panic(string(out))
 	}
 	code := m.Run()

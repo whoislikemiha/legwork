@@ -12,6 +12,7 @@ import (
 
 	"github.com/whoislikemiha/legwork/internal/adapter"
 	"github.com/whoislikemiha/legwork/internal/events"
+	"github.com/whoislikemiha/legwork/internal/fakeagent"
 	"github.com/whoislikemiha/legwork/internal/job"
 	"github.com/whoislikemiha/legwork/internal/runner"
 )
@@ -36,6 +37,18 @@ func rootCmd() *cobra.Command {
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), statusCmd(), eventsCmd(),
 		lsCmd(), watchCmd(), cancelCmd(), runnerCmd(), fakeAgentCmd())
 	return root
+}
+
+// fakeAgentCmd must ship in the real binary: the fake adapter execs
+// os.Executable() so tests exercise the actual spawn path.
+func fakeAgentCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "_fake-agent",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return fakeagent.Replay(os.Stdout)
+		},
+	}
 }
 
 func openStore() (*job.Store, error) { return job.OpenStore() }
