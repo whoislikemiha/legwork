@@ -1,0 +1,37 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: gofmt
+        if: runner.os == 'Linux'
+        run: test -z "$(gofmt -l .)"
+      - run: go vet ./...
+      # The test suite includes the e2e contract tests: they build the real
+      # binary and drive it with the fake agent (detach, needs-input loop,
+      # mid-turn death, workspaces, notifier) — zero API spend.
+      - run: go test ./... -count=1
+      - name: cli smoke
+        run: |
+          go build -o /tmp/legwork .
+          export LEGWORK_STATE_DIR=/tmp/lwstate
+          /tmp/legwork run --agent fake "smoke" | grep -q job-1
+          sleep 2
+          /tmp/legwork status job-1 | grep -q "state:  done"
+          /tmp/legwork guide | grep -q "orchestrator guide"

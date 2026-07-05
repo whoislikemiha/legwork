@@ -1,0 +1,33 @@
+version: 2
+
+project_name: legwork
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  use: github-native
+
+release:
+  footer: |
+    ## Install
+
+    ```console
+    $ curl -fsSL https://raw.githubusercontent.com/whoislikemiha/legwork/main/install.sh | sh
+    ```
