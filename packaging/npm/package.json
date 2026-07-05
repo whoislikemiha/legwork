@@ -1,0 +1,27 @@
+{
+  "name": "legwork",
+  "version": "0.0.2",
+  "description": "Delegate the legwork to headless coding agents. CLI for dispatching and supervising Claude Code & Codex jobs, locally or over ssh. This package reserves the name; the tool is distributed via GitHub releases for now.",
+  "bin": {
+    "legwork": "index.js"
+  },
+  "files": [
+    "index.js",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/whoislikemiha/legwork.git"
+  },
+  "homepage": "https://github.com/whoislikemiha/legwork",
+  "keywords": [
+    "agents",
+    "claude-code",
+    "codex",
+    "orchestration",
+    "cli",
+    "headless"
+  ],
+  "author": "Mihailo Bubnjevic",
+  "license": "MIT"
+}
