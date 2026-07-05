@@ -1,0 +1,171 @@
+// Package runner is the detached job runner: the only code that touches a
+// live agent process. `legwork run` spawns `legwork _runner --job N` in its
+// own session and returns immediately; the runner execs the agent CLI, tees
+// its stream to the transcript, derives index events, writes the result, and
+// exits (DESIGN.md §11).
+package runner
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"syscall"
+
+	"github.com/whoislikemiha/legwork/internal/adapter"
+	"github.com/whoislikemiha/legwork/internal/events"
+	"github.com/whoislikemiha/legwork/internal/job"
+	"github.com/whoislikemiha/legwork/internal/rules"
+)
+
+// Spawn launches the detached runner for a job and records its PID.
+func Spawn(store *job.Store, m *job.Meta, extraEnv []string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	logf, err := os.OpenFile(filepath.Join(store.JobDir(m.ID), "runner.log"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return err
+	}
+	defer logf.Close()
+
+	cmd := exec.Command(self, "_runner", "--job", m.ID)
+	cmd.Stdout = logf
+	cmd.Stderr = logf
+	cmd.Stdin = nil
+	cmd.Env = append(os.Environ(), extraEnv...)
+	// New session: survives the CLI exiting and the ssh connection dropping.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+	m.RunnerPID = cmd.Process.Pid
+	m.State = job.StateActive
+	if err := store.SaveMeta(m); err != nil {
+		return err
+	}
+	return cmd.Process.Release()
+}
+
+// Run executes one turn for the job; this is the _runner entrypoint.
+func Run(store *job.Store, id string) error {
+	m, err := store.LoadMeta(id)
+	if err != nil {
+		return err
+	}
+	dir := store.JobDir(id)
+	log, err := events.Open(filepath.Join(dir, "events.jsonl"))
+	if err != nil {
+		return err
+	}
+
+	fail := func(state job.State, format string, args ...any) error {
+		msg := fmt.Sprintf(format, args...)
+		m.State = state
+		m.Result = msg
+		_ = store.SaveMeta(m)
+		_, _ = log.Append(events.Event{Type: events.TypeFinished, Actor: "runner",
+			Preview: msg, Fields: map[string]any{"state": string(state)}})
+		return fmt.Errorf("%s", msg)
+	}
+
+	ad, err := adapter.New(m.Agent)
+	if err != nil {
+		return fail(job.StateFailed, "adapter: %v", err)
+	}
+
+	workDir := m.Dir
+	if workDir == "" {
+		workDir = filepath.Join(dir, "scratch")
+		if err := os.MkdirAll(workDir, 0o700); err != nil {
+			return fail(job.StateFailed, "scratch dir: %v", err)
+		}
+	}
+
+	req := adapter.TurnRequest{
+		Task:         m.Task,
+		SystemPrompt: rules.Compose(os.Getenv("LEGWORK_APPEND_PROMPT")),
+		SessionID:    m.SessionID,
+		Model:        m.Model,
+		WorkDir:      workDir,
+		ReadOnly:     os.Getenv("LEGWORK_READ_ONLY") == "1",
+	}
+	cmd, err := ad.Command(req)
+	if err != nil {
+		return fail(job.StateFailed, "command: %v", err)
+	}
+
+	transcript, err := os.OpenFile(filepath.Join(dir, "transcript.jsonl"),
+		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	if err != nil {
+		return fail(job.StateFailed, "transcript: %v", err)
+	}
+	defer transcript.Close()
+
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fail(job.StateFailed, "pipe: %v", err)
+	}
+	cmd.Stderr = transcript
+
+	if err := cmd.Start(); err != nil {
+		return fail(job.StateFailed, "starting %s: %v", m.Agent, err)
+	}
+	_, _ = log.Append(events.Event{Type: events.TypeStarted, Actor: "runner",
+		Preview: events.Truncate(m.Task)})
+
+	// Tee: every raw line to the transcript; parsed events to the index.
+	parser := ad.Parser()
+	var result *adapter.TurnResult
+	sc := bufio.NewScanner(stdout)
+	sc.Buffer(make([]byte, 0, 256*1024), 16*1024*1024)
+	for sc.Scan() {
+		raw := sc.Bytes()
+		transcript.Write(raw)
+		transcript.Write([]byte{'\n'})
+		evs, res, perr := parser.Line(raw)
+		if perr != nil {
+			continue
+		}
+		for _, e := range evs {
+			_, _ = log.Append(e)
+		}
+		if res != nil {
+			result = res
+		}
+	}
+
+	waitErr := cmd.Wait()
+	if result == nil {
+		// Mid-turn death: process ended without a result line.
+		return fail(job.StateInterrupted, "agent exited without a result (%v)", waitErr)
+	}
+
+	// Persist outcome.
+	m.SessionID = result.SessionID
+	m.Result = result.Result
+	m.Question = result.Question
+	m.CostUSD += result.CostUSD
+	m.Turns += result.Turns
+	m.TokensIn += result.TokensIn
+	m.TokensOut += result.TokensOut
+	m.State = job.State(result.State)
+	m.RunnerPID = 0
+	if err := store.SaveMeta(m); err != nil {
+		return err
+	}
+
+	_, _ = log.Append(events.Event{Type: events.TypeUsage, Actor: "runner", Fields: map[string]any{
+		"cost_usd": result.CostUSD, "tokens_in": result.TokensIn, "tokens_out": result.TokensOut}})
+	if result.State == "needs-input" {
+		_, _ = log.Append(events.Event{Type: events.TypeNeedsInput, Actor: "main",
+			Preview: events.Truncate(result.Question)})
+	}
+	_, _ = log.Append(events.Event{Type: events.TypeFinished, Actor: "runner",
+		Preview: events.Truncate(result.Result),
+		Fields:  map[string]any{"state": result.State}})
+	return nil
+}
