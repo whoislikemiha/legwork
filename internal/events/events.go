@@ -39,8 +39,9 @@ const (
 	TypeText        = "text"      // assistant text (preview)
 	TypeToolCall    = "tool-call" // fields: tool, target
 	TypeProgress    = "progress"
-	TypeUsage       = "usage" // fields: cost_usd, tokens_in, tokens_out, context
-	TypeNote        = "note"  // orchestrator narration
+	TypeUsage       = "usage"      // fields: cost_usd, tokens_in, tokens_out, context
+	TypeNote        = "note"       // orchestrator narration
+	TypeCheckpoint  = "checkpoint" // fields: ref, oid
 )
 
 const previewMax = 200

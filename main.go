@@ -35,7 +35,8 @@ func rootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), statusCmd(), eventsCmd(),
-		lsCmd(), watchCmd(), cancelCmd(), runnerCmd(), fakeAgentCmd())
+		lsCmd(), watchCmd(), cancelCmd(), wsCmd(), diffCmd(), closeCmd(),
+		runnerCmd(), fakeAgentCmd())
 	return root
 }
 
@@ -76,7 +77,7 @@ func printJSON(v any) error {
 // --- run ---
 
 func runCmd() *cobra.Command {
-	var agent, dir, model, appendPrompt string
+	var agent, dir, model, appendPrompt, wsID string
 	var readOnly, asJSON bool
 	c := &cobra.Command{
 		Use:   "run <task>",
@@ -92,6 +93,28 @@ func runCmd() *cobra.Command {
 				return err
 			}
 			m := &job.Meta{ID: id, Agent: agent, Task: args[0], Model: model, State: job.StateQueued}
+			if dir != "" && wsID != "" {
+				return fmt.Errorf("--dir and --workspace are mutually exclusive")
+			}
+			if wsID != "" {
+				_, wss, err := openWorkspaces()
+				if err != nil {
+					return err
+				}
+				wm, err := wss.Load(wsID)
+				if err != nil {
+					return err
+				}
+				if wm.State == "closed" {
+					return fmt.Errorf("%s is closed", wsID)
+				}
+				if active, err := activeJobIn(s, wsID); err != nil {
+					return err
+				} else if active != "" {
+					return fmt.Errorf("%s already has active job %s (one active job per workspace)", wsID, active)
+				}
+				m.Workspace = wsID
+			}
 			if dir != "" {
 				abs, err := filepath.Abs(dir)
 				if err != nil {
@@ -128,6 +151,7 @@ func runCmd() *cobra.Command {
 	}
 	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter (claude, fake)")
 	c.Flags().StringVar(&dir, "dir", "", "run in-place in this directory (default: scratch dir)")
+	c.Flags().StringVar(&wsID, "workspace", "", "attach the job to a workspace (see: legwork ws new)")
 	c.Flags().StringVar(&model, "model", "", "model override (passed through to the agent)")
 	c.Flags().StringVar(&appendPrompt, "append-prompt", "", "orchestrator additions to the injected worker rules")
 	c.Flags().BoolVar(&readOnly, "read-only", false, "read-only turn (plan/research)")
@@ -152,6 +176,13 @@ func doResume(id, message, eventType string) (*job.Meta, error) {
 	}
 	if m.State == job.StateClosed {
 		return nil, fmt.Errorf("%s is closed", id)
+	}
+	if m.Workspace != "" {
+		if active, err := activeJobIn(s, m.Workspace); err != nil {
+			return nil, err
+		} else if active != "" && active != m.ID {
+			return nil, fmt.Errorf("workspace %s has active job %s", m.Workspace, active)
+		}
 	}
 	log, err := events.Open(filepath.Join(s.JobDir(id), "events.jsonl"))
 	if err != nil {

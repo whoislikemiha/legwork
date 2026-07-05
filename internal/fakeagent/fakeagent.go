@@ -6,8 +6,9 @@
 //
 // Script directives:
 //
-//	#sleep <ms>   pause (readiness/watch/cancel tests)
-//	#die          exit 1 mid-turn (interrupted-state tests)
+//	#sleep <ms>            pause (readiness/watch/cancel tests)
+//	#die                   exit 1 mid-turn (interrupted-state tests)
+//	#write <path> <text>   write a file relative to the cwd (workspace tests)
 //
 // Any other non-empty line is emitted verbatim.
 package fakeagent
@@ -50,6 +51,13 @@ func Replay(w io.Writer) error {
 			time.Sleep(time.Duration(ms) * time.Millisecond)
 		case line == "#die":
 			os.Exit(1)
+		case strings.HasPrefix(line, "#write "):
+			parts := strings.SplitN(strings.TrimPrefix(line, "#write "), " ", 2)
+			if len(parts) == 2 {
+				if err := os.WriteFile(parts[0], []byte(parts[1]+"\n"), 0o644); err != nil {
+					return err
+				}
+			}
 		case strings.TrimSpace(line) == "":
 		default:
 			fmt.Fprintln(w, line)

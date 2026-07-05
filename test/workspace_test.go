@@ -1,0 +1,166 @@
+package e2e
+
+import (
+	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// initRepo creates a git repo with one commit.
+func initRepo(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	run := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
+		)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	run("init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(dir, "README.md"), []byte("hi\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	run("add", ".")
+	run("commit", "-q", "-m", "init")
+	return dir
+}
+
+func (e *env) wsNew(t *testing.T, repo string) map[string]any {
+	t.Helper()
+	out := e.legwork(t, "ws", "new", "--repo", repo, "--json")
+	var m map[string]any
+	if err := json.Unmarshal([]byte(out), &m); err != nil {
+		t.Fatalf("bad ws json: %v\n%s", err, out)
+	}
+	return m
+}
+
+func TestWorkspaceLifecycle(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+
+	// Worktree lives outside the repo, on a namespaced branch.
+	tree := ws["tree"].(string)
+	if strings.HasPrefix(tree, repo) {
+		t.Fatalf("worktree must live outside the repo: %s", tree)
+	}
+	if ws["branch"] != "legwork/"+wsID {
+		t.Fatalf("branch = %v", ws["branch"])
+	}
+
+	// Fake worker edits a file and adds a new one, then finishes.
+	e.writeScript(t,
+		"#write README.md changed by worker",
+		"#write newfile.txt hello",
+		resultDone,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "edit stuff"))
+	e.waitState(t, id, "done")
+
+	// Turn end produced a checkpoint event.
+	evs := e.legwork(t, "events", id)
+	if !strings.Contains(evs, "checkpoint") || !strings.Contains(evs, "refs/legwork/"+wsID+"/ckpt-1") {
+		t.Fatalf("no checkpoint after workspace turn:\n%s", evs)
+	}
+
+	// Diff vs base includes the edit AND the untracked file.
+	diff := e.legwork(t, "diff", wsID)
+	if !strings.Contains(diff, "changed by worker") || !strings.Contains(diff, "newfile.txt") {
+		t.Fatalf("diff incomplete:\n%s", diff)
+	}
+
+	// Close without disposition must refuse: there are unreviewed changes.
+	if out, err := e.legworkErr("close", wsID); err == nil {
+		t.Fatalf("close must refuse dirty workspace without disposition:\n%s", out)
+	}
+
+	// Explicit discard reclaims worktree, branch, and refs.
+	e.legwork(t, "close", wsID, "--discard")
+	if _, err := os.Stat(tree); !os.IsNotExist(err) {
+		t.Fatal("worktree not removed on close")
+	}
+	branches, _ := exec.Command("git", "-C", repo, "branch", "--list", "legwork/*").Output()
+	if strings.TrimSpace(string(branches)) != "" {
+		t.Fatalf("branch not deleted: %s", branches)
+	}
+	refs, _ := exec.Command("git", "-C", repo, "for-each-ref", "refs/legwork/").Output()
+	if strings.TrimSpace(string(refs)) != "" {
+		t.Fatalf("checkpoint refs not deleted: %s", refs)
+	}
+
+	// The workspace's job is closed with it.
+	out := e.legwork(t, "status", id, "--json")
+	if !strings.Contains(out, `"state": "closed"`) {
+		t.Fatalf("job not closed with workspace:\n%s", out)
+	}
+}
+
+func TestWorkspaceCleanCloseNeedsNoFlag(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	// No changes: close succeeds without a disposition.
+	e.legwork(t, "close", ws["id"].(string))
+}
+
+func TestWorkspaceLock(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+
+	e.writeScript(t, "#sleep 5000", resultDone)
+	e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "slow job")
+	time.Sleep(300 * time.Millisecond)
+
+	// Second concurrent job in the same workspace must be refused.
+	if out, err := e.legworkErr("run", "--agent", "fake", "--workspace", wsID, "second job"); err == nil {
+		t.Fatalf("workspace lock not enforced:\n%s", out)
+	}
+	// Closing while a job runs must be refused too.
+	if out, err := e.legworkErr("close", wsID, "--discard"); err == nil {
+		t.Fatalf("close of busy workspace must be refused:\n%s", out)
+	}
+}
+
+func TestWorkspaceWorkstreeBootstrap(t *testing.T) {
+	if _, err := exec.LookPath("workstree"); err != nil {
+		t.Skip("workstree not installed")
+	}
+	e := newEnv(t)
+	repo := initRepo(t)
+	// Commit a worktree.toml whose setup leaves a marker and whose ready
+	// check requires it: proves bootstrap actually ran in the new tree.
+	if err := os.WriteFile(filepath.Join(repo, "worktree.toml"),
+		[]byte("setup = [\"touch bootstrapped\"]\nready = \"test -f bootstrapped\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "-C", repo, "add", ".")
+	cmd.Run()
+	cmd = exec.Command("git", "-C", repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "add worktree.toml")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+
+	ws := e.wsNew(t, repo)
+	if ws["setup"] != "ok" {
+		t.Fatalf("setup = %v", ws["setup"])
+	}
+	if _, err := os.Stat(filepath.Join(ws["tree"].(string), "bootstrapped")); err != nil {
+		t.Fatal("bootstrap marker missing in worktree")
+	}
+	// The marker isn't gitignored (unlike real setup artifacts), so the
+	// workspace counts as dirty — discard explicitly.
+	e.legwork(t, "close", ws["id"].(string), "--discard")
+}

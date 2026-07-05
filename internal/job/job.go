@@ -32,7 +32,8 @@ type Meta struct {
 	Run       string    `json:"run,omitempty"`
 	Agent     string    `json:"agent"`
 	Task      string    `json:"task"`
-	Dir       string    `json:"dir,omitempty"` // in-place target; empty = scratch
+	Dir       string    `json:"dir,omitempty"`       // in-place target; empty = scratch
+	Workspace string    `json:"workspace,omitempty"` // workspace ID when attached
 	State     State     `json:"state"`
 	SessionID string    `json:"session_id,omitempty"`
 	RunnerPID int       `json:"runner_pid,omitempty"`

@@ -17,6 +17,7 @@ import (
 	"github.com/whoislikemiha/legwork/internal/events"
 	"github.com/whoislikemiha/legwork/internal/job"
 	"github.com/whoislikemiha/legwork/internal/rules"
+	"github.com/whoislikemiha/legwork/internal/workspace"
 )
 
 // Spawn launches the detached runner for a job and records its PID.
@@ -77,7 +78,20 @@ func Run(store *job.Store, id string) error {
 		return fail(job.StateFailed, "adapter: %v", err)
 	}
 
+	var ws *workspace.Meta
+	var wsStore *workspace.Store
 	workDir := m.Dir
+	if m.Workspace != "" {
+		wsStore, err = workspace.Open(store.Root)
+		if err != nil {
+			return fail(job.StateFailed, "workspace store: %v", err)
+		}
+		ws, err = wsStore.Load(m.Workspace)
+		if err != nil {
+			return fail(job.StateFailed, "workspace: %v", err)
+		}
+		workDir = ws.Tree
+	}
 	if workDir == "" {
 		workDir = filepath.Join(dir, "scratch")
 		if err := os.MkdirAll(workDir, 0o700); err != nil {
@@ -160,6 +174,16 @@ func Run(store *job.Store, id string) error {
 
 	_, _ = log.Append(events.Event{Type: events.TypeUsage, Actor: "runner", Fields: map[string]any{
 		"cost_usd": result.CostUSD, "tokens_in": result.TokensIn, "tokens_out": result.TokensOut}})
+	// Workspace turns end with a checkpoint: the diff timeline spans the lineage.
+	if ws != nil {
+		if ref, oid, cerr := wsStore.Checkpoint(ws); cerr == nil {
+			_, _ = log.Append(events.Event{Type: events.TypeCheckpoint, Actor: "runner",
+				Preview: ref, Fields: map[string]any{"ref": ref, "oid": oid}})
+		} else {
+			_, _ = log.Append(events.Event{Type: events.TypeProgress, Actor: "runner",
+				Preview: "checkpoint failed: " + cerr.Error()})
+		}
+	}
 	if result.State == "needs-input" {
 		_, _ = log.Append(events.Event{Type: events.TypeNeedsInput, Actor: "main",
 			Preview: events.Truncate(result.Question)})
