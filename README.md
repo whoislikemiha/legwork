@@ -63,6 +63,19 @@ signal, workspace review flow, and health recipes (spotting and recovering a
 poisoned-context worker). Smoke-test any setup without API spend:
 `legwork run --agent fake "test"`.
 
+A loadable skill for agent harnesses ships at
+[`skills/legwork/SKILL.md`](skills/legwork/SKILL.md) — for Claude Code:
+
+```console
+$ mkdir -p ~/.claude/skills/legwork
+$ curl -fsSL https://raw.githubusercontent.com/whoislikemiha/legwork/main/skills/legwork/SKILL.md \
+    -o ~/.claude/skills/legwork/SKILL.md
+```
+
+One rule worth knowing before the guide: **your task prompt is only the task** —
+legwork injects the worker contract (status block, ask-early, no commit/push)
+itself; don't repeat it in prompts.
+
 ## Status
 
 Early. Implemented: jobs, detached runner, claude + fake adapters, status-block

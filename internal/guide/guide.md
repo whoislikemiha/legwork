@@ -5,6 +5,12 @@ legwork runs headless coding-agent turns (claude, fake; codex planned) as superv
 and a final state, you steer with new turns. Locally or over ssh — every command
 below works as `ssh host legwork ...`. All verbs take `--json`.
 
+**Your task prompt is ONLY the task.** legwork itself injects the worker's rules —
+the status block contract (`state: done|needs-input|blocked`), ask-early behavior,
+no-commit/no-push — into every turn. Do not repeat or paraphrase any of that in your
+prompts; a slightly different paraphrase competes with the injected contract. Add
+task-specific guidance with `--append-prompt` instead.
+
 ## The loop
 
 ```
