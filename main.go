@@ -13,6 +13,7 @@ import (
 	"github.com/whoislikemiha/legwork/internal/adapter"
 	"github.com/whoislikemiha/legwork/internal/events"
 	"github.com/whoislikemiha/legwork/internal/fakeagent"
+	"github.com/whoislikemiha/legwork/internal/guide"
 	"github.com/whoislikemiha/legwork/internal/job"
 	"github.com/whoislikemiha/legwork/internal/runner"
 )
@@ -28,16 +29,34 @@ func main() {
 
 func rootCmd() *cobra.Command {
 	root := &cobra.Command{
-		Use:           "legwork",
-		Short:         "Delegate the legwork to headless coding agents",
+		Use:   "legwork",
+		Short: "Delegate the legwork to headless coding agents",
+		Long: `Delegate the legwork to headless coding agents: dispatch tasks as supervised
+jobs, observe structured events, review diffs, steer with follow-up turns.
+
+The loop: run -> (notification or status) -> done? verify : answer/resume -> close.
+Run 'legwork guide' for the full orchestrator guide (notifications, workspaces,
+health, recipes).`,
 		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), statusCmd(), eventsCmd(),
 		lsCmd(), watchCmd(), cancelCmd(), wsCmd(), diffCmd(), closeCmd(),
-		noteCmd(), runnerCmd(), fakeAgentCmd())
+		noteCmd(), guideCmd(), runnerCmd(), fakeAgentCmd())
 	return root
+}
+
+func guideCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "guide",
+		Short: "Print the orchestrator guide (the loop, notifications, workspaces, health)",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			fmt.Print(guide.Text)
+			return nil
+		},
+	}
 }
 
 // noteCmd is orchestrator narration: cross-job reasoning goes into the run's
