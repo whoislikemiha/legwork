@@ -16,9 +16,30 @@ import (
 	"github.com/whoislikemiha/legwork/internal/adapter"
 	"github.com/whoislikemiha/legwork/internal/events"
 	"github.com/whoislikemiha/legwork/internal/job"
+	"github.com/whoislikemiha/legwork/internal/notify"
 	"github.com/whoislikemiha/legwork/internal/rules"
 	"github.com/whoislikemiha/legwork/internal/workspace"
 )
+
+// finishJob centralizes end-of-turn bookkeeping: run-log marker + notifier.
+func finishJob(store *job.Store, m *job.Meta, state string, preview string) {
+	if m.Run != "" {
+		if path, err := store.RunEventsPath(m.Run); err == nil {
+			if rl, err := events.Open(path); err == nil {
+				_, _ = rl.Append(events.Event{Type: events.TypeFinished, Actor: "runner",
+					Preview: events.Truncate(preview),
+					Fields:  map[string]any{"job": m.ID, "state": state}})
+			}
+		}
+	}
+	if cfg, err := notify.Load(); err == nil {
+		_ = cfg.Send(notify.Payload{
+			Event: state, Job: m.ID, Run: m.Run, Agent: m.Agent,
+			Task: m.Task, Question: m.Question, Result: events.Truncate(m.Result),
+			CostUSD: m.CostUSD, Context: m.Context,
+		})
+	}
+}
 
 // Spawn launches the detached runner for a job and records its PID.
 func Spawn(store *job.Store, m *job.Meta, extraEnv []string) error {
@@ -67,9 +88,11 @@ func Run(store *job.Store, id string) error {
 		msg := fmt.Sprintf(format, args...)
 		m.State = state
 		m.Result = msg
+		m.RunnerPID = 0
 		_ = store.SaveMeta(m)
 		_, _ = log.Append(events.Event{Type: events.TypeFinished, Actor: "runner",
 			Preview: msg, Fields: map[string]any{"state": string(state)}})
+		finishJob(store, m, string(state), msg)
 		return fmt.Errorf("%s", msg)
 	}
 
@@ -166,6 +189,7 @@ func Run(store *job.Store, id string) error {
 	m.Turns += result.Turns
 	m.TokensIn += result.TokensIn
 	m.TokensOut += result.TokensOut
+	m.Context = result.Context
 	m.State = job.State(result.State)
 	m.RunnerPID = 0
 	if err := store.SaveMeta(m); err != nil {
@@ -191,5 +215,13 @@ func Run(store *job.Store, id string) error {
 	_, _ = log.Append(events.Event{Type: events.TypeFinished, Actor: "runner",
 		Preview: events.Truncate(result.Result),
 		Fields:  map[string]any{"state": result.State}})
+	finishJob(store, m, result.State, firstNonEmpty(result.Question, result.Result))
 	return nil
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

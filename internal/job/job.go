@@ -49,6 +49,9 @@ type Meta struct {
 	Turns     int     `json:"turns,omitempty"`
 	TokensIn  int     `json:"tokens_in,omitempty"`
 	TokensOut int     `json:"tokens_out,omitempty"`
+	// Context is the session's footprint after the last turn (not
+	// cumulative): the health metric for spotting spinning workers.
+	Context int `json:"context,omitempty"`
 }
 
 // Store manages the state directory layout:
@@ -80,6 +83,16 @@ func OpenStore() (*Store, error) {
 }
 
 func (s *Store) JobDir(id string) string { return filepath.Join(s.Root, "jobs", id) }
+
+// RunEventsPath is the run-level event log: job lifecycle markers plus
+// orchestrator narration (legwork note). A run is a label, zero semantics.
+func (s *Store) RunEventsPath(label string) (string, error) {
+	dir := filepath.Join(s.Root, "runs", label)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "events.jsonl"), nil
+}
 
 // NewID allocates the next sequential job id (job-1, job-2, ...).
 func (s *Store) NewID() (string, error) {

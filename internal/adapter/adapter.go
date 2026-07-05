@@ -38,7 +38,12 @@ type TurnResult struct {
 	Turns     int
 	TokensIn  int
 	TokensOut int
-	IsError   bool
+	// Context is the session's current context footprint in tokens (fresh
+	// input + cache reads/writes on the last call). On subscription plans
+	// cost is nominal — context is the real health metric: high context +
+	// stale diff = a spinning worker.
+	Context int
+	IsError bool
 }
 
 // Adapter normalizes one agent CLI to the legwork contract.

@@ -68,8 +68,10 @@ type claudeLine struct {
 	NumTurns  int     `json:"num_turns"`
 	TotalCost float64 `json:"total_cost_usd"`
 	Usage     *struct {
-		InputTokens  int `json:"input_tokens"`
-		OutputTokens int `json:"output_tokens"`
+		InputTokens         int `json:"input_tokens"`
+		OutputTokens        int `json:"output_tokens"`
+		CacheCreationTokens int `json:"cache_creation_input_tokens"`
+		CacheReadTokens     int `json:"cache_read_input_tokens"`
 	} `json:"usage"`
 }
 
@@ -118,6 +120,9 @@ func (p *claudeParser) Line(raw []byte) ([]events.Event, *TurnResult, error) {
 		if l.Usage != nil {
 			res.TokensIn = l.Usage.InputTokens
 			res.TokensOut = l.Usage.OutputTokens
+			// Context footprint of the last call: fresh input + everything
+			// read from / written to the prompt cache.
+			res.Context = l.Usage.InputTokens + l.Usage.CacheCreationTokens + l.Usage.CacheReadTokens
 		}
 		if l.IsError {
 			res.State = "failed"
