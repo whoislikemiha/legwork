@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/whoislikemiha/legwork/internal/adapter"
 	"github.com/whoislikemiha/legwork/internal/events"
@@ -154,6 +155,19 @@ func Run(store *job.Store, id string) error {
 	_, _ = log.Append(events.Event{Type: events.TypeStarted, Actor: "runner",
 		Preview: events.Truncate(m.Task)})
 
+	// Wall-clock guard: budgets cap tokens, this caps time. A hung agent
+	// (or hung test suite inside it) must not hold a job open forever.
+	var timedOut bool
+	if raw := os.Getenv("LEGWORK_TIMEOUT"); raw != "" {
+		if d, perr := time.ParseDuration(raw); perr == nil && d > 0 {
+			timer := time.AfterFunc(d, func() {
+				timedOut = true
+				_ = cmd.Process.Kill()
+			})
+			defer timer.Stop()
+		}
+	}
+
 	// Tee: every raw line to the transcript; parsed events to the index.
 	parser := ad.Parser()
 	var result *adapter.TurnResult
@@ -176,6 +190,9 @@ func Run(store *job.Store, id string) error {
 	}
 
 	waitErr := cmd.Wait()
+	if timedOut {
+		return fail(job.StateInterrupted, "turn exceeded --timeout %s; session survives, resume or restart fresh", os.Getenv("LEGWORK_TIMEOUT"))
+	}
 	if result == nil {
 		// Mid-turn death: process ended without a result line.
 		return fail(job.StateInterrupted, "agent exited without a result (%v)", waitErr)

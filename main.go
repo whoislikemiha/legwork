@@ -123,7 +123,7 @@ func printJSON(v any) error {
 // --- run ---
 
 func runCmd() *cobra.Command {
-	var agent, dir, model, appendPrompt, wsID, runLabel string
+	var agent, dir, model, appendPrompt, wsID, runLabel, timeout string
 	var readOnly, asJSON bool
 	c := &cobra.Command{
 		Use:   "run <task>",
@@ -193,6 +193,12 @@ func runCmd() *cobra.Command {
 			if readOnly {
 				env = append(env, "LEGWORK_READ_ONLY=1")
 			}
+			if timeout != "" {
+				if _, err := time.ParseDuration(timeout); err != nil {
+					return fmt.Errorf("--timeout: %w", err)
+				}
+				env = append(env, "LEGWORK_TIMEOUT="+timeout)
+			}
 			if err := runner.Spawn(s, m, env); err != nil {
 				return err
 			}
@@ -207,6 +213,7 @@ func runCmd() *cobra.Command {
 	c.Flags().StringVar(&dir, "dir", "", "run in-place in this directory (default: scratch dir)")
 	c.Flags().StringVar(&wsID, "workspace", "", "attach the job to a workspace (see: legwork ws new)")
 	c.Flags().StringVar(&runLabel, "run", "", "group the job under a run label")
+	c.Flags().StringVar(&timeout, "timeout", "", "wall-clock limit for the turn (e.g. 30m); exceeded -> interrupted, session survives")
 	c.Flags().StringVar(&model, "model", "", "model override (passed through to the agent)")
 	c.Flags().StringVar(&appendPrompt, "append-prompt", "", "orchestrator additions to the injected worker rules")
 	c.Flags().BoolVar(&readOnly, "read-only", false, "read-only turn (plan/research)")
@@ -382,8 +389,9 @@ func eventsCmd() *cobra.Command {
 	return c
 }
 
-// fmtContext renders the session context footprint. The percentage assumes a
-// 200k window — approximate, but "162k (81%)" is the signal that matters.
+// fmtContext renders the session context footprint in tokens. No percentage:
+// window sizes vary per model (an Opus session measured 280k — a hardcoded
+// 200k window would render nonsense). Raw magnitude is the honest signal.
 func fmtContext(tokens int) string {
 	if tokens == 0 {
 		return "-"
@@ -391,7 +399,7 @@ func fmtContext(tokens int) string {
 	if tokens < 1000 {
 		return fmt.Sprintf("%d", tokens)
 	}
-	return fmt.Sprintf("%dk(%d%%)", tokens/1000, tokens*100/200_000)
+	return fmt.Sprintf("%dk", tokens/1000)
 }
 
 func printEvent(e events.Event) {

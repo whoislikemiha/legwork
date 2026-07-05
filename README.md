@@ -39,7 +39,7 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Wake-on-event**: a configurable notifier command receives JSON payloads — point
   it at ntfy for your phone, or at whatever re-invokes your orchestrator.
 - **Context as the health metric**: `ls` shows each session's context footprint
-  (`ctx:145k(72%)`) — the early-warning signal for a worker spinning in circles.
+  (`ctx:145k`) — the early-warning signal for a worker spinning in circles.
 
 ## Install
 

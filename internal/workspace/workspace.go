@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/whoislikemiha/legwork/internal/job"
 )
 
 // Meta is the persisted workspace record.
@@ -42,7 +44,15 @@ func Open(root string) (*Store, error) {
 
 func (s *Store) dir(id string) string { return filepath.Join(s.Root, "workspaces", id) }
 
+// newID allocates ws-N and reserves its directory under the state-wide
+// allocation lock (same lock as job IDs).
 func (s *Store) newID() (string, error) {
+	unlock, err := job.LockAlloc(s.Root)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+
 	entries, err := os.ReadDir(filepath.Join(s.Root, "workspaces"))
 	if err != nil {
 		return "", err
@@ -54,7 +64,11 @@ func (s *Store) newID() (string, error) {
 			max = n
 		}
 	}
-	return fmt.Sprintf("ws-%d", max+1), nil
+	id := fmt.Sprintf("ws-%d", max+1)
+	if err := os.Mkdir(filepath.Join(s.Root, "workspaces", id), 0o700); err != nil {
+		return "", err
+	}
+	return id, nil
 }
 
 func (s *Store) save(m *Meta) error {

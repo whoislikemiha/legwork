@@ -59,7 +59,7 @@ bypass it reflexively.
 
 ## Health and recovery
 
-`legwork ls` shows `ctx:145k(72%)` per job. High context + stale diff = spinning
+`legwork ls` shows `ctx:145k` per job. High context + stale diff = spinning
 worker. Do NOT resume with "keep going": `legwork cancel <job>`, then start a
 **fresh job** seeded with the artifacts (plan file, `diff` output). Poisoned context
 does not recover.

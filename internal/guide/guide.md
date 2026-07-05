@@ -74,7 +74,7 @@ turns (harness-enforced: the agent cannot edit).
 
 ## Health: watch context, not cost
 
-`legwork ls` shows `ctx:145k(72%)` per job — the session's context footprint.
+`legwork ls` shows `ctx:145k` per job — the session's context footprint.
 High context + no new diff progress = a spinning worker. The fix is NOT
 `resume "keep going"`: cancel, then start a **fresh job** seeded with the artifacts
 (the plan file, `legwork diff` output) — a poisoned context does not recover.

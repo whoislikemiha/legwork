@@ -94,8 +94,16 @@ func (s *Store) RunEventsPath(label string) (string, error) {
 	return filepath.Join(dir, "events.jsonl"), nil
 }
 
-// NewID allocates the next sequential job id (job-1, job-2, ...).
+// NewID allocates the next sequential job id (job-1, job-2, ...) and
+// reserves its directory. Allocation is flock-guarded: parallel dispatch is a
+// core use case, and scan-max+1 alone races.
 func (s *Store) NewID() (string, error) {
+	unlock, err := LockAlloc(s.Root)
+	if err != nil {
+		return "", err
+	}
+	defer unlock()
+
 	entries, err := os.ReadDir(filepath.Join(s.Root, "jobs"))
 	if err != nil {
 		return "", err
@@ -107,7 +115,29 @@ func (s *Store) NewID() (string, error) {
 			max = n
 		}
 	}
-	return fmt.Sprintf("job-%d", max+1), nil
+	id := fmt.Sprintf("job-%d", max+1)
+	// Reserve while still holding the lock.
+	if err := os.Mkdir(filepath.Join(s.Root, "jobs", id), 0o700); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
+// LockAlloc takes the state-wide allocation lock (shared by jobs and
+// workspaces). The returned func releases it.
+func LockAlloc(root string) (func(), error) {
+	f, err := os.OpenFile(filepath.Join(root, ".alloc.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		f.Close()
+		return nil, err
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}, nil
 }
 
 // Create initializes a job dir and persists initial meta.

@@ -69,9 +69,10 @@ func TestRunGroupingNoteAndNotifier(t *testing.T) {
 	if payload["context"].(float64) != 145200 {
 		t.Fatalf("context = %v, want 145200", payload["context"])
 	}
+	// Raw tokens, no percentage: window sizes are model-dependent.
 	status := e.legwork(t, "status", id)
-	if !strings.Contains(status, "context: 145k(72%)") {
-		t.Fatalf("status missing context health:\n%s", status)
+	if !strings.Contains(status, "context: 145k") || strings.Contains(status, "%") {
+		t.Fatalf("status context format wrong:\n%s", status)
 	}
 }
 
