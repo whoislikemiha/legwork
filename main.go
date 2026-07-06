@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/whoislikemiha/legwork/internal/adapter"
+	"github.com/whoislikemiha/legwork/internal/config"
 	"github.com/whoislikemiha/legwork/internal/doctor"
 	"github.com/whoislikemiha/legwork/internal/events"
 	"github.com/whoislikemiha/legwork/internal/fakeagent"
@@ -343,6 +344,14 @@ func answerCmd() *cobra.Command {
 
 // --- status / events / ls / watch / cancel ---
 
+// metaOut wraps a persisted Meta with the derived context_high signal, so
+// --json carries it without touching the persisted struct. omitempty means the
+// field only appears when high — additive, no schema break.
+type metaOut struct {
+	*job.Meta
+	ContextHigh bool `json:"context_high,omitempty"`
+}
+
 func statusCmd() *cobra.Command {
 	var asJSON bool
 	c := &cobra.Command{
@@ -359,8 +368,13 @@ func statusCmd() *cobra.Command {
 				return err
 			}
 			s.Reconcile(m)
+			health, err := config.LoadHealth()
+			if err != nil {
+				return err
+			}
+			high := m.ContextHigh(health.ContextThreshold)
 			if asJSON {
-				return printJSON(m)
+				return printJSON(metaOut{Meta: m, ContextHigh: high})
 			}
 			fmt.Printf("job:    %s (%s)\nstate:  %s\ntask:   %s\n", m.ID, m.Agent, m.State, m.Task)
 			if m.Run != "" {
@@ -368,6 +382,9 @@ func statusCmd() *cobra.Command {
 			}
 			fmt.Printf("turns: %d  context: %s  tokens: %d in / %d out  cost: $%.4f\n",
 				m.Turns, fmtContext(m.Context), m.TokensIn, m.TokensOut, m.CostUSD)
+			if high {
+				fmt.Printf("hint:   context high — prefer a fresh job over resume\n")
+			}
 			if m.Question != "" {
 				fmt.Printf("question: %s\n", m.Question)
 			}
@@ -458,8 +475,16 @@ func lsCmd() *cobra.Command {
 			for _, m := range metas {
 				s.Reconcile(m)
 			}
+			health, err := config.LoadHealth()
+			if err != nil {
+				return err
+			}
 			if asJSON {
-				return printJSON(metas)
+				out := make([]metaOut, len(metas))
+				for i, m := range metas {
+					out[i] = metaOut{Meta: m, ContextHigh: m.ContextHigh(health.ContextThreshold)}
+				}
+				return printJSON(out)
 			}
 			for _, m := range metas {
 				age := time.Since(m.Updated).Round(time.Second)
@@ -473,8 +498,14 @@ func lsCmd() *cobra.Command {
 				if m.Run != "" {
 					task = "[" + m.Run + "] " + task
 				}
-				fmt.Printf("%-8s %-7s %-13s %6s  ctx:%-7s %-6s %s\n",
-					m.ID, m.Agent, m.State, age, fmtContext(m.Context), where, task)
+				// ctx cell padded as one token so the "!" marker never shoves
+				// later columns; field widened 7->9 to fit "ctx:180k!".
+				ctx := "ctx:" + fmtContext(m.Context)
+				if m.ContextHigh(health.ContextThreshold) {
+					ctx += "!"
+				}
+				fmt.Printf("%-8s %-7s %-13s %6s  %-9s %-6s %s\n",
+					m.ID, m.Agent, m.State, age, ctx, where, task)
 			}
 			return nil
 		},

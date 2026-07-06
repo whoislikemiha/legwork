@@ -36,6 +36,7 @@ type env struct {
 	state  string
 	script string
 	parser string // LEGWORK_FAKE_PARSER: "" (claude) or "codex"
+	config string // LEGWORK_CONFIG path; "" leaves it unset
 }
 
 func newEnv(t *testing.T) *env {
@@ -67,6 +68,9 @@ func (e *env) legworkErr(args ...string) (string, error) {
 	)
 	if e.parser != "" {
 		cmd.Env = append(cmd.Env, "LEGWORK_FAKE_PARSER="+e.parser)
+	}
+	if e.config != "" {
+		cmd.Env = append(cmd.Env, "LEGWORK_CONFIG="+e.config)
 	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err

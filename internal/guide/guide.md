@@ -158,6 +158,12 @@ High context + no new diff progress = a spinning worker. The fix is NOT
 (the plan file, `legwork diff` output) — a poisoned context does not recover.
 Costs are also tracked (`status`), cumulative per session.
 
+legwork flags this for you: once a job crosses a threshold, `ls` marks its ctx
+cell `ctx:180k!` and `status` prints a `hint:` line (`--json` sets
+`context_high: true`) — the built-in cue to start fresh over resume. Tune it under
+`[health]` in `config.toml` with `context_threshold` (tokens, default 150000; set
+`0` to disable — useful for large-window models).
+
 ## Grouping and narration
 
 Group a pipeline's jobs with `--run <label>`; narrate your decisions:
