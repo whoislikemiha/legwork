@@ -174,7 +174,9 @@ tests: <command + result | none>
 
 Enforcement is per-adapter (**capability flag** `structured-status: enforced |
 convention`): codex via `--output-schema` (schema-guaranteed); claude via Stop-hook
-validation (reject turn end until the block parses). Missing/unparseable block →
+validation (reject turn end until the block parses). The initial codex adapter ships
+`convention` (shared parser, no schema); `--output-schema` enforcement is a documented
+follow-up (ROADMAP). Missing/unparseable block →
 classify as `needs-review`, never assume done. Cheap-model classifier as fallback.
 Orchestrator never trusts `done` blindly anyway: verification (diff nonempty, tests
 event present, review phase) is recipe-mandated.
@@ -247,8 +249,9 @@ preclude).
 - **The adapter writes phase artifacts** (plan → `plan.md` in the job dir) regardless
   of mode: artifact for the human, the orchestrator, the next phase — and for
   **restartability** (see poisoned-context recipe).
-- **Subagents**: the worker's native harness handles intra-job fan-out (claude: native;
-  codex: none → capability flag; "parallelize" there means decompose into workspaces).
+- **Subagents**: the worker's native harness handles intra-job fan-out (claude and
+  codex: native → `Caps.Subagents`; where an agent lacks it, "parallelize" means
+  decompose into workspaces).
   Subagent activity is tagged in the event index; usage rolls into job totals (budget
   binds — instructed fan-out deserves a deliberately raised budget). Rule of thumb
   (skill): *separately reviewable/abortable → separate workspaces; combined outcome →

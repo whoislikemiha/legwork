@@ -37,4 +37,12 @@ func (f *Fake) Command(req TurnRequest) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func (f *Fake) Parser() Parser { return &claudeParser{} }
+// Parser selects the production parser to drive the fake stream through. This
+// lets the e2e suite exercise a real dialect's parser (codex) against a
+// codex-shaped script with zero spend; default stays claude-shaped.
+func (f *Fake) Parser() Parser {
+	if os.Getenv("LEGWORK_FAKE_PARSER") == "codex" {
+		return &codexParser{}
+	}
+	return &claudeParser{}
+}

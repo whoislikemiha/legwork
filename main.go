@@ -82,7 +82,7 @@ func doctorCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter to validate (claude, fake)")
+	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter to validate (claude, codex, fake)")
 	c.Flags().StringVar(&model, "model", "", "model to validate (default: agent default)")
 	c.Flags().StringVar(&dir, "dir", "", "repo to check for the worktree.toml/workstree pairing (default: cwd)")
 	c.Flags().BoolVar(&noProbe, "no-probe", false, "skip the paid live-turn check (static checks only, offline-safe)")
@@ -249,7 +249,7 @@ func runCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter (claude, fake)")
+	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter (claude, codex, fake)")
 	c.Flags().StringVar(&dir, "dir", "", "run in-place in this directory (default: scratch dir)")
 	c.Flags().StringVar(&wsID, "workspace", "", "attach the job to a workspace (see: legwork ws new)")
 	c.Flags().StringVar(&runLabel, "run", "", "group the job under a run label")

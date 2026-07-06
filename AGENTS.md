@@ -40,6 +40,17 @@ real agent (cheap, ~$0.02):
 )
 ```
 
+For codex (needs `codex login`; cost is 0 on subscription → check `context`):
+
+```bash
+(
+  export LEGWORK_STATE_DIR=$(mktemp -d)
+  go build -o /tmp/lw . && /tmp/lw doctor --agent codex   # auth guard for codex
+  /tmp/lw run --agent codex "Reply with exactly the word PLUMBING-OK. No tools."
+  sleep 20 && /tmp/lw status job-1        # expect: state done, PLUMBING-OK, context>0
+)
+```
+
 ## Hard rules (from DESIGN.md — do not erode)
 
 - **No database, no daemon.** State is files; jobs survive via the detached runner.

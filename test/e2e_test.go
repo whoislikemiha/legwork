@@ -31,6 +31,7 @@ func TestMain(m *testing.M) {
 type env struct {
 	state  string
 	script string
+	parser string // LEGWORK_FAKE_PARSER: "" (claude) or "codex"
 }
 
 func newEnv(t *testing.T) *env {
@@ -60,6 +61,9 @@ func (e *env) legworkErr(args ...string) (string, error) {
 		"LEGWORK_STATE_DIR="+e.state,
 		"LEGWORK_FAKE_SCRIPT="+e.script,
 	)
+	if e.parser != "" {
+		cmd.Env = append(cmd.Env, "LEGWORK_FAKE_PARSER="+e.parser)
+	}
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

@@ -200,8 +200,12 @@ func Run(store *job.Store, id string) error {
 		return fail(job.StateInterrupted, "agent exited without a result (%v)", waitErr)
 	}
 
-	// Persist outcome.
-	m.SessionID = result.SessionID
+	// Persist outcome. Only overwrite the session id when the turn emitted one:
+	// a resumable session id, once known, must survive a turn that completes
+	// without re-reporting it (protects every adapter, not just codex).
+	if result.SessionID != "" {
+		m.SessionID = result.SessionID
+	}
 	m.Result = result.Result
 	m.Question = result.Question
 	m.CostUSD += result.CostUSD
