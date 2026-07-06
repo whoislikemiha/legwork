@@ -31,9 +31,12 @@ locks, notifier, timeouts — all via the fake agent, zero API spend. When you t
 real agent (cheap, ~$0.02):
 
 ```bash
-export LEGWORK_STATE_DIR=$(mktemp -d)   # never pollute the real state dir
-go build -o /tmp/lw . && /tmp/lw run --agent claude --model haiku "Say hello briefly. No tools."
-sleep 12 && /tmp/lw status job-1        # expect: state done, sane ctx, no phantom question
+# subshell: the state-dir override must not leak into later legwork calls
+(
+  export LEGWORK_STATE_DIR=$(mktemp -d)   # never pollute the real state dir
+  go build -o /tmp/lw . && /tmp/lw run --agent claude --model haiku "Say hello briefly. No tools."
+  sleep 12 && /tmp/lw status job-1        # expect: state done, sane ctx, no phantom question
+)
 ```
 
 ## Hard rules (from DESIGN.md — do not erode)

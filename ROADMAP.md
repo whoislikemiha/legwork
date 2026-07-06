@@ -26,7 +26,22 @@ re-proposed.
   without disturbing it (`ask`), A/B branch from a plan turn (`fork`).
 - **Claude flag passthroughs** — `--max-turns`, `--effort`, `--allowed-tools` /
   `--disallowed-tools` (optional tightening for callers who want it; see
-  rejected below for why it's not the default), `--fallback-model`.
+  rejected below for why it's not the default), `--fallback-model`. Dogfood
+  (2026-07-06, doctor run): `--effort` is the sharpest gap — a "Fable
+  reasoning-low plan → Opus reasoning-high implement" recipe couldn't be
+  expressed and fell back to prompt guidance.
+- **Run artifacts** — a home for orchestration artifacts (plans, process notes)
+  attached to the run record instead of the workspace diff. Dogfood: a read-only
+  planner wrote its plan to `~/.claude/plans/`, it got copied into the repo for
+  the implementer, and review had to catch it as a scratch file that must not
+  ship. Something like `legwork artifact save/get --run L` keeps
+  intended-for-merge (workspace diff) and intended-for-the-record (run) cleanly
+  separate; interacts with the close tripwire, so design before building.
+- **Actionable context threshold** — `ls`/`status` already report context size;
+  add a visible hint when it crosses a threshold (e.g. "context high — prefer a
+  fresh job over resume"). Dogfood: the signal was noticed but the orchestrator
+  had to invent the policy; a built-in nudge makes the fresh-reviewer pattern
+  the default.
 - **Profiles** — named presets: agent + model + access + rules additions +
   timeout (`legwork run --profile opus-review "..."`). Config-file defined.
 - **`max_concurrent`** — cap simultaneous runners with a pending queue (queued
