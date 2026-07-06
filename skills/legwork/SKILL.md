@@ -71,7 +71,9 @@ ws=$(legwork ws new --repo ~/code/app --json | jq -r .id)   # worktree + branch;
 legwork run --workspace "$ws" --agent claude "implement X"
 legwork diff "$ws"                     # changes vs base, incl. untracked
 legwork resume <job> "fix review finding Y"                 # same lineage
-legwork close "$ws" --merged           # after landing; --discard to throw away
+legwork close "$ws" --merged           # after landing; verified via merge-base
+                                       # against the default branch (--into <ref>
+                                       # to override); --discard to throw away
 ```
 
 One active job per workspace; parallelism = multiple workspaces. `close` refuses

@@ -111,6 +111,11 @@ legwork close ws-N --merged|--discard    -> reclaims worktree/branch/refs
 
 `close` without a flag refuses if there are unreviewed changes — that's the review
 gate. You (or the human) land the diff (PR, merge), then close `--merged`.
+`--merged` is verified, not trusted: the branch must actually be an ancestor of
+the default branch (or `--into <ref>`), else close refuses — this catches the
+classic mistake of running the merge inside the worktree (a no-op) and then
+destroying the branch. Merge from the main checkout. `--force` skips the check
+for work that landed somewhere legwork can't see (cherry-pick, another remote).
 Scratch/research jobs need no workspace: plain `run` gets a scratch dir;
 `run --dir <path>` works in-place — combine with `--read-only` for plan/research
 turns (harness-enforced: the agent cannot edit).
@@ -146,7 +151,8 @@ git-style, gated to at most once per `auto_interval` (default 24h). Configure un
 
 ## Health: watch context, not cost
 
-`legwork ls` shows `ctx:145k` per job — the session's context footprint.
+`legwork ls` shows `ctx:145k` per job — the live window of the session's most
+recent agent call (what the next call will pay to re-read).
 High context + no new diff progress = a spinning worker. The fix is NOT
 `resume "keep going"`: cancel, then start a **fresh job** seeded with the artifacts
 (the plan file, `legwork diff` output) — a poisoned context does not recover.
@@ -173,7 +179,7 @@ run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
 resume <job> <msg>   answer <job> <msg>   cancel <job>
 status <job>         events <job|run> [--run] [--since N]   ls   watch <job>
 ws new --repo R      ws ls               diff <ws> [--stat]
-close <ws> [--merged|--discard|--keep-worktree]
+close <ws> [--merged [--into <ref>] [--force]|--discard|--keep-worktree]
 gc [--dry-run] [--close-merged [--close-merged-into <ref>]] [--json]
 note <run> <text>    guide
 ```

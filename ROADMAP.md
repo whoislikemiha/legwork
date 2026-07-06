@@ -8,25 +8,14 @@ re-proposed.
 
 ## Next
 
-_(Codex adapter and `legwork gc` shipped — see below / the changelog. The items
-here come from the 2026-07-06 dogfood run that built them: two features
-orchestrated through legwork itself, opus workers, split plan/implement/review.)_
-
-- **Fix: `watch` on a resumed job exits immediately** — it replays the previous
-  turn's `finished` event instead of waiting for the new turn to end. Forced the
-  orchestrator back to sleep-poll loops, the exact thing `watch` exists to
-  replace. Likely fix: `watch` after a resume should seek past events older than
-  the current turn (or key on runner PID / a turn counter).
-- **Fix: context telemetry is cumulative** — `status`/`ls` report ctx summed
-  across turns (a long job showed 5.75M), not the live session window. Every
-  context-based policy (including the planned threshold hint below) is
-  meaningless until this reports the last turn's window size.
-- **Verify `--merged` in `close`** — `close ws-N --merged` trusts the caller;
-  a merge mistakenly run inside the worktree (a no-op) followed by
-  `close --merged` left the branch's commit dangling (recovered via fsck).
-  gc's `--close-merged` already verifies with `git merge-base --is-ancestor`
-  through `workspace.MergedInto`; wire the same check into `close --merged` and
-  refuse (or require `--force`) when the branch isn't actually an ancestor.
+_(Codex adapter and `legwork gc` shipped — see below / the changelog. The three
+bugs the 2026-07-06 dogfood run surfaced — watch replaying a finished turn on
+resumed jobs, context telemetry summing cache reads across a turn's calls, and
+`close --merged` trusting the caller's claim — are fixed: watch seeks past
+finished turns, claude ctx is the last call's real window, and `--merged` is
+verified via merge-base with `--into <ref>` / `--force` escapes. The codex
+adapter's ctx may have the same summing issue — verify against a live multi-call
+turn before changing it.)_
 
 ## Soon
 

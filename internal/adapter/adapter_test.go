@@ -63,6 +63,36 @@ func TestClaudeParserStream(t *testing.T) {
 	}
 }
 
+// TestClaudeParserContextIsLastCallWindow: Context must be the last assistant
+// call's prompt window, not the result line's usage — that one sums cache reads
+// across every call in the turn and overreports by ~turns×.
+func TestClaudeParserContextIsLastCallWindow(t *testing.T) {
+	p := (&Claude{}).Parser()
+	lines := []string{
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"a"}],"usage":{"input_tokens":10,"cache_creation_input_tokens":90,"cache_read_input_tokens":100000,"output_tokens":50}}}`,
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"b"}],"usage":{"input_tokens":5,"cache_creation_input_tokens":200,"cache_read_input_tokens":110000,"output_tokens":30}}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":2,"total_cost_usd":0.5,"usage":{"input_tokens":15,"output_tokens":80,"cache_creation_input_tokens":290,"cache_read_input_tokens":210000},"session_id":"s","result":"ok\n\nstate: done"}`,
+	}
+	var res *TurnResult
+	for _, l := range lines {
+		if _, r, err := p.Line([]byte(l)); err != nil {
+			t.Fatal(err)
+		} else if r != nil {
+			res = r
+		}
+	}
+	if want := 5 + 200 + 110000; res == nil || res.Context != want {
+		t.Fatalf("Context = %+v, want %d (last call's window, not the turn sum)", res, want)
+	}
+	// No assistant usage at all (e.g. immediate error): fall back to the
+	// result line's sum rather than reporting zero.
+	p2 := (&Claude{}).Parser()
+	_, r2, _ := p2.Line([]byte(`{"type":"result","subtype":"success","is_error":false,"usage":{"input_tokens":200,"output_tokens":80,"cache_creation_input_tokens":5000,"cache_read_input_tokens":140000},"session_id":"s","result":"ok\n\nstate: done"}`))
+	if r2 == nil || r2.Context != 200+5000+140000 {
+		t.Fatalf("fallback Context = %+v", r2)
+	}
+}
+
 func TestClaudeParserAuthError(t *testing.T) {
 	p := (&Claude{}).Parser()
 	_, res, _ := p.Line([]byte(`{"type":"result","subtype":"error","is_error":true,"result":"Invalid API key. Please run /login","session_id":"s"}`))

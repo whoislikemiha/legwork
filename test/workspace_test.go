@@ -106,6 +106,59 @@ func TestWorkspaceLifecycle(t *testing.T) {
 	}
 }
 
+// close --merged is a claim, not a fact: it must be verified against the
+// target branch before the branch (and with it the work) is destroyed.
+func TestCloseMergedVerifies(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	branch := ws["branch"].(string)
+
+	e.writeScript(t, "#write landed.txt content", resultDone)
+	jid := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "do"))
+	e.waitState(t, jid, "done")
+	gitIn(t, tree, "add", ".")
+	gitIn(t, tree, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "work")
+
+	// Not landed yet: --merged must refuse (this is the dangling-commit trap).
+	if out, err := e.legworkErr("close", wsID, "--merged"); err == nil {
+		t.Fatalf("close --merged of an unmerged branch must refuse:\n%s", out)
+	}
+	if m := e.wsStatus(t, wsID); m["state"] != "open" {
+		t.Fatalf("workspace must stay open after refused close: %v", m)
+	}
+
+	// Land it in main; now --merged verifies and the close goes through.
+	gitIn(t, repo, "merge", "--ff-only", branch)
+	e.legwork(t, "close", wsID, "--merged")
+	if m := e.wsStatus(t, wsID); m["state"] != "closed" || m["disposition"] != "merged" {
+		t.Fatalf("ws not closed merged: %v", m)
+	}
+}
+
+// --force skips the verification for targets legwork can't see (e.g. the work
+// landed in another repo or was cherry-picked).
+func TestCloseMergedForceSkipsVerification(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+
+	e.writeScript(t, "#write landed.txt content", resultDone)
+	jid := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "do"))
+	e.waitState(t, jid, "done")
+	gitIn(t, tree, "add", ".")
+	gitIn(t, tree, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "work")
+
+	e.legwork(t, "close", wsID, "--merged", "--force")
+	if m := e.wsStatus(t, wsID); m["state"] != "closed" || m["disposition"] != "merged" {
+		t.Fatalf("ws not closed with --force: %v", m)
+	}
+}
+
 func TestWorkspaceCleanCloseNeedsNoFlag(t *testing.T) {
 	e := newEnv(t)
 	repo := initRepo(t)

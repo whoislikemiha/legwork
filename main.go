@@ -494,7 +494,31 @@ func watchCmd() *cobra.Command {
 				return err
 			}
 			path := filepath.Join(s.JobDir(args[0]), "events.jsonl")
+			// A resumed job's log already holds earlier turns, each ending in a
+			// terminal event. Start the cursor past finished turns so watch
+			// follows the live one instead of replaying an old terminal event
+			// and exiting immediately. For a job that isn't running, replay
+			// just the most recent turn.
 			cursor := 0
+			m0, err := s.LoadMeta(args[0])
+			if err != nil {
+				return err
+			}
+			s.Reconcile(m0)
+			live := m0.State == job.StateActive || m0.State == job.StateQueued
+			var terminals []int
+			if evs, err := events.Read(path, 0); err == nil {
+				for _, e := range evs {
+					if e.Type == events.TypeFinished || e.Type == events.TypeInterrupted {
+						terminals = append(terminals, e.Seq)
+					}
+				}
+			}
+			if live && len(terminals) > 0 {
+				cursor = terminals[len(terminals)-1]
+			} else if !live && len(terminals) > 1 {
+				cursor = terminals[len(terminals)-2]
+			}
 			for {
 				evs, err := events.Read(path, cursor)
 				if err != nil && !os.IsNotExist(err) {

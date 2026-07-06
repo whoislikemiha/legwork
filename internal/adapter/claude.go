@@ -49,6 +49,17 @@ func (c *Claude) Parser() Parser { return &claudeParser{} }
 // claudeParser normalizes Claude Code's stream-json lines.
 type claudeParser struct {
 	sessionID string
+	// context of the most recent assistant API call (its full prompt window).
+	// The result line's usage sums every call in the turn, so cache reads are
+	// counted once per call — useless as a window-size signal.
+	lastContext int
+}
+
+type claudeUsage struct {
+	InputTokens         int `json:"input_tokens"`
+	OutputTokens        int `json:"output_tokens"`
+	CacheCreationTokens int `json:"cache_creation_input_tokens"`
+	CacheReadTokens     int `json:"cache_read_input_tokens"`
 }
 
 // Minimal shapes of the stream we consume.
@@ -63,18 +74,14 @@ type claudeLine struct {
 			Name  string          `json:"name"`
 			Input json.RawMessage `json:"input"`
 		} `json:"content"`
+		Usage *claudeUsage `json:"usage"`
 	} `json:"message"`
 	// result line
-	Result    string  `json:"result"`
-	IsError   bool    `json:"is_error"`
-	NumTurns  int     `json:"num_turns"`
-	TotalCost float64 `json:"total_cost_usd"`
-	Usage     *struct {
-		InputTokens         int `json:"input_tokens"`
-		OutputTokens        int `json:"output_tokens"`
-		CacheCreationTokens int `json:"cache_creation_input_tokens"`
-		CacheReadTokens     int `json:"cache_read_input_tokens"`
-	} `json:"usage"`
+	Result    string       `json:"result"`
+	IsError   bool         `json:"is_error"`
+	NumTurns  int          `json:"num_turns"`
+	TotalCost float64      `json:"total_cost_usd"`
+	Usage     *claudeUsage `json:"usage"`
 }
 
 func (p *claudeParser) Line(raw []byte) ([]events.Event, *TurnResult, error) {
@@ -91,6 +98,11 @@ func (p *claudeParser) Line(raw []byte) ([]events.Event, *TurnResult, error) {
 	case "assistant":
 		if l.Message == nil {
 			return nil, nil, nil
+		}
+		if u := l.Message.Usage; u != nil {
+			if ctx := u.InputTokens + u.CacheCreationTokens + u.CacheReadTokens; ctx > 0 {
+				p.lastContext = ctx
+			}
 		}
 		var evs []events.Event
 		for _, block := range l.Message.Content {
@@ -122,8 +134,13 @@ func (p *claudeParser) Line(raw []byte) ([]events.Event, *TurnResult, error) {
 		if l.Usage != nil {
 			res.TokensIn = l.Usage.InputTokens
 			res.TokensOut = l.Usage.OutputTokens
-			// Context footprint of the last call: fresh input + everything
-			// read from / written to the prompt cache.
+		}
+		// Live window size: the last assistant call's prompt (fresh input +
+		// cache reads/writes for that one call). The result line's usage is
+		// summed across every call in the turn and would overreport by ~turns×.
+		res.Context = p.lastContext
+		if res.Context == 0 && l.Usage != nil {
+			// Fallback (e.g. zero-assistant-turn errors): better than nothing.
 			res.Context = l.Usage.InputTokens + l.Usage.CacheCreationTokens + l.Usage.CacheReadTokens
 		}
 		if l.IsError {

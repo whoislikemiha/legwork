@@ -195,6 +195,36 @@ func TestResumeRefusedWhileActive(t *testing.T) {
 	e.legwork(t, "cancel", id)
 }
 
+// watch on a resumed job must follow the live turn, not replay an earlier
+// turn's finished event and exit immediately.
+func TestWatchFollowsResumedTurn(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.01,"usage":{"input_tokens":1,"output_tokens":1},"session_id":"s1","result":"first-turn-ok\n\nstate: done"}`,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "first"))
+	e.waitState(t, id, "done")
+
+	// Second turn is slow: a watch that replays turn 1 would return long
+	// before it ends.
+	e.writeScript(t, "#sleep 1200", resultDone)
+	e.legwork(t, "resume", id, "again")
+	start := time.Now()
+	out := e.legwork(t, "watch", id)
+	if time.Since(start) < time.Second {
+		t.Fatalf("watch exited before the resumed turn ended (%v):\n%s", time.Since(start), out)
+	}
+	if strings.Contains(out, "first-turn-ok") {
+		t.Fatalf("watch replayed the previous turn:\n%s", out)
+	}
+
+	// On a job that isn't running, watch replays only the most recent turn.
+	out = e.legwork(t, "watch", id)
+	if strings.Contains(out, "first-turn-ok") || !strings.Contains(out, "finished") {
+		t.Fatalf("watch of a finished multi-turn job should replay only the last turn:\n%s", out)
+	}
+}
+
 func TestUnknownJobAndAgentFailCleanly(t *testing.T) {
 	e := newEnv(t)
 	if _, err := e.legworkErr("status", "job-999"); err == nil {

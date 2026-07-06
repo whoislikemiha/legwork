@@ -16,7 +16,7 @@ job-7
 $ legwork watch job-7          # live events: tool calls, text, checkpoint, finished
 $ legwork diff ws-1            # the reviewable diff (incl. untracked files)
 $ legwork answer job-7 "use the token-bucket approach"   # if it asked
-$ legwork close ws-1 --merged  # after you land it; reclaims worktree/branch/refs
+$ legwork close ws-1 --merged  # verified via merge-base, then reclaims worktree/branch/refs
 ```
 
 ## Why

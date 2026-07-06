@@ -137,7 +137,8 @@ func diffCmd() *cobra.Command {
 }
 
 func closeCmd() *cobra.Command {
-	var merged, discard, keepWorktree bool
+	var merged, discard, keepWorktree, force bool
+	var mergedInto string
 	c := &cobra.Command{
 		Use:   "close <workspace>",
 		Short: "Acknowledge a workspace and reclaim worktree, branch, checkpoint refs",
@@ -165,6 +166,24 @@ func closeCmd() *cobra.Command {
 			case discard:
 				disposition = "discard"
 			}
+			// --merged is a claim; verify it before destroying the branch.
+			// (A merge mistakenly run inside the worktree is a no-op — closing
+			// on top of that leaves the work dangling.)
+			if merged && !force {
+				target := mergedInto
+				if target == "" {
+					if target, _ = wss.DefaultBranchTip(m.Repo); target == "" {
+						return fmt.Errorf("no default branch resolved; pass --into <ref> (or --force to skip verification)")
+					}
+				}
+				ok, err := wss.MergedInto(m, target)
+				if err != nil {
+					return err
+				}
+				if !ok {
+					return fmt.Errorf("%s: branch %s is NOT an ancestor of %s — the work has not landed there; merge it first, or use --into <ref> / --discard / --force", m.ID, m.Branch, target)
+				}
+			}
 			if err := wss.Close(m, disposition, keepWorktree); err != nil {
 				return err
 			}
@@ -175,8 +194,10 @@ func closeCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().BoolVar(&merged, "merged", false, "changes landed elsewhere (verified)")
+	c.Flags().BoolVar(&merged, "merged", false, "changes landed elsewhere (verified via merge-base against --into or the default branch)")
 	c.Flags().BoolVar(&discard, "discard", false, "throw the changes away")
 	c.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "acknowledge but keep the worktree on disk")
+	c.Flags().StringVar(&mergedInto, "into", "", "target ref --merged is verified against (default: detected default branch)")
+	c.Flags().BoolVar(&force, "force", false, "skip --merged verification")
 	return c
 }
