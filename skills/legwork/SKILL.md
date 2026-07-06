@@ -109,11 +109,30 @@ does not recover. legwork flags the crossing for you: `ls` marks the cell
 Tune the trip point with `[health] context_threshold` in `config.toml` (tokens,
 default 150000; `0` disables).
 
+## Watching a pipeline
+
+Three read-only surfaces over the same event logs (all ssh-friendly except the
+TUI):
+
+```bash
+legwork runs                       # one line per --run label: state rollup, cost,
+                                   # ctx health, your latest note (the overview)
+legwork tail                       # tail -f across all jobs + run logs, notes
+                                   # interleaved; --run/--job scope, --full firehose
+legwork tail --run L --until-idle  # blocks, exits 0 when no job in scope is
+                                   # active/queued — the scriptable "wait for my pipeline"
+legwork dashboard                  # interactive TUI (needs a TTY): runs + detail + timeline
+```
+
+Prefer `runs` over `ls` for the pipeline view; `tail --until-idle` replaces a
+status-polling loop; both take `--json`.
+
 ## Tips
 
 - Group pipeline jobs: `--run <label>`; narrate decisions:
   `legwork note <label> "plan approved, splitting into 2 workspaces"`;
-  read the merged timeline: `legwork events <label> --run`.
+  watch the merged timeline live with `legwork tail --run <label>` (or the
+  snapshot `legwork events <label> --run`).
 - Model policy: big model + `--read-only` for plan/review turns; cheaper `--model`
   for mechanical implementation of an approved plan. Dial reasoning with `--effort`
   (`low` for mechanical edits, `high`/`max` for hard design work; codex clamps

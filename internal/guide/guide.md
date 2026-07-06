@@ -181,6 +181,55 @@ legwork events auth-refactor --run      -> merged timeline: jobs + your notes
 
 Notes make your reasoning auditable — report decisions as you make them.
 
+## Watching a pipeline
+
+Three read-only surfaces render the same event logs at different zoom levels.
+All are strictly read-only; `runs` and `tail` are plain-stdout (work over
+`ssh host legwork ...`, no TTY), `dashboard` needs a terminal.
+
+```
+legwork runs                 -> one line per run label, rolled up (the overview)
+legwork tail                 -> tail -f across all jobs + run logs (the live feed)
+legwork dashboard            -> interactive TUI: runs + selected-job + timeline
+```
+
+`runs` is the pipeline overview `ls` never was — one line per `--run` label,
+newest activity first, with a job-state rollup, total cost, a `!` when any live
+job's context is high, and your most recent `note` for that run:
+
+```
+RUN           JOBS  STATE          COST    CTX  LAST   NOTE
+passthrough   2     done           $3.39   ok   19h    merged 85bd6f9, smoke green
+ctx-hint      2     1 active · 1 done  $2.76  ok  2m    dispatched implementer to ws-5
+(no run)      1     needs-input    $1.10   !    5m
+```
+
+Jobs with no `--run` collapse into one `(no run)` line. `--json` emits the
+rollup array (`label, jobs, cost_usd, context_high, updated, last_note`).
+
+`tail` follows the merged stream — worker events and your notes interleaved by
+time, newest at the bottom. It backfills the last `-n` events (default 30) then
+follows live. Scope with `--run <label>` or `--job <id>`; add `--full` for the
+firehose (tool calls, progress, usage). Finished lines carry the turn's
+`state · cost · ctx`:
+
+```
+19:02 [ctx-hint]  note      dispatched implementer to ws-5
+19:04 job-14      started   Implement the context threshold…
+19:11 job-13      finished  done · $2.17 · ctx:73k
+```
+
+`--until-idle` makes `tail` the scriptable *wait for my pipeline* primitive: it
+exits 0 once no job in scope is active or queued (after draining events), so an
+orchestrator can replace a polling loop with `legwork tail --run L --until-idle`.
+`--json` emits the merged events as JSONL (raw event + `job`/`run` provenance).
+
+`dashboard` is htop-for-jobs: a live runs rollup, a detail pane for the selected
+job (status, task, recent events — `f` toggles the firehose), and the curated
+timeline. Keys: `j/k` (or arrows) move the selection across jobs, `enter`/`esc`
+focus/leave detail, `q` quits. needs-input jobs get the loudest treatment on
+every pane. It needs a TTY; without one it points you at `tail` and exits 2.
+
 ## Quick reference
 
 ```
@@ -189,6 +238,7 @@ run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P] [--effort E] [--fallback-model M] <task>
 resume <job> <msg>   answer <job> <msg>   cancel <job>
 status <job>         events <job|run> [--run] [--since N]   ls   watch <job>
+runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]   dashboard
 ws new --repo R      ws ls               diff <ws> [--stat]
 close <ws> [--merged [--into <ref>] [--force]|--discard|--keep-worktree]
 gc [--dry-run] [--close-merged [--close-merged-into <ref>]] [--json]
