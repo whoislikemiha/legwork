@@ -74,10 +74,12 @@ func New(name string) (Adapter, error) {
 	switch name {
 	case "claude":
 		return &Claude{}, nil
+	case "codex":
+		return &Codex{}, nil
 	case "fake":
 		return &Fake{}, nil
 	default:
-		return nil, fmt.Errorf("unknown agent %q (available: claude, fake)", name)
+		return nil, fmt.Errorf("unknown agent %q (available: claude, codex, fake)", name)
 	}
 }
 

@@ -1,9 +1,16 @@
 # legwork — orchestrator guide
 
-legwork runs headless coding-agent turns (claude, fake; codex planned) as supervised
+legwork runs headless coding-agent turns (claude, codex, fake) as supervised
 **jobs**: you dispatch a task, the agent works detached, you read structured events
 and a final state, you steer with new turns. Locally or over ssh — every command
 below works as `ssh host legwork ...`. All verbs take `--json`.
+
+Agents differ; legwork normalizes them, it doesn't pretend they're identical.
+`--agent claude` uses a permission mode; `--agent codex` runs in a kernel sandbox
+(`--read-only` → codex's read-only sandbox, otherwise workspace-write) and both
+fork sessions and run subagents. The loop, states, resume, and status block are
+identical across agents. On codex's subscription auth, per-turn cost is nominal
+(reported as 0) — watch `context`, not cost.
 
 **Your task prompt is ONLY the task.** legwork itself injects the worker's rules —
 the status block contract (`state: done|needs-input|blocked`), ask-early behavior,
@@ -21,7 +28,7 @@ legwork status <job> --json              -> state decides your next move:
   needs-input  legwork answer <job> "<decision>"   (same session continues)
   blocked      read status/events; fix the blocker or escalate to the human
   failed       read events; retry as a fresh job or escalate
-  auth-required tell the human: agent login needed on this machine (e.g. claude /login)
+  auth-required tell the human: agent login needed on this machine (claude /login, codex login)
   interrupted  the turn died mid-flight (crash/cancel); session survives -> resume
 legwork resume <job> "next instruction"  -> another turn in the same session
 ```

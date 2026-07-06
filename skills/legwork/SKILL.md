@@ -1,6 +1,6 @@
 ---
 name: legwork
-description: Dispatch and supervise headless coding-agent jobs (Claude Code, more coming) via the legwork CLI — locally or over ssh. Use when delegating coding/research tasks to worker agents, orchestrating plan/implement/review pipelines, checking on running jobs, answering worker questions, reviewing workspace diffs, or when the user mentions legwork.
+description: Dispatch and supervise headless coding-agent jobs (Claude Code, Codex) via the legwork CLI — locally or over ssh. Use when delegating coding/research tasks to worker agents, orchestrating plan/implement/review pipelines, checking on running jobs, answering worker questions, reviewing workspace diffs, or when the user mentions legwork.
 ---
 
 # legwork — orchestrating headless agent workers
@@ -20,6 +20,10 @@ ssh (`ssh host legwork ...`) and takes `--json`. Full built-in reference:
 - **Mutating work goes in a workspace.** Plain `run` = scratch dir;
   `--dir` = in-place (combine with `--read-only` for research); `--workspace` = the
   reviewable-diff flow.
+- **Pick the agent with `--agent`** (`claude` | `codex`). claude uses a permission
+  mode; codex runs in a kernel sandbox (`--read-only` → read-only sandbox, else
+  workspace-write). Loop, states, resume, status block are identical. On codex's
+  subscription auth, cost is reported as 0 — watch `context` for health.
 
 ## Preflight
 
@@ -51,7 +55,8 @@ Act on `state`:
   if it is genuinely their call.
 - `blocked` / `failed` — read `legwork events "$job"`; fix and resume, or start a
   fresh job.
-- `auth-required` — tell the human to log the agent in on that machine.
+- `auth-required` — tell the human to log the agent in on that machine
+  (`claude /login`, `codex login`).
 - `interrupted` — turn died (crash/cancel); session survives, `resume` continues.
 
 Wake-on-event instead of polling: set `[notify] command` in

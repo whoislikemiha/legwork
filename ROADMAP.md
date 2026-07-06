@@ -8,9 +8,7 @@ re-proposed.
 
 ## Next
 
-- **Codex adapter** — the abstraction-prover: second dialect (`codex exec --json`,
-  OS sandbox modes mapping to `--read-only`/workspace-write, session resume).
-  Expected to flush out claude-shaped assumptions in the adapter interface.
+_(Codex adapter and `legwork gc` shipped — see below / the changelog.)_
 
 ## Soon
 
@@ -41,6 +39,11 @@ re-proposed.
   timeout (`legwork run --profile opus-review "..."`). Config-file defined.
 - **`max_concurrent`** — cap simultaneous runners with a pending queue (queued
   jobs visible in `ls`).
+- **Enforced structured status on codex** — the codex adapter ships with
+  convention-based status blocks (`StructuredStatus: "convention"`), same as
+  claude. codex's `--output-schema` could force `{state, question, summary}` JSON
+  (`"enforced"`), killing the missing-block ambiguity — deferred from the initial
+  adapter because it changes `Result` format and needs a worker-rules variant.
 
 ## Later
 

@@ -3,7 +3,7 @@
 > Delegate the legwork; keep the judgment.
 
 legwork is a CLI for dispatching and supervising **headless coding-agent jobs**
-(Claude Code today, Codex planned) — built so that *another agent* can be the one
+(Claude Code and Codex) — built so that *another agent* can be the one
 driving. An orchestrator (or you) runs tasks as detached jobs, reads structured
 events, reviews diffs behind a gate, answers the worker's questions, and closes the
 work when it lands. Locally, or over plain ssh — the CLI is the API.
@@ -25,8 +25,14 @@ Orchestrating coding agents by scraping their TUIs breaks constantly, and every
 agent CLI speaks a different dialect. legwork normalizes them behind one contract:
 
 - **Headless-only**: agents run via their native non-interactive modes
-  (`claude -p --output-format stream-json`); readiness is process state, results are
-  structured output. No terminal scraping, no tmux control, no MCP required.
+  (`claude -p --output-format stream-json`, `codex exec --json`); readiness is
+  process state, results are structured output. No terminal scraping, no tmux
+  control, no MCP required.
+- **Per-agent, not lowest-common-denominator**: `--agent claude` uses a permission
+  mode; `--agent codex` runs in a kernel sandbox (`--read-only` → read-only sandbox,
+  else workspace-write) and needs `codex login`. The loop, states, and status-block
+  contract are identical. codex's subscription auth reports cost as 0 — watch
+  `context` for health.
 - **Jobs are detached**: `run` returns an ID immediately; the runner survives your
   ssh session dropping. State is append-only JSONL files you can `tail -f | jq`.
 - **Every turn ends in a machine-parsed state**: `done`, `needs-input` (with the
@@ -84,7 +90,7 @@ itself; don't repeat it in prompts.
 
 ## Status
 
-Early. Implemented: jobs, detached runner, claude + fake adapters, status-block
+Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
 contract, workspaces/checkpoints/diff/close, runs + narration, notifier, context
 tracking, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
 [ROADMAP.md](ROADMAP.md) (including rejected ideas and why); the full design
