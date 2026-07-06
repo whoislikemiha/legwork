@@ -114,6 +114,14 @@ legwork resume <job> "review feedback: fix Y"
 legwork close ws-N --merged|--discard    -> reclaims worktree/branch/refs
 ```
 
+**You own git history; workers never commit.** The injected contract forbids
+worker commits — do not override it in your prompts ("commit when done" turns a
+worker into a historian without the bigger picture, and codex's sandbox can't
+write the worktree gitdir anyway). Workers produce tree states; legwork
+checkpoints them automatically after every turn. When the diff passes review,
+*you* commit in the worktree — you know what's one logical change, what's
+scratch, and what the message should say — then land it.
+
 `close` without a flag refuses if there are unreviewed changes — that's the review
 gate. You (or the human) land the diff (PR, merge), then close `--merged`.
 `--merged` is verified, not trusted: the branch must actually be an ancestor of

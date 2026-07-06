@@ -25,6 +25,28 @@ package — source discovery, time-ordered merge with a Poll cursor, a curated/f
 significance filter, and per-run rollups — designed so `serve` (below) can adopt it
 unchanged. `ls` stays the flat per-job table.)_
 
+- **`legwork serve` — the human surface, designed mockup-first.** Promoted from
+  Later after the dashboard dogfood (2026-07-07): two independent TUI
+  implementations both landed "confusing, clunky scrolling" with the human
+  judge — a browser is simply the better human medium (native scroll, real
+  typography, clickable drill-in). Process requirement: the visual design is
+  crafted as an HTML mockup over real state-dir data and approved by the human
+  *before* any Go is written; the mockup is the spec. `internal/timeline` is
+  the data layer; DESIGN.md §7's invariants hold (localhost, read-only, SSE,
+  go:embed).
+- **Dashboard TUI design pass** — shipped v1 works but reads as a data dump;
+  needs a deliberate hierarchy/interaction pass (what draws the eye, scrolling
+  and focus model). Lesson recorded: structure specs aren't visual specs —
+  presentation surfaces need mockup-level design before implementation. Do it
+  after (and informed by) the `serve` design.
+- **`ws commit <ws> -m <msg>`** — first-class orchestrator commit inside a
+  workspace, recorded as an attributed event in the run log. Workers never
+  commit (the injected contract already forbids it — the 2026-07-07 dogfood
+  confirmed why: worker-authored messages lack the bigger picture, and codex's
+  sandbox can't even write the worktree gitdir under the main repo's
+  `.git/worktrees/`). The orchestrator owning history deserves a verb instead
+  of raw git-in-the-worktree.
+
 ## Soon
 
 - **`approve` / `needs-decision`** — route genuine permission judgment calls to

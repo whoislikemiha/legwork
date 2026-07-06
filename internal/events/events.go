@@ -46,12 +46,15 @@ const (
 
 const previewMax = 200
 
-// Truncate shortens s to the index preview budget.
+// Truncate shortens s to the index preview budget, never splitting a rune —
+// a byte-sliced multibyte character would put invalid UTF-8 in every preview
+// surface downstream.
 func Truncate(s string) string {
-	if len(s) <= previewMax {
+	rs := []rune(s)
+	if len(rs) <= previewMax {
 		return s
 	}
-	return s[:previewMax] + "…"
+	return string(rs[:previewMax]) + "…"
 }
 
 // Log appends events to one events.jsonl. Appends are O_APPEND single writes

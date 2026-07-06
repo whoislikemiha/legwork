@@ -81,6 +81,10 @@ One active job per workspace; parallelism = multiple workspaces. `close` refuses
 unreviewed changes without an explicit disposition — that's the review gate, don't
 bypass it reflexively.
 
+You own git history — workers never commit (the injected contract forbids it;
+don't override with "commit when done"). Review the diff, then commit in the
+worktree yourself with a message that has the bigger picture, then land it.
+
 ## Cleanup: close + gc
 
 `close` acknowledges + reclaims **one** workspace (you own it, after the diff lands).
