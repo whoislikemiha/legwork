@@ -40,6 +40,10 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   it at ntfy for your phone, or at whatever re-invokes your orchestrator.
 - **Context as the health metric**: `ls` shows each session's context footprint
   (`ctx:145k`) — the early-warning signal for a worker spinning in circles.
+- **Reclamation without a daemon**: `gc` compresses/retires transcripts and sweeps
+  orphans (dead runners, stale worktrees, refs with no workspace); opt-in
+  `--close-merged` auto-closes landed work. Runs opportunistically on dispatch;
+  unclosed work is never touched.
 
 ## Install
 
@@ -82,7 +86,7 @@ itself; don't repeat it in prompts.
 
 Early. Implemented: jobs, detached runner, claude + fake adapters, status-block
 contract, workspaces/checkpoints/diff/close, runs + narration, notifier, context
-tracking, timeouts, `doctor` preflight, `guide` + skill. What's next lives in
+tracking, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
 [ROADMAP.md](ROADMAP.md) (including rejected ideas and why); the full design
 rationale in [DESIGN.md](DESIGN.md).
 

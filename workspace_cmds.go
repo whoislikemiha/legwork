@@ -32,7 +32,7 @@ func activeJobIn(s *job.Store, wsID string) (string, error) {
 		if m.Workspace != wsID {
 			continue
 		}
-		reconcile(s, m)
+		s.Reconcile(m)
 		if m.State == job.StateActive || m.State == job.StateQueued {
 			return m.ID, nil
 		}
@@ -168,14 +168,9 @@ func closeCmd() *cobra.Command {
 			if err := wss.Close(m, disposition, keepWorktree); err != nil {
 				return err
 			}
-			// Close the workspace's jobs too: the lineage is acknowledged.
-			metas, _ := s.List()
-			for _, jm := range metas {
-				if jm.Workspace == m.ID && jm.State != job.StateClosed {
-					jm.State = job.StateClosed
-					_ = s.SaveMeta(jm)
-				}
-			}
+			// Close the workspace's jobs too: the lineage is acknowledged, and
+			// each job's Closed timestamp anchors gc's retention clock.
+			_ = s.CloseJobsForWorkspace(m.ID)
 			fmt.Printf("%s closed (%s)\n", m.ID, m.Disposition)
 			return nil
 		},

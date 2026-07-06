@@ -40,6 +40,11 @@ func TestParallelRunsGetUniqueIDs(t *testing.T) {
 	if len(seen) != n {
 		t.Fatalf("got %d unique ids, want %d", len(seen), n)
 	}
+	// Let the detached runners finish before the tempdir is torn down, else
+	// cleanup races a live runner still writing into a job dir.
+	for id := range seen {
+		e.waitState(t, id, "done")
+	}
 }
 
 // A hung turn must not hold a job open past --timeout; the session survives

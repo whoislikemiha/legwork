@@ -44,27 +44,14 @@ func Open(root string) (*Store, error) {
 
 func (s *Store) dir(id string) string { return filepath.Join(s.Root, "workspaces", id) }
 
-// newID allocates ws-N and reserves its directory under the state-wide
-// allocation lock (same lock as job IDs).
+// newID allocates ws-N (via the persisted high-water counter, so gc deletions
+// never cause reuse) and reserves its directory.
 func (s *Store) newID() (string, error) {
-	unlock, err := job.LockAlloc(s.Root)
+	n, err := job.AllocID(s.Root, "ws")
 	if err != nil {
 		return "", err
 	}
-	defer unlock()
-
-	entries, err := os.ReadDir(filepath.Join(s.Root, "workspaces"))
-	if err != nil {
-		return "", err
-	}
-	max := 0
-	for _, e := range entries {
-		var n int
-		if _, err := fmt.Sscanf(e.Name(), "ws-%d", &n); err == nil && n > max {
-			max = n
-		}
-	}
-	id := fmt.Sprintf("ws-%d", max+1)
+	id := fmt.Sprintf("ws-%d", n)
 	if err := os.Mkdir(filepath.Join(s.Root, "workspaces", id), 0o700); err != nil {
 		return "", err
 	}
@@ -269,6 +256,19 @@ func (s *Store) Dirty(m *Meta) (bool, error) {
 	return strings.TrimSpace(out) != "", nil
 }
 
+// Uncommitted reports whether the worktree has changes not yet committed
+// (tracked or untracked) — i.e. it differs from its own HEAD. This is distinct
+// from Dirty, which compares to the workspace base: committed work that has
+// landed is not "uncommitted" and is safe for gc --close-merged to reclaim,
+// whereas uncommitted work is always a human judgment call.
+func (s *Store) Uncommitted(m *Meta) (bool, error) {
+	out, err := git(m.Tree, "status", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(out) != "", nil
+}
+
 // Close acknowledges the workspace and reclaims worktree, branch, and
 // checkpoint refs. Unreviewed changes require an explicit disposition.
 func (s *Store) Close(m *Meta, disposition string, keepWorktree bool) error {
@@ -287,20 +287,85 @@ func (s *Store) Close(m *Meta, disposition string, keepWorktree bool) error {
 	}
 
 	if !keepWorktree {
-		// Delete checkpoint refs first: they pin objects.
-		if refs, err := git(m.Repo, "for-each-ref", "--format=%(refname)", "refs/legwork/"+m.ID); err == nil {
-			for _, ref := range strings.Fields(refs) {
-				_, _ = git(m.Repo, "update-ref", "-d", ref)
-			}
-		}
-		if _, err := git(m.Repo, "worktree", "remove", "--force", m.Tree); err != nil {
-			return err
-		}
-		if _, err := git(m.Repo, "branch", "-D", m.Branch); err != nil {
+		if err := s.reclaim(m); err != nil {
 			return err
 		}
 	}
 	m.State = "closed"
 	m.Disposition = disposition
 	return s.save(m)
+}
+
+// reclaim performs the blast-radius-limited reclamation of a workspace's
+// tool-created resources: checkpoint refs, worktree, branch. It is the single
+// place these git commands live, so both Close and gc's --close-merged inherit
+// the exact same "only touch what legwork created" guarantee.
+func (s *Store) reclaim(m *Meta) error {
+	// Delete checkpoint refs first: they pin objects.
+	if refs, err := git(m.Repo, "for-each-ref", "--format=%(refname)", "refs/legwork/"+m.ID); err == nil {
+		for _, ref := range strings.Fields(refs) {
+			_, _ = git(m.Repo, "update-ref", "-d", ref)
+		}
+	}
+	if _, err := git(m.Repo, "worktree", "remove", "--force", m.Tree); err != nil {
+		return err
+	}
+	if _, err := git(m.Repo, "branch", "-D", m.Branch); err != nil {
+		return err
+	}
+	return nil
+}
+
+// CloseMerged closes an open workspace whose work is machine-verified as
+// landed (disposition "merged") or never-started (disposition "clean"),
+// reclaiming its worktree/branch/refs. It is gc's entry to the same
+// reclamation path Close uses; callers verify merged-ness first.
+func (s *Store) CloseMerged(m *Meta, disposition string) error {
+	if m.State == "closed" {
+		return fmt.Errorf("%s is already closed", m.ID)
+	}
+	if err := s.reclaim(m); err != nil {
+		return err
+	}
+	m.State = "closed"
+	m.Disposition = disposition
+	return s.save(m)
+}
+
+// Dir returns the workspace's state directory (<root>/workspaces/<id>).
+func (s *Store) Dir(id string) string { return s.dir(id) }
+
+// DefaultBranchTip resolves the repo's default branch and returns its commit
+// OID: origin/HEAD -> main -> master. Empty string (no error) if none resolve.
+func (s *Store) DefaultBranchTip(repo string) (ref, oid string) {
+	for _, cand := range []string{"refs/remotes/origin/HEAD", "refs/heads/main", "refs/heads/master"} {
+		if out, err := git(repo, "rev-parse", "--verify", "--quiet", cand); err == nil && out != "" {
+			return cand, out
+		}
+	}
+	return "", ""
+}
+
+// MergedInto reports whether the workspace branch tip is an ancestor of target
+// (i.e. its commits have landed there). `git merge-base --is-ancestor` exits 0
+// for yes and exactly 1 for no; any other exit (e.g. 128 for a bad target ref)
+// is a real error and is returned, so a typo'd --close-merged-into surfaces
+// instead of quietly reporting everything unmerged.
+func (s *Store) MergedInto(m *Meta, target string) (bool, error) {
+	cmd := exec.Command("git", "-C", m.Repo, "merge-base", "--is-ancestor", m.Branch, target)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return true, nil
+	}
+	if ee, ok := err.(*exec.ExitError); ok && ee.ExitCode() == 1 {
+		return false, nil
+	}
+	return false, fmt.Errorf("merge-base --is-ancestor %s %s: %v: %s",
+		m.Branch, target, err, strings.TrimSpace(string(out)))
+}
+
+// BranchTip returns the OID of the workspace's branch, or "" if it's gone.
+func (s *Store) BranchTip(m *Meta) string {
+	out, _ := git(m.Repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+m.Branch)
+	return out
 }

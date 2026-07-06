@@ -14,6 +14,7 @@ import (
 	"github.com/whoislikemiha/legwork/internal/doctor"
 	"github.com/whoislikemiha/legwork/internal/events"
 	"github.com/whoislikemiha/legwork/internal/fakeagent"
+	"github.com/whoislikemiha/legwork/internal/gc"
 	"github.com/whoislikemiha/legwork/internal/guide"
 	"github.com/whoislikemiha/legwork/internal/job"
 	"github.com/whoislikemiha/legwork/internal/runner"
@@ -44,7 +45,7 @@ health, recipes).`,
 	}
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), statusCmd(), eventsCmd(),
 		lsCmd(), watchCmd(), cancelCmd(), wsCmd(), diffCmd(), closeCmd(),
-		noteCmd(), doctorCmd(), guideCmd(), runnerCmd(), fakeAgentCmd())
+		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd())
 	return root
 }
 
@@ -143,20 +144,6 @@ func fakeAgentCmd() *cobra.Command {
 
 func openStore() (*job.Store, error) { return job.OpenStore() }
 
-// reconcile flips a stale active job (dead runner) to interrupted.
-func reconcile(s *job.Store, m *job.Meta) {
-	if m.State == job.StateActive && !s.Alive(m) {
-		m.State = job.StateInterrupted
-		m.RunnerPID = 0
-		_ = s.SaveMeta(m)
-		log, err := events.Open(filepath.Join(s.JobDir(m.ID), "events.jsonl"))
-		if err == nil {
-			_, _ = log.Append(events.Event{Type: events.TypeInterrupted, Actor: "runner",
-				Preview: "runner died without finishing the turn"})
-		}
-	}
-}
-
 func printJSON(v any) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
@@ -242,6 +229,7 @@ func runCmd() *cobra.Command {
 			if err := runner.Spawn(s, m); err != nil {
 				return err
 			}
+			gc.MaybeAuto(s)
 			if asJSON {
 				return printJSON(m)
 			}
@@ -272,7 +260,7 @@ func doResume(id, message, eventType string) (*job.Meta, error) {
 	if err != nil {
 		return nil, err
 	}
-	reconcile(s, m)
+	s.Reconcile(m)
 	if m.State == job.StateActive {
 		return nil, fmt.Errorf("%s is active; cancel it first or wait for the turn to end", id)
 	}
@@ -305,6 +293,7 @@ func doResume(id, message, eventType string) (*job.Meta, error) {
 	if err := runner.Spawn(s, m); err != nil {
 		return nil, err
 	}
+	gc.MaybeAuto(s)
 	return m, nil
 }
 
@@ -369,7 +358,7 @@ func statusCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			reconcile(s, m)
+			s.Reconcile(m)
 			if asJSON {
 				return printJSON(m)
 			}
@@ -467,7 +456,7 @@ func lsCmd() *cobra.Command {
 				return err
 			}
 			for _, m := range metas {
-				reconcile(s, m)
+				s.Reconcile(m)
 			}
 			if asJSON {
 				return printJSON(metas)
@@ -522,7 +511,7 @@ func watchCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				reconcile(s, m)
+				s.Reconcile(m)
 				if m.State != job.StateActive && m.State != job.StateQueued {
 					// Terminal and no more events coming.
 					evs, _ := events.Read(path, cursor)

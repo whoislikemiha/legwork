@@ -11,11 +11,6 @@ re-proposed.
 - **Codex adapter** — the abstraction-prover: second dialect (`codex exec --json`,
   OS sandbox modes mapping to `--read-only`/workspace-write, session resume).
   Expected to flush out claude-shaped assumptions in the adapter interface.
-- **`legwork gc`** — reclamation for closed jobs/workspaces: transcript
-  compression + retention, orphan sweeps (worktrees without meta, refs without
-  workspaces, dead runners), `--dry-run`, opt-in `--close-merged`
-  (machine-verifiable via `git branch --merged`). Runs opportunistically
-  (git-style auto), never touches unclosed work.
 
 ## Soon
 

@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/whoislikemiha/legwork/internal/config"
 )
 
 // Config lives at $XDG_CONFIG_HOME/legwork/config.toml:
@@ -30,21 +31,9 @@ type Config struct {
 // DefaultEvents when the config lists none.
 var DefaultEvents = []string{"needs-input", "done", "blocked", "failed", "auth-required", "interrupted"}
 
-func configPath() string {
-	if p := os.Getenv("LEGWORK_CONFIG"); p != "" {
-		return p
-	}
-	base := os.Getenv("XDG_CONFIG_HOME")
-	if base == "" {
-		home, _ := os.UserHomeDir()
-		base = filepath.Join(home, ".config")
-	}
-	return filepath.Join(base, "legwork", "config.toml")
-}
-
 func Load() (*Config, error) {
 	var cfg Config
-	if _, err := toml.DecodeFile(configPath(), &cfg); err != nil {
+	if _, err := toml.DecodeFile(config.Path(), &cfg); err != nil {
 		if os.IsNotExist(err) {
 			return &cfg, nil
 		}

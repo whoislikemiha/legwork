@@ -73,6 +73,24 @@ One active job per workspace; parallelism = multiple workspaces. `close` refuses
 unreviewed changes without an explicit disposition — that's the review gate, don't
 bypass it reflexively.
 
+## Cleanup: close + gc
+
+`close` acknowledges + reclaims **one** workspace (you own it, after the diff lands).
+`gc` reclaims opportunistically — closed/orphaned things only, **never unclosed work**:
+
+```bash
+legwork gc                     # reconcile dead runners -> interrupted; compress/retire
+                               # transcripts; sweep orphan refs/worktrees (index kept)
+legwork gc --dry-run           # same summary, mutates nothing
+legwork gc --close-merged      # also close open workspaces whose branch landed in the
+                               # default branch (git merge-base --is-ancestor); dirty or
+                               # unmerged ones are left for human review
+```
+
+gc also auto-runs cheaply on `run`/`resume`/`answer` (git-style, gated ~24h). Its blast
+radius is only what legwork created; repo branches/refs/worktrees are never touched.
+Config: `[gc]` in `config.toml` (`auto`, `auto_interval`, `transcript_retain`, …).
+
 ## Health and recovery
 
 `legwork ls` shows `ctx:145k` per job. High context + stale diff = spinning

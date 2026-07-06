@@ -23,6 +23,10 @@ func TestMain(m *testing.M) {
 	if out, err := exec.Command("go", "build", "-o", binPath, "github.com/whoislikemiha/legwork").CombinedOutput(); err != nil {
 		panic(string(out))
 	}
+	// Suppress the opportunistic auto-gc fork by default: a detached child
+	// racing a test's tempdir cleanup is flaky. Tests that exercise auto-gc
+	// re-enable it per-command (LEGWORK_NO_AUTO_GC="").
+	os.Setenv("LEGWORK_NO_AUTO_GC", "1")
 	code := m.Run()
 	os.RemoveAll(dir)
 	os.Exit(code)

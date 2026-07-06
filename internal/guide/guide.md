@@ -108,6 +108,35 @@ Scratch/research jobs need no workspace: plain `run` gets a scratch dir;
 `run --dir <path>` works in-place — combine with `--read-only` for plan/research
 turns (harness-enforced: the agent cannot edit).
 
+## Cleanup: close + gc
+
+Two separate acts. `close` **acknowledges** one workspace with a disposition and
+reclaims its worktree/branch/refs immediately — you own that call (it's the final
+pipeline step after the diff lands). `gc` **reclaims opportunistically**: closed and
+provably-orphaned things only, **never unclosed work**.
+
+```
+legwork gc                    -> reconcile dead runners, compress/retire transcripts,
+                                 sweep orphan refs/worktrees, report orphan branches
+legwork gc --dry-run          -> same summary prefixed "would"; mutates nothing
+legwork gc --close-merged     -> also close open workspaces whose branch has landed
+legwork gc --close-merged --close-merged-into origin/main   -> explicit target ref
+```
+
+What gc does: flips dead-runner jobs to `interrupted` (resumable, never deleted);
+gzips a finished job's transcript, then deletes it past the retention horizon while
+the event index + artifacts persist as the audit trail; prunes stale worktree
+registrations and deletes `refs/legwork/*` with no owning workspace. `--close-merged`
+(opt-in) closes an open workspace only when its committed branch is an ancestor of the
+default branch (`git merge-base --is-ancestor`) and the tree has no uncommitted
+changes — dirty or unmerged workspaces are always left for human judgment. gc's blast
+radius is strictly what legwork created; repo branches/refs/worktrees are untouchable.
+
+gc also runs **automatically** and cheaply on dispatch (`run`/`resume`/`answer`),
+git-style, gated to at most once per `auto_interval` (default 24h). Configure under
+`[gc]` in `config.toml` (`auto`, `auto_interval`, `transcript_compress_after`,
+`transcript_retain`, `orphan_grace`); `auto = false` disables the opportunistic run.
+
 ## Health: watch context, not cost
 
 `legwork ls` shows `ctx:145k` per job — the session's context footprint.
@@ -138,6 +167,7 @@ resume <job> <msg>   answer <job> <msg>   cancel <job>
 status <job>         events <job|run> [--run] [--since N]   ls   watch <job>
 ws new --repo R      ws ls               diff <ws> [--stat]
 close <ws> [--merged|--discard|--keep-worktree]
+gc [--dry-run] [--close-merged [--close-merged-into <ref>]] [--json]
 note <run> <text>    guide
 ```
 
