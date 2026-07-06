@@ -135,12 +135,12 @@ func TestEffortRejectsBadLevel(t *testing.T) {
 	}
 }
 
-// The claude-specific passthroughs are rejected for codex rather than
-// silently dropped.
-func TestCodexRejectsClaudePassthroughs(t *testing.T) {
+// --effort reaches codex (mapped onto its reasoning scale); --fallback-model
+// stays claude-specific and is rejected for codex rather than silently dropped.
+func TestCodexPassthroughs(t *testing.T) {
 	e := newEnv(t)
-	if out, err := e.legworkErr("run", "--agent", "codex", "--effort", "low", "x"); err == nil {
-		t.Fatalf("codex accepted --effort:\n%s", out)
+	if out, err := e.legworkErr("run", "--agent", "codex", "--effort", "max", "x"); err != nil {
+		t.Fatalf("codex rejected --effort:\n%s", out)
 	}
 	if out, err := e.legworkErr("run", "--agent", "codex", "--fallback-model", "sonnet", "x"); err == nil {
 		t.Fatalf("codex accepted --fallback-model:\n%s", out)

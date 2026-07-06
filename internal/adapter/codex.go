@@ -57,6 +57,13 @@ func (c *Codex) Command(req TurnRequest) (*exec.Cmd, error) {
 	if req.Model != "" {
 		args = append(args, "-m", req.Model)
 	}
+	// codex has no --effort flag; reasoning level is a config override, and its
+	// scale tops out at "high" (no xhigh/max). codexEffort maps legwork's shared
+	// vocabulary onto that ceiling so `--effort` means the same verb for both
+	// agents even though codex clamps the top two levels.
+	if e := codexEffort(req.Effort); e != "" {
+		args = append(args, "-c", "model_reasoning_effort=\""+e+"\"")
+	}
 	if req.SessionID != "" {
 		args = append(args, req.SessionID) // positional id, after options
 	}
@@ -70,6 +77,19 @@ func (c *Codex) Command(req TurnRequest) (*exec.Cmd, error) {
 	}
 	cmd.Stdin = strings.NewReader(prompt)
 	return cmd, nil
+}
+
+// codexEffort maps legwork's --effort vocabulary (low|medium|high|xhigh|max) to
+// codex's model_reasoning_effort scale (low|medium|high). codex has no level
+// above "high", so xhigh and max both clamp there. Empty in, empty out.
+func codexEffort(e string) string {
+	switch e {
+	case "low", "medium", "high":
+		return e
+	case "xhigh", "max":
+		return "high"
+	}
+	return ""
 }
 
 func (c *Codex) Parser() Parser { return &codexParser{} }

@@ -210,3 +210,26 @@ func TestCodexCommand(t *testing.T) {
 		t.Fatalf("resume must not use the -s/--sandbox flag: %v", cmd.Args)
 	}
 }
+
+func TestCodexCommandEffort(t *testing.T) {
+	// No effort -> no reasoning override.
+	cmd, _ := (&Codex{}).Command(TurnRequest{Task: "x"})
+	if strings.Contains(strings.Join(cmd.Args, " "), "model_reasoning_effort") {
+		t.Fatalf("no reasoning override expected without effort: %v", cmd.Args)
+	}
+
+	// Native levels pass straight through; xhigh/max clamp to codex's "high".
+	for effort, want := range map[string]string{
+		"low":    "low",
+		"medium": "medium",
+		"high":   "high",
+		"xhigh":  "high",
+		"max":    "high",
+	} {
+		cmd, _ := (&Codex{}).Command(TurnRequest{Task: "x", Effort: effort})
+		joined := strings.Join(cmd.Args, " ")
+		if !strings.Contains(joined, `-c model_reasoning_effort="`+want+`"`) {
+			t.Fatalf("effort %q must map to %q: %v", effort, want, cmd.Args)
+		}
+	}
+}

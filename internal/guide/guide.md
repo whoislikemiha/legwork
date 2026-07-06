@@ -34,12 +34,13 @@ legwork resume <job> "next instruction"  -> another turn in the same session
 ```
 
 Dispatch options stick for the job's lifetime: `--read-only`, `--append-prompt`,
-`--timeout`, and the claude-only `--effort` / `--fallback-model` are recorded in
+`--timeout`, `--effort`, and the claude-only `--fallback-model` are recorded in
 the job and apply to every resumed turn too. The job record also keeps the
 original dispatch prompt (`initial_task` once resumed) and the model —
 `status --json` reconstructs any job cold. `--effort` (`low|medium|high|xhigh|max`)
-and `--fallback-model` are claude-specific; passing them to `--agent codex` is
-rejected at dispatch.
+reaches both claude and codex, but codex's reasoning scale tops out at `high`, so
+`xhigh` and `max` clamp there. `--fallback-model` is claude-specific; passing it
+to `--agent codex` is rejected at dispatch.
 
 Never trust `done` blindly: verify the diff is non-empty and tests ran (visible as
 tool-call events) before building on it. A missing/unparseable status block surfaces
