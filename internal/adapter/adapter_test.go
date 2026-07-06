@@ -114,3 +114,28 @@ func TestClaudeCommandReadOnly(t *testing.T) {
 		t.Fatalf("read-only turn must NOT skip permissions: %v", cmd.Args)
 	}
 }
+
+func TestClaudeCommandEffortAndFallback(t *testing.T) {
+	cmd, err := (&Claude{}).Command(TurnRequest{Task: "do it", Effort: "low", FallbackModel: "sonnet"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmd.Args, " ")
+	if !strings.Contains(joined, "--effort low") {
+		t.Fatalf("--effort not passed through: %v", cmd.Args)
+	}
+	if !strings.Contains(joined, "--fallback-model sonnet") {
+		t.Fatalf("--fallback-model not passed through: %v", cmd.Args)
+	}
+}
+
+func TestClaudeCommandOmitsUnsetPassthroughs(t *testing.T) {
+	cmd, err := (&Claude{}).Command(TurnRequest{Task: "do it"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(cmd.Args, " ")
+	if strings.Contains(joined, "--effort") || strings.Contains(joined, "--fallback-model") {
+		t.Fatalf("unset passthroughs must not appear: %v", cmd.Args)
+	}
+}

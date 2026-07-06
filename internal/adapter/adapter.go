@@ -26,6 +26,10 @@ type TurnRequest struct {
 	Model        string
 	WorkDir      string
 	ReadOnly     bool
+	// Effort and FallbackModel are claude-specific passthroughs; other
+	// adapters ignore them (the run command rejects them for non-claude).
+	Effort        string // --effort: low|medium|high|xhigh|max
+	FallbackModel string // --fallback-model: model to retry with when overloaded
 }
 
 // TurnResult is the normalized outcome of a completed turn.

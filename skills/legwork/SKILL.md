@@ -49,8 +49,8 @@ legwork status "$job" --json                      # poll, or configure wake-on-e
 
 Act on `state`:
 - `done` — verify, then next phase (`legwork resume "$job" "..."` continues the same
-  session; dispatch options — `--read-only`, `--append-prompt`, `--timeout`, model —
-  stick for every turn) or close.
+  session; dispatch options — `--read-only`, `--append-prompt`, `--timeout`,
+  `--effort`/`--fallback-model` (claude only), model — stick for every turn) or close.
 - `needs-input` — `legwork answer "$job" "<decision>"`; escalate to the human only
   if it is genuinely their call.
 - `blocked` / `failed` — read `legwork events "$job"`; fix and resume, or start a
@@ -111,5 +111,7 @@ does not recover.
   `legwork note <label> "plan approved, splitting into 2 workspaces"`;
   read the merged timeline: `legwork events <label> --run`.
 - Model policy: big model + `--read-only` for plan/review turns; cheaper `--model`
-  for mechanical implementation of an approved plan.
+  for mechanical implementation of an approved plan. On claude, dial reasoning with
+  `--effort` (`low` for mechanical edits, `high`/`max` for hard design work) and set
+  `--fallback-model` to survive overload without failing the turn.
 - Smoke-test plumbing without API spend: `legwork run --agent fake "test"`.

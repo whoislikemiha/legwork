@@ -32,7 +32,8 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   mode; `--agent codex` runs in a kernel sandbox (`--read-only` → read-only sandbox,
   else workspace-write) and needs `codex login`. The loop, states, and status-block
   contract are identical. codex's subscription auth reports cost as 0 — watch
-  `context` for health.
+  `context` for health. Agent-specific passthroughs stay explicit: `--effort` and
+  `--fallback-model` reach claude but are rejected for codex rather than dropped.
 - **Jobs are detached**: `run` returns an ID immediately; the runner survives your
   ssh session dropping. State is append-only JSONL files you can `tail -f | jq`.
 - **Every turn ends in a machine-parsed state**: `done`, `needs-input` (with the

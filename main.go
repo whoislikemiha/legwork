@@ -152,8 +152,18 @@ func printJSON(v any) error {
 
 // --- run ---
 
+// validEffort reports whether e is one of claude's accepted --effort levels.
+func validEffort(e string) bool {
+	switch e {
+	case "low", "medium", "high", "xhigh", "max":
+		return true
+	}
+	return false
+}
+
 func runCmd() *cobra.Command {
 	var agent, dir, model, appendPrompt, wsID, runLabel, timeout string
+	var effort, fallbackModel string
 	var readOnly, asJSON bool
 	c := &cobra.Command{
 		Use:   "run <task>",
@@ -173,8 +183,23 @@ func runCmd() *cobra.Command {
 					return fmt.Errorf("--timeout: %w", err)
 				}
 			}
+			// --effort and --fallback-model are claude-specific; codex has
+			// no --fallback-model and a different effort model, so reject
+			// them loudly rather than silently dropping them.
+			if agent == "codex" {
+				if effort != "" {
+					return fmt.Errorf("--effort is claude-specific; not supported by --agent codex")
+				}
+				if fallbackModel != "" {
+					return fmt.Errorf("--fallback-model is claude-specific; not supported by --agent codex")
+				}
+			}
+			if effort != "" && !validEffort(effort) {
+				return fmt.Errorf("--effort: %q not in low|medium|high|xhigh|max", effort)
+			}
 			m := &job.Meta{ID: id, Agent: agent, Task: args[0], Model: model, Run: runLabel,
 				AppendPrompt: appendPrompt, ReadOnly: readOnly, Timeout: timeout,
+				Effort: effort, FallbackModel: fallbackModel,
 				State: job.StateQueued}
 			if dir != "" && wsID != "" {
 				return fmt.Errorf("--dir and --workspace are mutually exclusive")
@@ -243,6 +268,8 @@ func runCmd() *cobra.Command {
 	c.Flags().StringVar(&runLabel, "run", "", "group the job under a run label")
 	c.Flags().StringVar(&timeout, "timeout", "", "wall-clock limit for the turn (e.g. 30m); exceeded -> interrupted, session survives")
 	c.Flags().StringVar(&model, "model", "", "model override (passed through to the agent)")
+	c.Flags().StringVar(&effort, "effort", "", "claude only: reasoning effort (low|medium|high|xhigh|max)")
+	c.Flags().StringVar(&fallbackModel, "fallback-model", "", "claude only: model to retry with when overloaded")
 	c.Flags().StringVar(&appendPrompt, "append-prompt", "", "orchestrator additions to the injected worker rules")
 	c.Flags().BoolVar(&readOnly, "read-only", false, "read-only turn (plan/research)")
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")

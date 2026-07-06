@@ -24,12 +24,15 @@ turn before changing it.)_
   hooks handle policy denies (push, out-of-worktree writes) without a round-trip.
 - **`fork` / `ask`** — session forking: interrogate a running/finished job
   without disturbing it (`ask`), A/B branch from a plan turn (`fork`).
-- **Claude flag passthroughs** — `--max-turns`, `--effort`, `--allowed-tools` /
-  `--disallowed-tools` (optional tightening for callers who want it; see
-  rejected below for why it's not the default), `--fallback-model`. Dogfood
-  (2026-07-06, doctor run): `--effort` is the sharpest gap — a "Fable
-  reasoning-low plan → Opus reasoning-high implement" recipe couldn't be
-  expressed and fell back to prompt guidance.
+- **Claude flag passthroughs** — `--allowed-tools` / `--disallowed-tools`
+  (optional tightening for callers who want it; see rejected below for why it's
+  not the default) remain. `--effort` and `--fallback-model` shipped: both
+  persist in meta and stick across resume, and are rejected for `--agent codex`
+  (claude-specific). `--max-turns` was verified absent from the installed claude
+  CLI (only `--max-budget-usd` exists) and dropped — not invented. Dogfood
+  (2026-07-06, doctor run) motivated `--effort`: a "Fable reasoning-low plan →
+  Opus reasoning-high implement" recipe couldn't be expressed and fell back to
+  prompt guidance; it now can.
 - **Run artifacts** — a home for orchestration artifacts (plans, process notes)
   attached to the run record instead of the workspace diff. Dogfood: a read-only
   planner wrote its plan to `~/.claude/plans/`, it got copied into the repo for

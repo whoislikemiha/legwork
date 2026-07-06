@@ -105,3 +105,44 @@ func TestResumePreservesDispatchOptions(t *testing.T) {
 		t.Fatalf("task should be the latest instruction: %v", m["task"])
 	}
 }
+
+// The claude-specific passthroughs (--effort, --fallback-model) persist in
+// meta.json and, like the other dispatch options, survive a resume so every
+// turn runs under the same contract.
+func TestEffortAndFallbackPersistThroughResume(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t, resultDone)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake",
+		"--effort", "low", "--fallback-model", "sonnet", "the original task"))
+	e.waitState(t, id, "done")
+
+	e.writeScript(t, resultDone)
+	e.legwork(t, "resume", id, "follow-up instruction")
+	m := e.waitState(t, id, "done")
+	if m["effort"] != "low" {
+		t.Fatalf("effort not persisted through resume: %v", m["effort"])
+	}
+	if m["fallback_model"] != "sonnet" {
+		t.Fatalf("fallback_model not persisted through resume: %v", m["fallback_model"])
+	}
+}
+
+// --effort is validated against claude's accepted set at dispatch.
+func TestEffortRejectsBadLevel(t *testing.T) {
+	e := newEnv(t)
+	if out, err := e.legworkErr("run", "--agent", "fake", "--effort", "turbo", "x"); err == nil {
+		t.Fatalf("bad --effort accepted:\n%s", out)
+	}
+}
+
+// The claude-specific passthroughs are rejected for codex rather than
+// silently dropped.
+func TestCodexRejectsClaudePassthroughs(t *testing.T) {
+	e := newEnv(t)
+	if out, err := e.legworkErr("run", "--agent", "codex", "--effort", "low", "x"); err == nil {
+		t.Fatalf("codex accepted --effort:\n%s", out)
+	}
+	if out, err := e.legworkErr("run", "--agent", "codex", "--fallback-model", "sonnet", "x"); err == nil {
+		t.Fatalf("codex accepted --fallback-model:\n%s", out)
+	}
+}

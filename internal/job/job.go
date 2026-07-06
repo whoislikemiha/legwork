@@ -42,6 +42,9 @@ type Meta struct {
 	AppendPrompt string `json:"append_prompt,omitempty"`
 	ReadOnly     bool   `json:"read_only,omitempty"`
 	Timeout      string `json:"timeout,omitempty"`
+	// Claude-specific passthroughs (rejected at dispatch for other agents).
+	Effort        string `json:"effort,omitempty"`         // --effort level
+	FallbackModel string `json:"fallback_model,omitempty"` // --fallback-model
 	// InitialTask preserves the dispatch prompt once resume/answer
 	// overwrite Task with a follow-up message. Empty until first resume.
 	InitialTask string `json:"initial_task,omitempty"`

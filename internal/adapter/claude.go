@@ -39,6 +39,12 @@ func (c *Claude) Command(req TurnRequest) (*exec.Cmd, error) {
 	if req.Model != "" {
 		args = append(args, "--model", req.Model)
 	}
+	if req.Effort != "" {
+		args = append(args, "--effort", req.Effort)
+	}
+	if req.FallbackModel != "" {
+		args = append(args, "--fallback-model", req.FallbackModel)
+	}
 	cmd := exec.Command("claude", args...)
 	cmd.Dir = req.WorkDir
 	return cmd, nil

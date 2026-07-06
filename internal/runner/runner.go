@@ -126,12 +126,14 @@ func Run(store *job.Store, id string) error {
 	}
 
 	req := adapter.TurnRequest{
-		Task:         m.Task,
-		SystemPrompt: rules.Compose(m.AppendPrompt),
-		SessionID:    m.SessionID,
-		Model:        m.Model,
-		WorkDir:      workDir,
-		ReadOnly:     m.ReadOnly,
+		Task:          m.Task,
+		SystemPrompt:  rules.Compose(m.AppendPrompt),
+		SessionID:     m.SessionID,
+		Model:         m.Model,
+		WorkDir:       workDir,
+		ReadOnly:      m.ReadOnly,
+		Effort:        m.Effort,
+		FallbackModel: m.FallbackModel,
 	}
 	cmd, err := ad.Command(req)
 	if err != nil {
