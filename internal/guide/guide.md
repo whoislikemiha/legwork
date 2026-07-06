@@ -30,6 +30,37 @@ Never trust `done` blindly: verify the diff is non-empty and tests ran (visible 
 tool-call events) before building on it. A missing/unparseable status block surfaces
 as `blocked` — treat it as needs-review, not failure.
 
+## Preflight: doctor before you dispatch
+
+A misconfigured machine (agent not logged in, bad model name, unwritable state dir,
+broken notifier) otherwise only surfaces *after* a job is spawned and its turn fails.
+`legwork doctor` moves that discovery up front — run it once before dispatching:
+
+```
+legwork doctor [--agent claude] [--model <m>] [--dir <repo>] [--no-probe] [--json]
+state-dir   ok    /home/you/.local/state/legwork (writable)
+git         ok    /usr/bin/git (git version 2.50.0)
+agent       ok    claude 2.x at /usr/local/bin/claude
+probe       ok    live turn completed: state done, model accepted ($0.0012)
+workstree   skip  no worktree.toml at .
+notifier    ok    command exited 0 (event "doctor" sent)
+```
+
+The `probe` runs one real turn with the exact `--agent`/`--model` a `run` would use —
+that's what validates auth and model acceptance, so it costs a few tokens. `--no-probe`
+does static checks only (offline-safe); `--agent fake` probes for free. `--json`:
+
+```json
+{"ok": true, "checks": [
+  {"name": "probe", "status": "ok",   "detail": "live turn completed: state done ..."},
+  {"name": "notifier", "status": "skip", "detail": "no notify command configured"}
+]}
+```
+
+`status` is `ok | warn | fail | skip`; top-level `ok` is true when nothing failed
+(warns/skips are fine). Exit codes: `0` no failures, `1` one or more `fail`, `2` usage
+error (e.g. unknown agent).
+
 ## Getting woken up instead of polling
 
 Configure the notifier in `~/.config/legwork/config.toml` (or `$LEGWORK_CONFIG`):
@@ -95,6 +126,7 @@ Notes make your reasoning auditable — report decisions as you make them.
 ## Quick reference
 
 ```
+doctor [--agent A] [--model M] [--dir R] [--no-probe]   (preflight before dispatch)
 run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P] <task>
 resume <job> <msg>   answer <job> <msg>   cancel <job>

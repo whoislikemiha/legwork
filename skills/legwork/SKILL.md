@@ -21,6 +21,21 @@ ssh (`ssh host legwork ...`) and takes `--json`. Full built-in reference:
   `--dir` = in-place (combine with `--read-only` for research); `--workspace` = the
   reviewable-diff flow.
 
+## Preflight
+
+Before dispatching into a fresh machine, `legwork doctor` catches a misconfigured
+environment (agent not logged in, bad model, unwritable state dir, broken notifier)
+up front instead of after a failed turn:
+
+```bash
+legwork doctor --agent claude --model <m> --json   # ok:true / exit 0 when healthy
+```
+
+The `probe` check runs one real turn (a few tokens) to validate auth + model;
+`--no-probe` is static/offline-safe, `--agent fake` probes for free. Exit `1` = a
+check failed, `2` = usage error. Checks: state-dir, git, agent, probe, workstree,
+notifier — each `ok | warn | fail | skip`.
+
 ## The loop
 
 ```bash

@@ -60,7 +60,9 @@ $ legwork guide
 
 It covers the run→observe→steer loop, hooking notifications up as your wake-up
 signal, workspace review flow, and health recipes (spotting and recovering a
-poisoned-context worker). Smoke-test any setup without API spend:
+poisoned-context worker). Preflight a machine before dispatching with
+`legwork doctor` (agent binary, auth, model, state dir, notifier — machine-readable,
+stable exit codes). Smoke-test any setup without API spend:
 `legwork run --agent fake "test"`.
 
 A loadable skill for agent harnesses ships at
@@ -80,7 +82,7 @@ itself; don't repeat it in prompts.
 
 Early. Implemented: jobs, detached runner, claude + fake adapters, status-block
 contract, workspaces/checkpoints/diff/close, runs + narration, notifier, context
-tracking, timeouts, `guide` + skill. What's next lives in
+tracking, timeouts, `doctor` preflight, `guide` + skill. What's next lives in
 [ROADMAP.md](ROADMAP.md) (including rejected ideas and why); the full design
 rationale in [DESIGN.md](DESIGN.md).
 

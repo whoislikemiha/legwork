@@ -6,6 +6,7 @@ package notify
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -100,6 +101,9 @@ func (c *Config) Send(p Payload) error {
 		return err
 	case <-time.After(15 * time.Second):
 		_ = cmd.Process.Kill()
-		return nil // slow notifier must not wedge the runner
+		// Report the kill so preflight (doctor) can flag a hung notifier. The
+		// runner ignores this return, so a slow notifier still never wedges a
+		// job — it just doesn't get silently reported as healthy.
+		return fmt.Errorf("notify command timed out after 15s (killed)")
 	}
 }

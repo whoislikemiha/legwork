@@ -50,6 +50,10 @@ type TurnResult struct {
 type Adapter interface {
 	Name() string
 	Caps() Caps
+	// Bin is the executable that must be on PATH for this agent (or an
+	// absolute path for self-hosted agents). Used by `legwork doctor` to
+	// check presence and capture a version without hardcoding binaries.
+	Bin() string
 	// Command builds the process for one turn. Stdout must be a stream the
 	// adapter's Parser understands, one JSON object per line.
 	Command(req TurnRequest) (*exec.Cmd, error)

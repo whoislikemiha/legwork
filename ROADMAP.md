@@ -8,9 +8,6 @@ re-proposed.
 
 ## Next
 
-- **`legwork doctor`** — preflight instead of post-spawn discovery: state dir
-  writable, agent binary present, auth valid, model accepted (`--agent`/`--model`
-  args), workstree present when repos declare it, notifier command runs.
 - **Codex adapter** — the abstraction-prover: second dialect (`codex exec --json`,
   OS sandbox modes mapping to `--read-only`/workspace-write, session resume).
   Expected to flush out claude-shaped assumptions in the adapter interface.

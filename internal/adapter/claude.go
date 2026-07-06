@@ -13,6 +13,8 @@ type Claude struct{}
 
 func (c *Claude) Name() string { return "claude" }
 
+func (c *Claude) Bin() string { return "claude" }
+
 func (c *Claude) Caps() Caps {
 	return Caps{Fork: true, OSSandbox: false, StructuredStatus: "convention", Subagents: true}
 }

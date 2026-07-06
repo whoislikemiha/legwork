@@ -15,6 +15,13 @@ type Fake struct{}
 
 func (f *Fake) Name() string { return "fake" }
 
+// Bin is this same binary: the fake adapter execs os.Executable()'s hidden
+// _fake-agent subcommand, so doctor's agent check is always satisfied.
+func (f *Fake) Bin() string {
+	self, _ := os.Executable()
+	return self
+}
+
 func (f *Fake) Caps() Caps {
 	return Caps{Fork: false, OSSandbox: false, StructuredStatus: "convention", Subagents: false}
 }
