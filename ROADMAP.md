@@ -17,6 +17,14 @@ verified via merge-base with `--into <ref>` / `--force` escapes. The codex
 adapter's ctx may have the same summing issue — verify against a live multi-call
 turn before changing it.)_
 
+_(The presentation layer shipped: `runs` (pipeline rollup, one line per run
+label), `tail` (`tail -f` across all jobs + run logs, `--until-idle` as the
+scriptable wait-for-my-pipeline primitive), and a read-only `dashboard` TUI
+(bubbletea/lipgloss). All three are renderers over a new shared `internal/timeline`
+package — source discovery, time-ordered merge with a Poll cursor, a curated/firehose
+significance filter, and per-run rollups — designed so `serve` (below) can adopt it
+unchanged. `ls` stays the flat per-job table.)_
+
 ## Soon
 
 - **`approve` / `needs-decision`** — route genuine permission judgment calls to
@@ -78,11 +86,11 @@ turn before changing it.)_
 
 ## Later
 
-- **Dashboard TUI** (`legwork dashboard`) — htop-for-jobs: job table + merged
-  worker/orchestrator timeline. Read-only.
 - **Read-only web UI** (`legwork serve`) — localhost + SSE live updates, diffs
   with since-last-review highlighting, go:embed'd assets. Binds localhost only;
-  no mutation endpoints ever (the CLI, hence ssh, is the only write path).
+  no mutation endpoints ever (the CLI, hence ssh, is the only write path). Should
+  be the fourth consumer of `internal/timeline` (discovery + merge + Poll cursor
+  + rollups already fit an SSE loop) — no new read plumbing needed.
 - **`.legwork.md` project context** — per-repo standing instructions appended to
   worker rules (like CLAUDE.md, but for workers dispatched into the repo).
 - **Mid-turn toolbelt** (stdio shim, same binary): `ask_orchestrator`,
