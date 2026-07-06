@@ -71,6 +71,13 @@ type Meta struct {
 	Context int `json:"context,omitempty"`
 }
 
+// ContextHigh reports whether the last turn's window crossed the health
+// threshold — the cue to start a fresh job instead of resuming. threshold<=0
+// disables the signal.
+func (m *Meta) ContextHigh(threshold int) bool {
+	return threshold > 0 && m.Context >= threshold
+}
+
 // Store manages the state directory layout:
 //
 //	<root>/jobs/<id>/meta.json

@@ -46,7 +46,11 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Wake-on-event**: a configurable notifier command receives JSON payloads — point
   it at ntfy for your phone, or at whatever re-invokes your orchestrator.
 - **Context as the health metric**: `ls` shows each session's context footprint
-  (`ctx:145k`) — the early-warning signal for a worker spinning in circles.
+  (`ctx:145k`) — the early-warning signal for a worker spinning in circles. Once a
+  job crosses a threshold, `ls` marks it `ctx:180k!` and `status` prints a `hint:`
+  line (`--json`: `context_high`) — the built-in cue to start fresh over resume.
+  Tune it with `[health] context_threshold` in `config.toml` (default 150000; `0`
+  disables).
 - **Reclamation without a daemon**: `gc` compresses/retires transcripts and sweeps
   orphans (dead runners, stale worktrees, refs with no workspace); opt-in
   `--close-merged` auto-closes landed work. Runs opportunistically on dispatch;
