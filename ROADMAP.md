@@ -8,7 +8,25 @@ re-proposed.
 
 ## Next
 
-_(Codex adapter and `legwork gc` shipped — see below / the changelog.)_
+_(Codex adapter and `legwork gc` shipped — see below / the changelog. The items
+here come from the 2026-07-06 dogfood run that built them: two features
+orchestrated through legwork itself, opus workers, split plan/implement/review.)_
+
+- **Fix: `watch` on a resumed job exits immediately** — it replays the previous
+  turn's `finished` event instead of waiting for the new turn to end. Forced the
+  orchestrator back to sleep-poll loops, the exact thing `watch` exists to
+  replace. Likely fix: `watch` after a resume should seek past events older than
+  the current turn (or key on runner PID / a turn counter).
+- **Fix: context telemetry is cumulative** — `status`/`ls` report ctx summed
+  across turns (a long job showed 5.75M), not the live session window. Every
+  context-based policy (including the planned threshold hint below) is
+  meaningless until this reports the last turn's window size.
+- **Verify `--merged` in `close`** — `close ws-N --merged` trusts the caller;
+  a merge mistakenly run inside the worktree (a no-op) followed by
+  `close --merged` left the branch's commit dangling (recovered via fsck).
+  gc's `--close-merged` already verifies with `git merge-base --is-ancestor`
+  through `workspace.MergedInto`; wire the same check into `close --merged` and
+  refuse (or require `--force`) when the branch isn't actually an ancestor.
 
 ## Soon
 
@@ -30,13 +48,34 @@ _(Codex adapter and `legwork gc` shipped — see below / the changelog.)_
   ship. Something like `legwork artifact save/get --run L` keeps
   intended-for-merge (workspace diff) and intended-for-the-record (run) cleanly
   separate; interacts with the close tripwire, so design before building.
+  Second dogfood hit (2026-07-06): the orchestrator's running feedback notes
+  lived in a session scratchpad and were lost between sessions — run-attached
+  artifacts are the durable home for orchestrator process notes too.
 - **Actionable context threshold** — `ls`/`status` already report context size;
   add a visible hint when it crosses a threshold (e.g. "context high — prefer a
   fresh job over resume"). Dogfood: the signal was noticed but the orchestrator
   had to invent the policy; a built-in nudge makes the fresh-reviewer pattern
   the default.
+- **Job acknowledge/archive** — `close` is workspace-only, so done
+  workspace-less jobs (read-only planners, reviewers) linger in `ls` forever
+  with no way to say "reviewed, done with this". Either a job-level
+  close/archive verb or an `ls` default that hides acknowledged jobs
+  (`--all` to show); gc retention covers reclamation but not the signal.
+- **`ws refresh`** — reconcile an open workspace with a moved base. Dogfood:
+  two parallel workspaces both landed; the second had to be told to
+  `git merge main` by hand inside its tree and resolve conflicts. A first-class
+  verb (fetch base, merge/rebase, report conflicts as needs-input) makes the
+  parallel-workspace pattern safe by default.
+- **Mid-turn cost/context signal** — telemetry only lands at the turn boundary,
+  so a $13 turn is invisible until it ends. Even a coarse heartbeat (tokens so
+  far, derived from the transcript tee) in `status` while a runner is live
+  would let orchestrators catch runaways. Overlaps with the mid-turn toolbelt
+  (Later) but is read-side only, so it may be much cheaper to ship.
 - **Profiles** — named presets: agent + model + access + rules additions +
   timeout (`legwork run --profile opus-review "..."`). Config-file defined.
+  Dogfood: the planner recipe (`run --model opus --read-only --dir <repo>`)
+  and the fresh-reviewer recipe were retyped constantly — exactly what
+  profiles are for; also document both as recipes in the guide.
 - **`max_concurrent`** — cap simultaneous runners with a pending queue (queued
   jobs visible in `ls`).
 - **Enforced structured status on codex** — the codex adapter ships with
@@ -60,7 +99,10 @@ _(Codex adapter and `legwork gc` shipped — see below / the changelog.)_
 - **npm/PyPI wrapper packages** — turn the name-reservation stubs into
   binary-fetching installers (the esbuild/ruff pattern).
 - **Upstream-drift tripwire** — committed `--help`/stream-format snapshots,
-  daily CI diff auto-opens an issue; nightly canary against real CLIs.
+  daily CI diff auto-opens an issue; nightly canary against real CLIs. Dogfood
+  (2026-07-06): validated hard — the fake-agent suite was green while real
+  `codex exec resume` rejected `-s/--sandbox` (0.118.0); only the live smoke
+  caught it. The AGENTS.md real-agent smoke is the manual version of this.
 - **diff `--since-last-review`** — per-workspace review cursor shared by CLI and
   web UI.
 
