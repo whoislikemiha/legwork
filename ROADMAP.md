@@ -32,8 +32,11 @@ unchanged. `ls` stays the flat per-job table.)_
   typography, clickable drill-in). Process requirement: the visual design is
   crafted as an HTML mockup over real state-dir data and approved by the human
   *before* any Go is written; the mockup is the spec. `internal/timeline` is
-  the data layer; DESIGN.md §7's invariants hold (localhost, read-only, SSE,
-  go:embed).
+  the data layer — its discovery + merge + Poll cursor + rollups already fit an
+  SSE loop, so no new read plumbing. DESIGN.md §7's invariants hold: binds
+  localhost only, strictly read-only, no mutation endpoints ever (the CLI,
+  hence ssh, is the only write path), diffs with since-last-review
+  highlighting, assets go:embed'd.
 - **Dashboard TUI design pass** — shipped v1 works but reads as a data dump;
   needs a deliberate hierarchy/interaction pass (what draws the eye, scrolling
   and focus model). Lesson recorded: structure specs aren't visual specs —
@@ -108,11 +111,6 @@ unchanged. `ls` stays the flat per-job table.)_
 
 ## Later
 
-- **Read-only web UI** (`legwork serve`) — localhost + SSE live updates, diffs
-  with since-last-review highlighting, go:embed'd assets. Binds localhost only;
-  no mutation endpoints ever (the CLI, hence ssh, is the only write path). Should
-  be the fourth consumer of `internal/timeline` (discovery + merge + Poll cursor
-  + rollups already fit an SSE loop) — no new read plumbing needed.
 - **`.legwork.md` project context** — per-repo standing instructions appended to
   worker rules (like CLAUDE.md, but for workers dispatched into the repo).
 - **Mid-turn toolbelt** (stdio shim, same binary): `ask_orchestrator`,
