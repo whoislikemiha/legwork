@@ -181,7 +181,14 @@ func runCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			m := &job.Meta{ID: id, Agent: agent, Task: args[0], Model: model, Run: runLabel, State: job.StateQueued}
+			if timeout != "" {
+				if _, err := time.ParseDuration(timeout); err != nil {
+					return fmt.Errorf("--timeout: %w", err)
+				}
+			}
+			m := &job.Meta{ID: id, Agent: agent, Task: args[0], Model: model, Run: runLabel,
+				AppendPrompt: appendPrompt, ReadOnly: readOnly, Timeout: timeout,
+				State: job.StateQueued}
 			if dir != "" && wsID != "" {
 				return fmt.Errorf("--dir and --workspace are mutually exclusive")
 			}
@@ -232,17 +239,7 @@ func runCmd() *cobra.Command {
 				}
 			}
 
-			env := []string{"LEGWORK_APPEND_PROMPT=" + appendPrompt}
-			if readOnly {
-				env = append(env, "LEGWORK_READ_ONLY=1")
-			}
-			if timeout != "" {
-				if _, err := time.ParseDuration(timeout); err != nil {
-					return fmt.Errorf("--timeout: %w", err)
-				}
-				env = append(env, "LEGWORK_TIMEOUT="+timeout)
-			}
-			if err := runner.Spawn(s, m, env); err != nil {
+			if err := runner.Spawn(s, m); err != nil {
 				return err
 			}
 			if asJSON {
@@ -295,12 +292,17 @@ func doResume(id, message, eventType string) (*job.Meta, error) {
 	}
 	_, _ = log.Append(events.Event{Type: eventType, Actor: "orchestrator",
 		Preview: events.Truncate(message)})
+	// Task becomes the new turn's instruction; keep the dispatch prompt
+	// recoverable (a cold orchestrator reconstructs jobs from meta alone).
+	if m.InitialTask == "" {
+		m.InitialTask = m.Task
+	}
 	m.Task = message
 	m.Question = ""
 	if err := s.SaveMeta(m); err != nil {
 		return nil, err
 	}
-	if err := runner.Spawn(s, m, nil); err != nil {
+	if err := runner.Spawn(s, m); err != nil {
 		return nil, err
 	}
 	return m, nil

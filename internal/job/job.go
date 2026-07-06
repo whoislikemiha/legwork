@@ -28,18 +28,27 @@ const (
 
 // Meta is the persisted job record (meta.json in the job dir).
 type Meta struct {
-	ID        string    `json:"id"`
-	Run       string    `json:"run,omitempty"`
-	Agent     string    `json:"agent"`
-	Task      string    `json:"task"`
-	Dir       string    `json:"dir,omitempty"`       // in-place target; empty = scratch
-	Workspace string    `json:"workspace,omitempty"` // workspace ID when attached
-	State     State     `json:"state"`
-	SessionID string    `json:"session_id,omitempty"`
-	RunnerPID int       `json:"runner_pid,omitempty"`
-	Model     string    `json:"model,omitempty"`
-	Created   time.Time `json:"created"`
-	Updated   time.Time `json:"updated"`
+	ID        string `json:"id"`
+	Run       string `json:"run,omitempty"`
+	Agent     string `json:"agent"`
+	Task      string `json:"task"`
+	Dir       string `json:"dir,omitempty"`       // in-place target; empty = scratch
+	Workspace string `json:"workspace,omitempty"` // workspace ID when attached
+	// Dispatch options, persisted so every turn — including resumed ones —
+	// runs with the same contract as the first (rules additions, access
+	// mode, wall clock). The runner reads these; never plumb them via env.
+	AppendPrompt string `json:"append_prompt,omitempty"`
+	ReadOnly     bool   `json:"read_only,omitempty"`
+	Timeout      string `json:"timeout,omitempty"`
+	// InitialTask preserves the dispatch prompt once resume/answer
+	// overwrite Task with a follow-up message. Empty until first resume.
+	InitialTask string    `json:"initial_task,omitempty"`
+	State       State     `json:"state"`
+	SessionID   string    `json:"session_id,omitempty"`
+	RunnerPID   int       `json:"runner_pid,omitempty"`
+	Model       string    `json:"model,omitempty"`
+	Created     time.Time `json:"created"`
+	Updated     time.Time `json:"updated"`
 	// Question set when State == needs-input.
 	Question string `json:"question,omitempty"`
 	// Result is the final status-block-stripped output of the last turn.

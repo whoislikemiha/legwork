@@ -26,6 +26,11 @@ legwork status <job> --json              -> state decides your next move:
 legwork resume <job> "next instruction"  -> another turn in the same session
 ```
 
+Dispatch options stick for the job's lifetime: `--read-only`, `--append-prompt`,
+and `--timeout` are recorded in the job and apply to every resumed turn too.
+The job record also keeps the original dispatch prompt (`initial_task` once
+resumed) and the model — `status --json` reconstructs any job cold.
+
 Never trust `done` blindly: verify the diff is non-empty and tests ran (visible as
 tool-call events) before building on it. A missing/unparseable status block surfaces
 as `blocked` — treat it as needs-review, not failure.

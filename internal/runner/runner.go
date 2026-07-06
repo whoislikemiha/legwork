@@ -42,8 +42,10 @@ func finishJob(store *job.Store, m *job.Meta, state string, preview string) {
 	}
 }
 
-// Spawn launches the detached runner for a job and records its PID.
-func Spawn(store *job.Store, m *job.Meta, extraEnv []string) error {
+// Spawn launches the detached runner for a job and records its PID. All
+// per-job configuration travels in meta.json (never env), so resumed turns
+// run with the same dispatch options as the first.
+func Spawn(store *job.Store, m *job.Meta) error {
 	self, err := os.Executable()
 	if err != nil {
 		return err
@@ -59,7 +61,7 @@ func Spawn(store *job.Store, m *job.Meta, extraEnv []string) error {
 	cmd.Stdout = logf
 	cmd.Stderr = logf
 	cmd.Stdin = nil
-	cmd.Env = append(os.Environ(), extraEnv...)
+	cmd.Env = os.Environ()
 	// New session: survives the CLI exiting and the ssh connection dropping.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
@@ -125,11 +127,11 @@ func Run(store *job.Store, id string) error {
 
 	req := adapter.TurnRequest{
 		Task:         m.Task,
-		SystemPrompt: rules.Compose(os.Getenv("LEGWORK_APPEND_PROMPT")),
+		SystemPrompt: rules.Compose(m.AppendPrompt),
 		SessionID:    m.SessionID,
 		Model:        m.Model,
 		WorkDir:      workDir,
-		ReadOnly:     os.Getenv("LEGWORK_READ_ONLY") == "1",
+		ReadOnly:     m.ReadOnly,
 	}
 	cmd, err := ad.Command(req)
 	if err != nil {
@@ -158,8 +160,8 @@ func Run(store *job.Store, id string) error {
 	// Wall-clock guard: budgets cap tokens, this caps time. A hung agent
 	// (or hung test suite inside it) must not hold a job open forever.
 	var timedOut bool
-	if raw := os.Getenv("LEGWORK_TIMEOUT"); raw != "" {
-		if d, perr := time.ParseDuration(raw); perr == nil && d > 0 {
+	if m.Timeout != "" {
+		if d, perr := time.ParseDuration(m.Timeout); perr == nil && d > 0 {
 			timer := time.AfterFunc(d, func() {
 				timedOut = true
 				_ = cmd.Process.Kill()
@@ -191,7 +193,7 @@ func Run(store *job.Store, id string) error {
 
 	waitErr := cmd.Wait()
 	if timedOut {
-		return fail(job.StateInterrupted, "turn exceeded --timeout %s; session survives, resume or restart fresh", os.Getenv("LEGWORK_TIMEOUT"))
+		return fail(job.StateInterrupted, "turn exceeded --timeout %s; session survives, resume or restart fresh", m.Timeout)
 	}
 	if result == nil {
 		// Mid-turn death: process ended without a result line.

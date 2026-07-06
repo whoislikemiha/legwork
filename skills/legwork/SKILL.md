@@ -45,7 +45,8 @@ legwork status "$job" --json                      # poll, or configure wake-on-e
 
 Act on `state`:
 - `done` — verify, then next phase (`legwork resume "$job" "..."` continues the same
-  session) or close.
+  session; dispatch options — `--read-only`, `--append-prompt`, `--timeout`, model —
+  stick for every turn) or close.
 - `needs-input` — `legwork answer "$job" "<decision>"`; escalate to the human only
   if it is genuinely their call.
 - `blocked` / `failed` — read `legwork events "$job"`; fix and resume, or start a

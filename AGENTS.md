@@ -34,8 +34,9 @@ real agent (cheap, ~$0.02):
 # subshell: the state-dir override must not leak into later legwork calls
 (
   export LEGWORK_STATE_DIR=$(mktemp -d)   # never pollute the real state dir
-  go build -o /tmp/lw . && /tmp/lw run --agent claude --model haiku "Say hello briefly. No tools."
-  sleep 12 && /tmp/lw status job-1        # expect: state done, sane ctx, no phantom question
+  # task-shaped prompt: a bare greeting makes haiku ask "what's the task?" -> needs-input
+  go build -o /tmp/lw . && /tmp/lw run --agent claude --model haiku "Reply with exactly the word PLUMBING-OK. No tools."
+  sleep 15 && /tmp/lw status job-1        # expect: state done, result PLUMBING-OK, sane ctx
 )
 ```
 

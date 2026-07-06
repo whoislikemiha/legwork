@@ -64,3 +64,39 @@ func TestTimeoutRejectsBadDuration(t *testing.T) {
 		t.Fatalf("bad --timeout accepted:\n%s", out)
 	}
 }
+
+// Dispatch options live in meta.json, not env: a resumed turn must run with
+// the same --timeout (and --read-only / --append-prompt, which travel the
+// same path) as the dispatch turn, and the dispatch prompt must stay
+// recoverable after resume overwrites task.
+func TestResumePreservesDispatchOptions(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t, resultDone)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake",
+		"--timeout", "1s", "--read-only", "--append-prompt", "house rules", "the original task"))
+	e.waitState(t, id, "done")
+
+	// Second turn hangs: only the persisted timeout can interrupt it.
+	e.writeScript(t,
+		`{"type":"assistant","message":{"content":[{"type":"text","text":"stalling"}]}}`,
+		"#sleep 30000",
+		resultDone,
+	)
+	e.legwork(t, "resume", id, "follow-up instruction")
+	m := e.waitState(t, id, "interrupted")
+	if !strings.Contains(m["result"].(string), "timeout") {
+		t.Fatalf("resumed turn ignored persisted --timeout: %v", m["result"])
+	}
+	if m["read_only"] != true {
+		t.Fatalf("read_only not persisted in meta: %v", m["read_only"])
+	}
+	if m["append_prompt"] != "house rules" {
+		t.Fatalf("append_prompt not persisted in meta: %v", m["append_prompt"])
+	}
+	if m["initial_task"] != "the original task" {
+		t.Fatalf("initial_task should preserve the dispatch prompt: %v", m["initial_task"])
+	}
+	if m["task"] != "follow-up instruction" {
+		t.Fatalf("task should be the latest instruction: %v", m["task"])
+	}
+}
