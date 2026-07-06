@@ -138,6 +138,44 @@ func TestCloseMergedVerifies(t *testing.T) {
 	}
 }
 
+// With a remote configured, the auto-detected target is origin/HEAD: work
+// merged into local main but not pushed must refuse with a message naming the
+// push, and closing succeeds once pushed.
+func TestCloseMergedDetectsUnpushed(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	remote := t.TempDir()
+	gitIn(t, remote, "init", "-q", "--bare")
+	gitIn(t, repo, "remote", "add", "origin", remote)
+	gitIn(t, repo, "push", "-q", "origin", "main")
+	gitIn(t, repo, "remote", "set-head", "origin", "main")
+
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	branch := ws["branch"].(string)
+	e.writeScript(t, "#write landed.txt content", resultDone)
+	jid := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "do"))
+	e.waitState(t, jid, "done")
+	gitIn(t, tree, "add", ".")
+	gitIn(t, tree, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "work")
+	gitIn(t, repo, "merge", "--ff-only", branch) // landed locally, not pushed
+
+	out, err := e.legworkErr("close", wsID, "--merged")
+	if err == nil {
+		t.Fatalf("close --merged must refuse unpushed work:\n%s", out)
+	}
+	if !strings.Contains(out, "push first") {
+		t.Fatalf("refusal should name the unpushed near-miss:\n%s", out)
+	}
+
+	gitIn(t, repo, "push", "-q", "origin", "main")
+	e.legwork(t, "close", wsID, "--merged")
+	if m := e.wsStatus(t, wsID); m["state"] != "closed" || m["disposition"] != "merged" {
+		t.Fatalf("ws not closed after push: %v", m)
+	}
+}
+
 // --force skips the verification for targets legwork can't see (e.g. the work
 // landed in another repo or was cherry-picked).
 func TestCloseMergedForceSkipsVerification(t *testing.T) {

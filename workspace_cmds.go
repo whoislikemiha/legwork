@@ -181,6 +181,17 @@ func closeCmd() *cobra.Command {
 					return err
 				}
 				if !ok {
+					// The auto-detected target prefers origin/HEAD. The common
+					// near-miss is work merged into the local default branch
+					// but not pushed yet — name that case instead of a generic
+					// refusal.
+					if mergedInto == "" {
+						for _, local := range []string{"refs/heads/main", "refs/heads/master"} {
+							if landed, lerr := wss.MergedInto(m, local); lerr == nil && landed {
+								return fmt.Errorf("%s: branch %s has landed in %s but not in %s — push first, or close with --into %s", m.ID, m.Branch, local, target, local)
+							}
+						}
+					}
 					return fmt.Errorf("%s: branch %s is NOT an ancestor of %s — the work has not landed there; merge it first, or use --into <ref> / --discard / --force", m.ID, m.Branch, target)
 				}
 			}

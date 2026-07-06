@@ -53,6 +53,7 @@ broken notifier) otherwise only surfaces *after* a job is spawned and its turn f
 
 ```
 legwork doctor [--agent claude] [--model <m>] [--dir <repo>] [--no-probe] [--json]
+binary      ok    /usr/local/bin/legwork (built from 8665e992b364 committed 2026-07-06T19:34:59Z)
 state-dir   ok    /home/you/.local/state/legwork (writable)
 git         ok    /usr/bin/git (git version 2.50.0)
 agent       ok    claude 2.x at /usr/local/bin/claude

@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -79,6 +80,7 @@ func probeTimeout() time.Duration {
 // to completion (a fail never short-circuits the rest) so one command gives
 // the whole picture.
 func Run(opts Options) (checks []Check, ok bool) {
+	checks = append(checks, checkBinary())
 	checks = append(checks, checkStateDir())
 	checks = append(checks, checkGit())
 	checks = append(checks, checkAgent(opts.Adapter))
@@ -100,6 +102,46 @@ func allOK(checks []Check) bool {
 		}
 	}
 	return true
+}
+
+// checkBinary surfaces which build is actually running — path plus the VCS
+// stamp Go embeds at build time. Staleness (an installed binary older than the
+// source it's dispatched from) otherwise only shows up as subtly wrong
+// behavior; making the commit and build date visible turns it into a glance.
+func checkBinary() Check {
+	self, err := os.Executable()
+	if err != nil {
+		return Check{"binary", StatusWarn, fmt.Sprintf("cannot resolve own path: %v", err)}
+	}
+	detail := self
+	if info, ok := debug.ReadBuildInfo(); ok {
+		var rev, at string
+		dirty := false
+		for _, s := range info.Settings {
+			switch s.Key {
+			case "vcs.revision":
+				rev = s.Value
+			case "vcs.time":
+				at = s.Value
+			case "vcs.modified":
+				dirty = s.Value == "true"
+			}
+		}
+		if rev != "" {
+			if len(rev) > 12 {
+				rev = rev[:12]
+			}
+			detail += fmt.Sprintf(" (built from %s", rev)
+			if at != "" {
+				detail += " committed " + at
+			}
+			if dirty {
+				detail += ", dirty tree"
+			}
+			detail += ")"
+		}
+	}
+	return Check{"binary", StatusOK, detail}
 }
 
 // checkStateDir confirms the state dir exists and a probe file round-trips.
