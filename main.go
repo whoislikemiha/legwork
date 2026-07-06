@@ -472,8 +472,18 @@ func lsCmd() *cobra.Command {
 			}
 			for _, m := range metas {
 				age := time.Since(m.Updated).Round(time.Second)
-				fmt.Printf("%-8s %-7s %-13s %6s  ctx:%-7s %s\n",
-					m.ID, m.Agent, m.State, age, fmtContext(m.Context), events.Truncate(m.Task))
+				// where: workspace for the reviewable-diff flow, "-" for
+				// scratch/in-place — keeps parallel pipelines tellable apart.
+				where := m.Workspace
+				if where == "" {
+					where = "-"
+				}
+				task := events.Truncate(m.Task)
+				if m.Run != "" {
+					task = "[" + m.Run + "] " + task
+				}
+				fmt.Printf("%-8s %-7s %-13s %6s  ctx:%-7s %-6s %s\n",
+					m.ID, m.Agent, m.State, age, fmtContext(m.Context), where, task)
 			}
 			return nil
 		},
