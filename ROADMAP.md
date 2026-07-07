@@ -66,6 +66,33 @@ _(Workspace lifecycle metadata shipped: close records optional `closed_at`, `rea
 
 ## Soon
 
+- **Native-feel orchestration pass** — turn the dogfood feedback into product
+  goals: legwork should feel like an agent-native substrate, not a shell tool the
+  orchestrator carefully drives. Success criteria: fewer manual `jq`/env/git
+  glue steps, obvious command grammar, structured outputs that agents can use
+  without sampling shapes, and operator surfaces that show what needs action
+  before raw transcript prose. Concrete lanes:
+  1. **Hermes/agent adapter surface:** expose the common loop as structured
+     operations (`run`, `status`, `events`, `diff`, `ws commit`, `close`,
+     `artifact`) so harnesses do not have to remember shell syntax or parse
+     human output. Keep the CLI as the source of truth; the adapter should be a
+     thin machine interface over the same commands/state.
+  2. **Landing assistant, not PR ownership:** add a `land`/integration workflow
+     that prepares a branch, applies workspace commits, detects conflicts,
+     runs configured validation, and prints a checklist. It must not replace
+     orchestrator judgment or the rejected `legwork pr` idea; pushing/PRs remain
+     explicit policy.
+  3. **Command grammar cleanup:** make high-frequency actions easy to remember
+     (`note`, `tail`, `events`, `artifact`, `ack`, `close`) with consistent run
+     selection, predictable `--json` envelopes, examples in help, and aliases
+     only where they reduce repeated mistakes.
+  4. **Quality receipts:** make the review loop first-class in status/serve:
+     latest validation command/result, reviewer verdicts, artifact links,
+     workspace final commit, and close/ack disposition should be visible without
+     digging through events.
+  5. **Less environment ceremony:** remove common agent friction (`unset
+     LEGWORK_STATE_DIR`, `/dev/shm` cache overrides, sandbox temp/cache setup)
+     via safer defaults, `doctor` checks, profiles, or generated command recipes.
 - **`serve` information density + progressive disclosure** — tighten the live
   browser console so overview text is compact and predictable: clamp long run
   notes/tasks/results to one or two lines, avoid mid-word/awkward wrapping,
