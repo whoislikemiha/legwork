@@ -17,7 +17,7 @@ $ legwork watch job-7          # live events: tool calls, text, checkpoint, fini
 $ legwork diff ws-1            # the reviewable diff (incl. untracked files)
 $ legwork answer job-7 "use the token-bucket approach"   # if it asked
 $ legwork ws commit ws-1 -m "add API rate limiting"
-$ legwork close ws-1 --merged  # verified via merge-base, then reclaims worktree/branch/refs
+$ legwork close ws-1 --merged --reason "landed in main"  # verified, records metadata, reclaims
 ```
 
 ## Why
@@ -44,7 +44,9 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Workspaces are review gates**: one worktree + one branch + one diff + one close.
   Workers never commit; the orchestrator reviews the diff, runs
   `legwork ws commit <ws> -m <message>` to make an attributed non-empty commit, then
-  lands and closes it. Bootstrap uses the
+  lands and closes it. The workspace `meta.json` records the final commit and close
+  disposition fields (`closed_at`, `reason`, `superseded_by`, `merged_into`,
+  `retention`) for later audit. Bootstrap uses the
   [workstree](https://github.com/whoislikemiha/workstree) convention when the repo
   declares it.
 - **Wake-on-event**: a configurable notifier command receives JSON payloads — point
@@ -62,10 +64,12 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   line (`--json`: `context_high`) — the built-in cue to start fresh over resume.
   Tune it with `[health] context_threshold` in `config.toml` (default 150000; `0`
   disables).
-- **Reclamation without a daemon**: `gc` compresses/retires transcripts and sweeps
-  orphans (dead runners, stale worktrees, refs with no workspace); opt-in
-  `--close-merged` auto-closes landed work. Runs opportunistically on dispatch;
-  unclosed work is never touched.
+- **Reclamation without a daemon**: `close` records disposition/retention metadata
+  and reclaims one workspace; `--preserve` records `retention=preserve` and keeps
+  the worktree/branch/checkpoint refs for analysis. `gc` compresses/retires
+  transcripts and sweeps orphans (dead runners, stale worktrees, refs with no
+  workspace); opt-in `--close-merged` auto-closes landed work. Runs
+  opportunistically on dispatch; unclosed work is never touched.
 
 ## Install
 

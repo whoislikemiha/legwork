@@ -135,6 +135,11 @@ func TestWorkspaceCommit(t *testing.T) {
 	if msg, _ := gitInErr(tree, "log", "-1", "--format=%s"); msg != "land workspace output" {
 		t.Fatalf("commit message = %q", msg)
 	}
+	meta := e.wsStatus(t, wsID)
+	final, ok := meta["final_commit"].(map[string]any)
+	if !ok || final["oid"] == "" || !strings.Contains(final["summary"].(string), "land workspace output") {
+		t.Fatalf("final commit not recorded in workspace meta: %v", meta)
+	}
 
 	for _, got := range []string{e.legwork(t, "events", jid, "--json"), e.legwork(t, "events", "pipe", "--run", "--json")} {
 		if !strings.Contains(got, "commit") || !strings.Contains(got, "land workspace output") || !strings.Contains(got, wsID) {
@@ -146,6 +151,8 @@ func TestWorkspaceCommit(t *testing.T) {
 	e.legwork(t, "close", wsID, "--merged")
 	if m := e.wsStatus(t, wsID); m["state"] != "closed" || m["disposition"] != "merged" {
 		t.Fatalf("ws not closed merged after ws commit: %v", m)
+	} else if m["closed_at"] == "" || m["merged_into"] == "" {
+		t.Fatalf("merged close metadata missing: %v", m)
 	}
 }
 
@@ -309,9 +316,70 @@ func TestCloseMergedForceSkipsVerification(t *testing.T) {
 	gitIn(t, tree, "add", ".")
 	gitIn(t, tree, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "work")
 
-	e.legwork(t, "close", wsID, "--merged", "--force")
+	e.legwork(t, "close", wsID, "--merged", "--force", "--into", "refs/heads/release")
 	if m := e.wsStatus(t, wsID); m["state"] != "closed" || m["disposition"] != "merged" {
 		t.Fatalf("ws not closed with --force: %v", m)
+	} else if m["merged_into"] != "refs/heads/release" {
+		t.Fatalf("forced merged close did not record --into target: %v", m)
+	}
+}
+
+func TestClosePreserveRejectsContradictoryRetention(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+
+	out, err := e.legworkErr("close", wsID, "--discard", "--preserve", "--retention", "delete")
+	if err == nil {
+		t.Fatalf("contradictory --preserve --retention delete must fail:\n%s", out)
+	}
+	if !strings.Contains(out, "--preserve requires --retention preserve") {
+		t.Fatalf("contradictory retention error should be clear:\n%s", out)
+	}
+	if m := e.wsStatus(t, wsID); m["state"] != "open" {
+		t.Fatalf("workspace should stay open after rejected close: %v", m)
+	}
+}
+
+func TestCloseRecordsArchiveMetadata(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	branch := ws["branch"].(string)
+
+	if err := os.WriteFile(filepath.Join(tree, "dead.txt"), []byte("dead branch evidence\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.legwork(t, "close", wsID, "--discard",
+		"--reason", "superseded by cleaner plan",
+		"--superseded-by", "ws-99",
+		"--retention", "preserve",
+		"--preserve")
+
+	m := e.wsStatus(t, wsID)
+	if m["state"] != "closed" || m["disposition"] != "discard" {
+		t.Fatalf("workspace not closed discarded: %v", m)
+	}
+	for k, want := range map[string]string{
+		"reason":        "superseded by cleaner plan",
+		"superseded_by": "ws-99",
+		"retention":     "preserve",
+	} {
+		if m[k] != want {
+			t.Fatalf("%s = %v, want %q in %v", k, m[k], want, m)
+		}
+	}
+	if m["closed_at"] == "" {
+		t.Fatalf("closed_at missing: %v", m)
+	}
+	if _, err := os.Stat(tree); err != nil {
+		t.Fatalf("--preserve should keep worktree: %v", err)
+	}
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out == "" {
+		t.Fatalf("--preserve should keep branch %s", branch)
 	}
 }
 

@@ -286,15 +286,17 @@ func (e *engine) transcripts(jobs []*job.Meta) {
 // --- passes 5 + 6: worktree prune + orphan refs ---
 
 func (e *engine) worktreesAndRefs(wss []*workspace.Meta) {
-	// Distinct repos referenced by surviving metas, and the set of OPEN ws IDs.
+	// Distinct repos referenced by surviving metas, and the set of workspace IDs
+	// that still own refs. Open workspaces own their checkpoint refs; closed
+	// preserve/archive workspaces intentionally keep them for later analysis.
 	repos := map[string]bool{}
-	openIDs := map[string]bool{}
+	refOwners := map[string]bool{}
 	for _, m := range wss {
 		if m.Repo != "" {
 			repos[m.Repo] = true
 		}
-		if m.State == "open" {
-			openIDs[m.ID] = true
+		if workspaceOwnsRefs(m) {
+			refOwners[m.ID] = true
 		}
 	}
 
@@ -332,8 +334,10 @@ func (e *engine) worktreesAndRefs(wss []*workspace.Meta) {
 		}
 	}
 
-	// Pass 6: delete refs/legwork/ws-N owned by no OPEN workspace. The
-	// refs/legwork/ namespace is strictly tool-created.
+	// Pass 6: delete refs/legwork/ws-N owned by no workspace. Closed
+	// retention=preserve workspaces remain owners; other closed workspaces have
+	// already acknowledged reclamation. The refs/legwork/ namespace is strictly
+	// tool-created.
 	for repo := range repos {
 		out, err := gitOut(repo, "for-each-ref", "--format=%(refname)", "refs/legwork/")
 		if err != nil {
@@ -341,11 +345,11 @@ func (e *engine) worktreesAndRefs(wss []*workspace.Meta) {
 		}
 		for _, ref := range strings.Fields(out) {
 			id := refWorkspaceID(ref)
-			if id == "" || openIDs[id] {
+			if id == "" || refOwners[id] {
 				continue
 			}
 			ref, repo := ref, repo
-			e.do(Action{Kind: KindOrphanRef, Target: ref, Note: "no open workspace"},
+			e.do(Action{Kind: KindOrphanRef, Target: ref, Note: "no owning workspace"},
 				func() error { _, err := gitOut(repo, "update-ref", "-d", ref); return err })
 		}
 	}
@@ -380,13 +384,13 @@ func (e *engine) stalePrunableWorktrees(repo, wsRoot string) []string {
 // --- pass 7: orphan branches (report-only) ---
 
 func (e *engine) orphanBranches(wss []*workspace.Meta) {
-	knownBranch := map[string]bool{} // "repo\x00legwork/ws-N" for OPEN workspaces
+	knownBranch := map[string]bool{} // "repo\x00legwork/ws-N" for branch-owning workspaces
 	repos := map[string]bool{}
 	for _, m := range wss {
 		if m.Repo != "" {
 			repos[m.Repo] = true
 		}
-		if m.State == "open" {
+		if workspaceOwnsRefs(m) {
 			knownBranch[m.Repo+"\x00"+m.Branch] = true
 		}
 	}
@@ -447,7 +451,7 @@ func (e *engine) closeMerged(wss []*workspace.Meta) {
 
 		// Nothing committed on the branch -> close clean.
 		if tip := e.ws.BranchTip(m); tip != "" && tip == m.BaseOID {
-			e.closeOne(m, "clean", KindCloseClean, "nothing committed")
+			e.closeOne(m, "clean", "", KindCloseClean, "nothing committed")
 			continue
 		}
 		merged, err := e.ws.MergedInto(m, target)
@@ -457,19 +461,19 @@ func (e *engine) closeMerged(wss []*workspace.Meta) {
 			continue
 		}
 		if merged {
-			e.closeOne(m, "merged", KindCloseMerged, "landed in "+target)
+			e.closeOne(m, "merged", target, KindCloseMerged, "landed in "+target)
 			continue
 		}
 		e.add(Action{Kind: KindSkip, Target: m.ID, Note: "unmerged, needs human review"})
 	}
 }
 
-func (e *engine) closeOne(m *workspace.Meta, disposition, kind, note string) {
+func (e *engine) closeOne(m *workspace.Meta, disposition, mergedInto, kind, note string) {
 	if e.o.DryRun {
 		e.add(Action{Kind: kind, Target: m.ID, Note: note})
 		return
 	}
-	if err := e.ws.CloseMerged(m, disposition); err != nil {
+	if err := e.ws.CloseMerged(m, disposition, mergedInto); err != nil {
 		e.rep.Failed++
 		e.add(Action{Kind: kind, Target: m.ID, Note: note + " (failed: " + err.Error() + ")"})
 		return
@@ -614,6 +618,10 @@ func refWorkspaceID(ref string) string {
 		return rest[:i]
 	}
 	return rest
+}
+
+func workspaceOwnsRefs(m *workspace.Meta) bool {
+	return m.State == "open" || (m.State == "closed" && m.Retention == "preserve")
 }
 
 func gitOut(dir string, args ...string) (string, error) {

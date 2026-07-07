@@ -72,8 +72,8 @@ ws=$(legwork ws new --repo ~/code/app --json | jq -r .id)   # worktree + branch;
 legwork run --workspace "$ws" --agent claude "implement X"
 legwork diff "$ws"                     # changes vs base, incl. untracked
 legwork resume <job> "fix review finding Y"                 # same lineage
-legwork ws commit "$ws" -m "message" --json   # orchestrator-owned commit; refuses empty
-legwork close "$ws" --merged           # after landing; verified via merge-base
+legwork ws commit "$ws" -m "message" --json   # records final_commit; refuses empty
+legwork close "$ws" --merged --reason "landed" # verified; records closed_at/merged_into
                                        # against the default branch (--into <ref>
                                        # to override); --discard to throw away
 ```
@@ -87,11 +87,17 @@ don't override with "commit when done"). Review the diff, then use
 `legwork ws commit <ws> -m <message>` so the workspace tree is committed and the
 decision is recorded in the job/run event logs, then land it.
 
-For dead or superseded work that is still useful for later analysis, do not run a
-plain `legwork close <ws> --discard`: today that reclaims the worktree, branch,
-and checkpoint refs. Instead, record a run note, commit the final workspace tree
-with `legwork ws commit`, and close only with an explicit retention choice such
-as `--discard --keep-worktree` until first-class archive/publish semantics land.
+For dead or superseded work that is still useful for later analysis, record a run
+note, commit the final workspace tree with `legwork ws commit`, then close with
+explicit metadata:
+
+```bash
+legwork close "$ws" --discard \
+  --reason "superseded by <replacement>" \
+  --superseded-by "<replacement>" \
+  --preserve
+```
+
 Push/archive workspace branches only when the orchestrator explicitly decides to
 publish them; do not ask worker agents to `git commit` or `git push` directly.
 

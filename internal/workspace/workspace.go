@@ -24,10 +24,16 @@ type Meta struct {
 	BaseOID string `json:"base_oid"`
 	State   string `json:"state"` // open | closed
 	// Disposition records why it closed: merged | discard | (empty while open).
-	Disposition string    `json:"disposition,omitempty"`
-	Checkpoints int       `json:"checkpoints"`
-	Created     time.Time `json:"created"`
-	Updated     time.Time `json:"updated"`
+	Disposition  string      `json:"disposition,omitempty"`
+	Checkpoints  int         `json:"checkpoints"`
+	Created      time.Time   `json:"created"`
+	Updated      time.Time   `json:"updated"`
+	ClosedAt     *time.Time  `json:"closed_at,omitempty"`
+	Reason       string      `json:"reason,omitempty"`
+	SupersededBy string      `json:"superseded_by,omitempty"`
+	FinalCommit  *CommitInfo `json:"final_commit,omitempty"`
+	MergedInto   string      `json:"merged_into,omitempty"`
+	Retention    string      `json:"retention,omitempty"`
 	// Setup notes: "ok", "skipped: <why>", captured for observability.
 	Setup string `json:"setup,omitempty"`
 }
@@ -40,6 +46,20 @@ type Store struct{ Root string }
 type CommitResult struct {
 	OID     string
 	Summary string
+}
+
+type CommitInfo struct {
+	OID     string `json:"oid"`
+	Summary string `json:"summary,omitempty"`
+}
+
+type CloseOptions struct {
+	Disposition  string
+	KeepWorktree bool
+	Reason       string
+	SupersededBy string
+	MergedInto   string
+	Retention    string
 }
 
 func Open(root string) (*Store, error) {
@@ -320,6 +340,10 @@ func (s *Store) Commit(m *Meta, message string) (*CommitResult, error) {
 		return nil, err
 	}
 	summary, _ := run("show", "--stat", "--oneline", "--summary", "--no-renames", "--format=%h %s", "--no-ext-diff", "--no-color", "HEAD")
+	m.FinalCommit = &CommitInfo{OID: oid, Summary: summary}
+	if err := s.save(m); err != nil {
+		return nil, err
+	}
 	return &CommitResult{OID: oid, Summary: summary}, nil
 }
 
@@ -336,10 +360,11 @@ func commitEnv(tree string) []string {
 
 // Close acknowledges the workspace and reclaims worktree, branch, and
 // checkpoint refs. Unreviewed changes require an explicit disposition.
-func (s *Store) Close(m *Meta, disposition string, keepWorktree bool) error {
+func (s *Store) Close(m *Meta, opts CloseOptions) error {
 	if m.State == "closed" {
 		return fmt.Errorf("%s is already closed", m.ID)
 	}
+	disposition := opts.Disposition
 	if disposition == "" {
 		dirty, err := s.Dirty(m)
 		if err != nil {
@@ -351,13 +376,19 @@ func (s *Store) Close(m *Meta, disposition string, keepWorktree bool) error {
 		disposition = "clean"
 	}
 
-	if !keepWorktree {
+	if !opts.KeepWorktree {
 		if err := s.reclaim(m); err != nil {
 			return err
 		}
 	}
 	m.State = "closed"
 	m.Disposition = disposition
+	now := time.Now().UTC()
+	m.ClosedAt = &now
+	m.Reason = strings.TrimSpace(opts.Reason)
+	m.SupersededBy = strings.TrimSpace(opts.SupersededBy)
+	m.MergedInto = strings.TrimSpace(opts.MergedInto)
+	m.Retention = strings.TrimSpace(opts.Retention)
 	return s.save(m)
 }
 
@@ -385,7 +416,7 @@ func (s *Store) reclaim(m *Meta) error {
 // landed (disposition "merged") or never-started (disposition "clean"),
 // reclaiming its worktree/branch/refs. It is gc's entry to the same
 // reclamation path Close uses; callers verify merged-ness first.
-func (s *Store) CloseMerged(m *Meta, disposition string) error {
+func (s *Store) CloseMerged(m *Meta, disposition, mergedInto string) error {
 	if m.State == "closed" {
 		return fmt.Errorf("%s is already closed", m.ID)
 	}
@@ -394,6 +425,9 @@ func (s *Store) CloseMerged(m *Meta, disposition string) error {
 	}
 	m.State = "closed"
 	m.Disposition = disposition
+	now := time.Now().UTC()
+	m.ClosedAt = &now
+	m.MergedInto = strings.TrimSpace(mergedInto)
 	return s.save(m)
 }
 

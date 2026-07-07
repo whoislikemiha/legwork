@@ -316,6 +316,8 @@ func TestGCCloseMerged(t *testing.T) {
 	// Merged workspace fully reclaimed.
 	if m := e.wsStatus(t, wsID); m["state"] != "closed" || m["disposition"] != "merged" {
 		t.Fatalf("ws not closed merged: %v", m)
+	} else if m["closed_at"] == "" || m["merged_into"] == "" {
+		t.Fatalf("gc close-merged metadata missing: %v", m)
 	}
 	if _, err := os.Stat(tree); !os.IsNotExist(err) {
 		t.Fatalf("worktree should be removed: %v", err)
@@ -395,6 +397,29 @@ func TestGCNeverTouchesUnclosed(t *testing.T) {
 	}
 	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out == "" {
 		t.Fatalf("branch %s wrongly deleted", branch)
+	}
+}
+
+func TestGCPreservesClosedPreserveCheckpointRefs(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+
+	e.writeScript(t, "#write archived.txt keep this snapshot", resultDone)
+	jid := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "archive work"))
+	e.waitState(t, jid, "done")
+
+	ref := "refs/legwork/" + wsID + "/ckpt-1"
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", ref); out == "" {
+		t.Fatalf("checkpoint ref missing before close: %s", ref)
+	}
+
+	e.legwork(t, "close", wsID, "--discard", "--preserve")
+	e.gcJSON(t, gcConfig(t, ""))
+
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", ref); out == "" {
+		t.Fatalf("plain gc deleted preserved checkpoint ref %s", ref)
 	}
 }
 

@@ -57,7 +57,12 @@ diff/review area is intentionally a read-only placeholder until
 `diff --since-last-review` lands. `ls` stays the flat per-job table.)_
 
 _(`ws commit <ws> -m <msg>` shipped: orchestrator-owned, non-empty workspace commits
-with attributed `commit` events in the workspace lineage.)_
+with attributed `commit` events in the workspace lineage and `final_commit` persisted
+in workspace metadata.)_
+
+_(Workspace lifecycle metadata shipped: close records optional `closed_at`, `reason`,
+`superseded_by`, `merged_into`, and `retention` fields; `--preserve` records
+`retention=preserve` and keeps the worktree/branch/checkpoint refs for analysis.)_
 
 ## Soon
 
@@ -122,20 +127,11 @@ with attributed `commit` events in the workspace lineage.)_
   exposes no quota/reset status, so legwork can only infer exhaustion after a
   failed run; if proactive reset times stay unavailable, support
   user-configured reset windows plus a documented manual fallback.
-- **Workspace lifecycle metadata + archive semantics** — make
-  `workspaces/<ws>/meta.json` the source of truth for review disposition and
-  retention, not just `open | closed`. Add durable fields such as
-  `closed_at`, `reason`, `superseded_by`, `final_commit`, `merged_into`, and a
-  retention policy (`preserve`, `compress`, `prune-after`, explicit delete).
-  Dogfood: `ws-13` is dead/superseded by live `serve`, but plain
-  `close --discard` would remove the branch/worktree/checkpoint refs that make
-  the wrong turn useful for later workflow analysis. Dead should mean "not
-  active / not mergeable", not "gone".
 - **Workspace archive / publish workflow** — formalize the post-review flow for
   both shipped and dead work: commit the workspace branch with
-  `legwork ws commit`, record the final commit in meta, close with an explicit
-  disposition/reason, keep the branch as the durable artifact by default, treat
-  the worktree as cache, and make remote branch publishing an explicit
+  `legwork ws commit`, close with an explicit disposition/reason/retention,
+  keep the branch as the durable artifact by default, treat the worktree as cache,
+  and make remote branch publishing an explicit
   orchestrator decision (`ws publish` or `close --archive --push`) rather than a
   worker default. GC should report/prune archived artifacts only through
   explicit archive/prune policy, not by silently deleting analyzable branches.

@@ -111,8 +111,9 @@ legwork ws new --repo <path>             -> ws-N (runs workstree init if the rep
 legwork run --workspace ws-N --agent claude "implement X per plan.md"
 legwork diff ws-N [--stat]               -> changes vs base, incl. untracked files
 legwork resume <job> "review feedback: fix Y"
-legwork ws commit ws-N -m "message" --json -> orchestrator commit of the workspace diff
-legwork close ws-N --merged|--discard    -> reclaims worktree/branch/refs
+legwork ws commit ws-N -m "message" --json -> orchestrator commit, recorded as final_commit
+legwork close ws-N --merged|--discard [--reason TEXT] [--retention POLICY]
+                                         -> records disposition metadata, then reclaims
 ```
 
 **You own git history; workers never commit.** The injected contract forbids
@@ -122,26 +123,31 @@ write the worktree gitdir anyway). Workers produce tree states; legwork
 checkpoints them automatically after every turn. When the diff passes review,
 *you* commit with `legwork ws commit <ws> -m <message>` — you know what's one
 logical change, what's scratch, and what the message should say. The command
-stages the workspace tree, refuses empty commits, and records an attributed
-`commit` event in the workspace lineage's job/run logs. Then land it.
+stages the workspace tree, refuses empty commits, records `final_commit` in
+workspace metadata, and writes an attributed `commit` event in the workspace
+lineage's job/run logs. Then land it.
 
 `close` without a flag refuses if there are unreviewed changes — that's the review
 gate. You (or the human) land the diff (PR, merge), then close `--merged`.
 `--merged` is verified, not trusted: the branch must actually be an ancestor of
 the default branch (or `--into <ref>`), else close refuses — this catches the
 classic mistake of running the merge inside the worktree (a no-op) and then
-destroying the branch. Merge from the main checkout. `--force` skips the check
-for work that landed somewhere legwork can't see (cherry-pick, another remote).
+destroying the branch. Merge from the main checkout. The verified target is
+recorded as `merged_into`. `--force` skips the check for work that landed somewhere
+legwork can't see (cherry-pick, another remote). For superseded/dead work, add
+`--reason`, `--superseded-by`, and `--retention`; use `--preserve` when the
+branch/worktree/checkpoint refs should remain available for analysis.
 Scratch/research jobs need no workspace: plain `run` gets a scratch dir;
 `run --dir <path>` works in-place — combine with `--read-only` for plan/research
 turns (harness-enforced: the agent cannot edit).
 
 ## Cleanup: close + gc
 
-Two separate acts. `close` **acknowledges** one workspace with a disposition and
-reclaims its worktree/branch/refs immediately — you own that call (it's the final
-pipeline step after the diff lands). `gc` **reclaims opportunistically**: closed and
-provably-orphaned things only, **never unclosed work**.
+Two separate acts. `close` **acknowledges** one workspace with a disposition,
+records archive metadata in `workspaces/<ws>/meta.json`, and reclaims its
+worktree/branch/refs immediately unless `--preserve` or `--keep-worktree` is set —
+you own that call. `gc` **reclaims opportunistically**: closed and provably-orphaned
+things only, **never unclosed work**.
 
 ```
 legwork gc                    -> reconcile dead runners, compress/retire transcripts,
@@ -154,11 +160,13 @@ legwork gc --close-merged --close-merged-into origin/main   -> explicit target r
 What gc does: flips dead-runner jobs to `interrupted` (resumable, never deleted);
 gzips a finished job's transcript, then deletes it past the retention horizon while
 the event index + artifacts persist as the audit trail; prunes stale worktree
-registrations and deletes `refs/legwork/*` with no owning workspace. `--close-merged`
-(opt-in) closes an open workspace only when its committed branch is an ancestor of the
-default branch (`git merge-base --is-ancestor`) and the tree has no uncommitted
-changes — dirty or unmerged workspaces are always left for human judgment. gc's blast
-radius is strictly what legwork created; repo branches/refs/worktrees are untouchable.
+registrations and deletes `refs/legwork/*` with no owning workspace/archive policy.
+Open workspaces and closed `retention=preserve` archive workspaces own their
+checkpoint refs. `--close-merged` (opt-in) closes an open workspace only when its
+committed branch is an ancestor of the default branch (`git merge-base
+--is-ancestor`) and the tree has no uncommitted changes — dirty or unmerged
+workspaces are always left for human judgment. gc's blast radius is strictly what
+legwork created; repo branches/refs/worktrees are untouchable.
 
 gc also runs **automatically** and cheaply on dispatch (`run`/`resume`/`answer`),
 git-style, gated to at most once per `auto_interval` (default 24h). Configure under
@@ -264,7 +272,8 @@ status <job>         events <job|run> [--run] [--since N]   ls   watch <job>
 runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]
 dashboard            serve [--addr 127.0.0.1:0] [--allow-remote]
 ws new --repo R      ws ls               ws commit <ws> -m M      diff <ws> [--stat]
-close <ws> [--merged [--into <ref>] [--force]|--discard|--keep-worktree]
+close <ws> [--merged [--into <ref>] [--force]|--discard|--keep-worktree|--preserve]
+           [--reason TEXT] [--superseded-by ID] [--retention POLICY]
 gc [--dry-run] [--close-merged [--close-merged-into <ref>]] [--json]
 note <run> <text>    guide
 ```
