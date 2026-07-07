@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/whoislikemiha/legwork/internal/events"
 	"github.com/whoislikemiha/legwork/internal/job"
 	"github.com/whoislikemiha/legwork/internal/workspace"
 )
@@ -102,8 +104,125 @@ func wsCmd() *cobra.Command {
 	}
 	lsCmd.Flags().BoolVar(&lsJSON, "json", false, "JSON output")
 
-	ws.AddCommand(newCmd, lsCmd)
+	var message string
+	var commitJSON bool
+	commitCmd := &cobra.Command{
+		Use:   "commit <workspace> -m <message>",
+		Short: "Commit the workspace diff as the orchestrator",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, wss, err := openWorkspaces()
+			if err != nil {
+				return err
+			}
+			m, err := wss.Load(args[0])
+			if err != nil {
+				return err
+			}
+			if id, err := activeJobIn(s, m.ID); err != nil {
+				return err
+			} else if id != "" {
+				return fmt.Errorf("%s has active job %s; wait for the turn or cancel it before committing", m.ID, id)
+			}
+			res, err := wss.Commit(m, message)
+			if err != nil {
+				return err
+			}
+			if err := appendWorkspaceCommitEvents(s, m, message, res); err != nil {
+				return fmt.Errorf("%s committed %s but event write failed: %w", m.ID, res.OID, err)
+			}
+			if commitJSON {
+				out := workspaceCommitOutput{
+					Workspace: m.ID,
+					Branch:    m.Branch,
+					OID:       res.OID,
+					Summary:   res.Summary,
+				}
+				return printJSON(out)
+			}
+			fmt.Printf("%s committed %s\n", m.ID, res.OID)
+			return nil
+		},
+	}
+	commitCmd.Flags().StringVarP(&message, "message", "m", "", "commit message")
+	commitCmd.Flags().BoolVar(&commitJSON, "json", false, "JSON output")
+	if err := commitCmd.MarkFlagRequired("message"); err != nil {
+		panic(err)
+	}
+
+	ws.AddCommand(newCmd, lsCmd, commitCmd)
 	return ws
+}
+
+type workspaceCommitOutput struct {
+	Workspace string `json:"workspace"`
+	Branch    string `json:"branch"`
+	OID       string `json:"oid"`
+	Summary   string `json:"summary,omitempty"`
+}
+
+func appendWorkspaceCommitEvents(s *job.Store, m *workspace.Meta, message string, res *workspace.CommitResult) error {
+	metas, err := s.List()
+	if err != nil {
+		return err
+	}
+	fields := map[string]any{
+		"workspace": m.ID,
+		"branch":    m.Branch,
+		"oid":       res.OID,
+	}
+	if res.Summary != "" {
+		fields["summary"] = events.Truncate(res.Summary)
+	}
+	ev := events.Event{
+		Type:    events.TypeCommit,
+		Actor:   "orchestrator",
+		Preview: events.Truncate(message),
+		Fields:  fields,
+	}
+	runs := map[string]bool{}
+	for _, jm := range metas {
+		if jm.Workspace != m.ID {
+			continue
+		}
+		log, err := events.Open(filepath.Join(s.JobDir(jm.ID), "events.jsonl"))
+		if err != nil {
+			return err
+		}
+		if _, err := log.Append(ev); err != nil {
+			return fmt.Errorf("append job %s event %s: %w", jm.ID, filepath.Join(s.JobDir(jm.ID), "events.jsonl"), err)
+		}
+		if jm.Run != "" {
+			runs[jm.Run] = true
+		}
+	}
+	for run := range runs {
+		path, err := s.RunEventsPath(run)
+		if err != nil {
+			return err
+		}
+		rl, err := events.Open(path)
+		if err != nil {
+			return err
+		}
+		runFields := map[string]any{
+			"workspace": m.ID,
+			"branch":    m.Branch,
+			"oid":       res.OID,
+		}
+		if res.Summary != "" {
+			runFields["summary"] = events.Truncate(res.Summary)
+		}
+		if _, err := rl.Append(events.Event{
+			Type:    events.TypeCommit,
+			Actor:   "orchestrator",
+			Preview: events.Truncate(message),
+			Fields:  runFields,
+		}); err != nil {
+			return fmt.Errorf("append run %s event %s: %w", run, path, err)
+		}
+	}
+	return nil
 }
 
 func diffCmd() *cobra.Command {

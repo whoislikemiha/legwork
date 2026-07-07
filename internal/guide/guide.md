@@ -111,6 +111,7 @@ legwork ws new --repo <path>             -> ws-N (runs workstree init if the rep
 legwork run --workspace ws-N --agent claude "implement X per plan.md"
 legwork diff ws-N [--stat]               -> changes vs base, incl. untracked files
 legwork resume <job> "review feedback: fix Y"
+legwork ws commit ws-N -m "message" --json -> orchestrator commit of the workspace diff
 legwork close ws-N --merged|--discard    -> reclaims worktree/branch/refs
 ```
 
@@ -119,8 +120,10 @@ worker commits — do not override it in your prompts ("commit when done" turns 
 worker into a historian without the bigger picture, and codex's sandbox can't
 write the worktree gitdir anyway). Workers produce tree states; legwork
 checkpoints them automatically after every turn. When the diff passes review,
-*you* commit in the worktree — you know what's one logical change, what's
-scratch, and what the message should say — then land it.
+*you* commit with `legwork ws commit <ws> -m <message>` — you know what's one
+logical change, what's scratch, and what the message should say. The command
+stages the workspace tree, refuses empty commits, and records an attributed
+`commit` event in the workspace lineage's job/run logs. Then land it.
 
 `close` without a flag refuses if there are unreviewed changes — that's the review
 gate. You (or the human) land the diff (PR, merge), then close `--merged`.
@@ -232,11 +235,13 @@ exits 0 once no job in scope is active or queued (after draining events), so an
 orchestrator can replace a polling loop with `legwork tail --run L --until-idle`.
 `--json` emits the merged events as JSONL (raw event + `job`/`run` provenance).
 
-`dashboard` is htop-for-jobs: a live runs rollup, a detail pane for the selected
-job (status, task, recent events — `f` toggles the firehose), and the curated
-timeline. Keys: `j/k` (or arrows) move the selection across jobs, `enter`/`esc`
-focus/leave detail, `q` quits. needs-input jobs get the loudest treatment on
-every pane. It needs a TTY; without one it points you at `tail` and exits 2.
+`dashboard` is htop-for-jobs: an attention banner, a prioritized runs/jobs
+rollup, a detail pane for the selected job (status, task, recent events — `f`
+toggles the firehose), and the curated timeline. Keys: in overview, `j/k` (or
+arrows) move the selection across jobs and `enter` focuses detail; in detail,
+`j/k` scroll recent events and `esc` returns to overview; `q` quits. needs-input
+jobs get the loudest treatment on every pane. It needs a TTY; without one it
+points you at `tail` and exits 2.
 
 ## Quick reference
 
@@ -247,7 +252,7 @@ run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
 resume <job> <msg>   answer <job> <msg>   cancel <job>
 status <job>         events <job|run> [--run] [--since N]   ls   watch <job>
 runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]   dashboard
-ws new --repo R      ws ls               diff <ws> [--stat]
+ws new --repo R      ws ls               ws commit <ws> -m M      diff <ws> [--stat]
 close <ws> [--merged [--into <ref>] [--force]|--discard|--keep-worktree]
 gc [--dry-run] [--close-merged [--close-merged-into <ref>]] [--json]
 note <run> <text>    guide

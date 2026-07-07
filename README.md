@@ -16,6 +16,7 @@ job-7
 $ legwork watch job-7          # live events: tool calls, text, checkpoint, finished
 $ legwork diff ws-1            # the reviewable diff (incl. untracked files)
 $ legwork answer job-7 "use the token-bucket approach"   # if it asked
+$ legwork ws commit ws-1 -m "add API rate limiting"
 $ legwork close ws-1 --merged  # verified via merge-base, then reclaims worktree/branch/refs
 ```
 
@@ -41,9 +42,11 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   question), `blocked`, `failed`, `auth-required`. A worker asking a clarifying
   question is a normal turn boundary — `answer` continues the same session.
 - **Workspaces are review gates**: one worktree + one branch + one diff + one close.
-  Closing a workspace with unreviewed changes requires an explicit decision.
-  Bootstrap uses the [workstree](https://github.com/whoislikemiha/workstree)
-  convention when the repo declares it.
+  Workers never commit; the orchestrator reviews the diff, runs
+  `legwork ws commit <ws> -m <message>` to make an attributed non-empty commit, then
+  lands and closes it. Bootstrap uses the
+  [workstree](https://github.com/whoislikemiha/workstree) convention when the repo
+  declares it.
 - **Wake-on-event**: a configurable notifier command receives JSON payloads — point
   it at ntfy for your phone, or at whatever re-invokes your orchestrator.
 - **A presentation layer that finds the story**: `runs` rolls a whole pipeline up
@@ -103,9 +106,9 @@ itself; don't repeat it in prompts.
 ## Status
 
 Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
-contract, workspaces/checkpoints/diff/close, runs + narration, the `runs`/`tail`/`dashboard`
-presentation layer, notifier, context tracking, timeouts, `doctor` preflight, `gc`
-reclamation, `guide` + skill. What's next lives in
+contract, workspaces/checkpoints/diff/commit/close, runs + narration, the
+`runs`/`tail`/`dashboard` presentation layer, notifier, context tracking, timeouts,
+`doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
 [ROADMAP.md](ROADMAP.md) (including rejected ideas and why); the full design
 rationale in [DESIGN.md](DESIGN.md).
 

@@ -106,6 +106,124 @@ func TestWorkspaceLifecycle(t *testing.T) {
 	}
 }
 
+func TestWorkspaceCommit(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	branch := ws["branch"].(string)
+
+	e.writeScript(t,
+		"#write README.md changed by worker",
+		"#write newfile.txt hello",
+		resultDone,
+	)
+	jid := strings.TrimSpace(e.legwork(t, "run", "--run", "pipe", "--agent", "fake", "--workspace", wsID, "edit stuff"))
+	e.waitState(t, jid, "done")
+
+	out := e.legwork(t, "ws", "commit", wsID, "-m", "land workspace output")
+	if !strings.Contains(out, wsID+" committed ") {
+		t.Fatalf("commit output missing oid:\n%s", out)
+	}
+	if uncommitted, _ := gitInErr(tree, "status", "--porcelain"); uncommitted != "" {
+		t.Fatalf("workspace left uncommitted changes:\n%s", uncommitted)
+	}
+	if diff := e.legwork(t, "diff", wsID); !strings.Contains(diff, "changed by worker") || !strings.Contains(diff, "newfile.txt") {
+		t.Fatalf("committed workspace diff should still be reviewable vs base:\n%s", diff)
+	}
+	if msg, _ := gitInErr(tree, "log", "-1", "--format=%s"); msg != "land workspace output" {
+		t.Fatalf("commit message = %q", msg)
+	}
+
+	for _, got := range []string{e.legwork(t, "events", jid, "--json"), e.legwork(t, "events", "pipe", "--run", "--json")} {
+		if !strings.Contains(got, "commit") || !strings.Contains(got, "land workspace output") || !strings.Contains(got, wsID) {
+			t.Fatalf("commit event missing attribution:\n%s", got)
+		}
+	}
+
+	gitIn(t, repo, "merge", "--ff-only", branch)
+	e.legwork(t, "close", wsID, "--merged")
+	if m := e.wsStatus(t, wsID); m["state"] != "closed" || m["disposition"] != "merged" {
+		t.Fatalf("ws not closed merged after ws commit: %v", m)
+	}
+}
+
+func TestWorkspaceCommitRefusesEmpty(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	if out, err := e.legworkErr("ws", "commit", wsID, "-m", "empty"); err == nil {
+		t.Fatalf("empty workspace commit must be refused:\n%s", out)
+	} else if !strings.Contains(out, "no uncommitted changes") {
+		t.Fatalf("empty commit refusal should explain why:\n%s", out)
+	}
+}
+
+func TestWorkspaceCommitJSON(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	branch := ws["branch"].(string)
+
+	if err := os.WriteFile(filepath.Join(tree, "json.txt"), []byte("json\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out := e.legwork(t, "ws", "commit", wsID, "-m", "json commit", "--json")
+	var got struct {
+		Workspace string `json:"workspace"`
+		Branch    string `json:"branch"`
+		OID       string `json:"oid"`
+		Summary   string `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad commit json: %v\n%s", err, out)
+	}
+	if got.Workspace != wsID || got.Branch != branch || got.OID == "" {
+		t.Fatalf("unexpected commit json: %+v", got)
+	}
+	if head, _ := gitInErr(tree, "rev-parse", "HEAD"); head != got.OID {
+		t.Fatalf("json oid %q != HEAD %q", got.OID, head)
+	}
+}
+
+func TestWorkspaceCommitReportsEventAppendFailure(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+
+	e.writeScript(t, "#write event-failure.txt content", resultDone)
+	jid := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "edit stuff"))
+	e.waitState(t, jid, "done")
+
+	eventsPath := filepath.Join(e.state, "jobs", jid, "events.jsonl")
+	if err := os.Remove(eventsPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(e.state, "missing-dir", "events.jsonl"), eventsPath); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := e.legworkErr("ws", "commit", wsID, "-m", "durable event")
+	if err == nil {
+		t.Fatalf("commit must report event append failure:\n%s", out)
+	}
+	oid, _ := gitInErr(tree, "rev-parse", "HEAD")
+	for _, want := range []string{"event write failed", oid, eventsPath} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("commit error missing %q:\n%s", want, out)
+		}
+	}
+	if uncommitted, _ := gitInErr(tree, "status", "--porcelain"); uncommitted != "" {
+		t.Fatalf("workspace left uncommitted changes:\n%s", uncommitted)
+	}
+}
+
 // close --merged is a claim, not a fact: it must be verified against the
 // target branch before the branch (and with it the work) is destroyed.
 func TestCloseMergedVerifies(t *testing.T) {

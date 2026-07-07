@@ -72,6 +72,7 @@ ws=$(legwork ws new --repo ~/code/app --json | jq -r .id)   # worktree + branch;
 legwork run --workspace "$ws" --agent claude "implement X"
 legwork diff "$ws"                     # changes vs base, incl. untracked
 legwork resume <job> "fix review finding Y"                 # same lineage
+legwork ws commit "$ws" -m "message" --json   # orchestrator-owned commit; refuses empty
 legwork close "$ws" --merged           # after landing; verified via merge-base
                                        # against the default branch (--into <ref>
                                        # to override); --discard to throw away
@@ -82,8 +83,9 @@ unreviewed changes without an explicit disposition — that's the review gate, d
 bypass it reflexively.
 
 You own git history — workers never commit (the injected contract forbids it;
-don't override with "commit when done"). Review the diff, then commit in the
-worktree yourself with a message that has the bigger picture, then land it.
+don't override with "commit when done"). Review the diff, then use
+`legwork ws commit <ws> -m <message>` so the workspace tree is committed and the
+decision is recorded in the job/run event logs, then land it.
 
 ## Cleanup: close + gc
 
@@ -125,7 +127,8 @@ legwork tail                       # tail -f across all jobs + run logs, notes
                                    # interleaved; --run/--job scope, --full firehose
 legwork tail --run L --until-idle  # blocks, exits 0 when no job in scope is
                                    # active/queued — the scriptable "wait for my pipeline"
-legwork dashboard                  # interactive TUI (needs a TTY): runs + detail + timeline
+legwork dashboard                  # interactive TUI (needs a TTY): attention banner,
+                                   # prioritized runs/jobs, detail focus + event scroll
 ```
 
 Prefer `runs` over `ls` for the pipeline view; `tail --until-idle` replaces a

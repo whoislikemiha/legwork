@@ -16,14 +16,13 @@ import (
 // non-TTY like the test harness), so View's text tokens survive substring
 // assertions.
 var (
-	titleStyle = lipgloss.NewStyle().Bold(true)
-	selStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
-	loudStyle  = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("1"))
-	highStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
-	dimStyle   = lipgloss.NewStyle().Faint(true)
+	titleStyle  = lipgloss.NewStyle().Bold(true)
+	bannerStyle = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("4"))
+	selStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("6"))
+	loudStyle   = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("15")).Background(lipgloss.Color("1"))
+	highStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))
+	dimStyle    = lipgloss.NewStyle().Faint(true)
 )
-
-const footer = "j/k select · enter/esc detail · f full · q quit"
 
 // View renders the three stacked panes plus a footer. It never reads disk;
 // everything comes from Model state set by dataMsg.
@@ -40,8 +39,8 @@ func (m Model) View() string {
 		h = 24
 	}
 
-	// Budget body lines across the three panes (minus 3 headers + 1 footer).
-	body := h - 4
+	// Budget body lines across the three panes (minus status + 3 headers + footer).
+	body := h - 5
 	if body < 6 {
 		body = 6
 	}
@@ -59,22 +58,26 @@ func (m Model) View() string {
 	}
 
 	var b strings.Builder
-	b.WriteString(header("runs", w) + "\n")
+	b.WriteString(statusBanner(m.statusLine(), w) + "\n")
+	b.WriteString(header("runs — overview", w) + "\n")
 	b.WriteString(strings.Join(m.runsPane(w, runsBudget), "\n"))
 	b.WriteString("\n")
 
 	title := "detail"
 	if j := m.selectedJob(); j != nil {
-		title = j.ID
+		title = "detail — " + j.ID
+	}
+	if m.focus {
+		title += " (focused)"
 	}
 	b.WriteString(header(title, w) + "\n")
 	b.WriteString(strings.Join(m.detailPane(w, detailBudget), "\n"))
 	b.WriteString("\n")
 
-	b.WriteString(header("timeline", w) + "\n")
+	b.WriteString(header("timeline — curated", w) + "\n")
 	b.WriteString(strings.Join(m.timelinePane(w, tlBudget), "\n"))
 	b.WriteString("\n")
-	b.WriteString(dimStyle.Render(clip(footer, w)))
+	b.WriteString(dimStyle.Render(clip(m.footer(), w)))
 	return b.String()
 }
 
@@ -86,6 +89,81 @@ func header(title string, w int) string {
 		rule = 0
 	}
 	return t + " " + dimStyle.Render(strings.Repeat("─", rule))
+}
+
+func statusBanner(s string, w int) string {
+	return bannerStyle.Render(clip(s, w))
+}
+
+func (m Model) footer() string {
+	mode := "curated"
+	if m.firehose {
+		mode = "full"
+	}
+	if m.focus {
+		return "detail: j/k scroll events · esc overview · f " + mode + "/full · q quit"
+	}
+	return "overview: j/k select · enter focus detail · f " + mode + "/full · q quit"
+}
+
+func (m Model) statusLine() string {
+	if len(m.metas) == 0 {
+		return "EMPTY: no jobs yet"
+	}
+	if j := firstJobWithState(m.metas, job.StateNeedsInput); j != nil {
+		msg := j.Question
+		if msg == "" {
+			msg = firstLine(j.Task)
+		}
+		if msg != "" {
+			return fmt.Sprintf("ATTENTION: %s needs input — %s", j.ID, msg)
+		}
+		return fmt.Sprintf("ATTENTION: %s needs input", j.ID)
+	}
+	for _, s := range []job.State{job.StateBlocked, job.StateFailed, job.StateAuthNeeded, job.StateInterrupted} {
+		if n := countState(m.metas, s); n > 0 {
+			return fmt.Sprintf("ATTENTION: %d %s", n, pluralState(s, n))
+		}
+	}
+	active := countState(m.metas, job.StateActive)
+	queued := countState(m.metas, job.StateQueued)
+	if active+queued > 0 {
+		parts := []string{}
+		if active > 0 {
+			parts = append(parts, fmt.Sprintf("%d active", active))
+		}
+		if queued > 0 {
+			parts = append(parts, fmt.Sprintf("%d queued", queued))
+		}
+		return "RUNNING: " + strings.Join(parts, " · ")
+	}
+	return fmt.Sprintf("CLEAR: %d complete/closed", len(m.metas))
+}
+
+func firstJobWithState(metas []*job.Meta, state job.State) *job.Meta {
+	for _, m := range metas {
+		if m.State == state {
+			return m
+		}
+	}
+	return nil
+}
+
+func countState(metas []*job.Meta, state job.State) int {
+	n := 0
+	for _, m := range metas {
+		if m.State == state {
+			n++
+		}
+	}
+	return n
+}
+
+func pluralState(s job.State, n int) string {
+	if n == 1 {
+		return string(s)
+	}
+	return string(s) + " jobs"
 }
 
 // runsPane lists each run rollup and, under it, its jobs. The selected job is
@@ -164,9 +242,16 @@ func (m Model) detailPane(w, budget int) []string {
 	if m.firehose {
 		mode = "full"
 	}
-	lines = append(lines, dimStyle.Render("events ("+mode+"):"))
+	label := "events (" + mode + "):"
+	if m.focus {
+		label += " scroll j/k"
+	}
+	if len(m.detail) > 0 && m.detailScroll > 0 {
+		label += fmt.Sprintf(" older +%d", m.detailScroll)
+	}
+	lines = append(lines, dimStyle.Render(label))
 	evLines := budget - len(lines)
-	for _, it := range lastItems(m.detail, evLines) {
+	for _, it := range detailWindow(m.detail, evLines, m.detailScroll) {
 		lines = append(lines, clip(detailEventLine(it), w))
 	}
 	return window(lines, 0, budget)
@@ -243,6 +328,28 @@ func lastItems(items []timeline.Item, n int) []timeline.Item {
 		return items[len(items)-n:]
 	}
 	return items
+}
+
+// detailWindow returns n contiguous detail events, newest-last, offset from the
+// newest window by scroll. scroll=0 follows the tail; scroll=1 moves one event
+// older, matching a log viewer's "scroll up for history" model.
+func detailWindow(items []timeline.Item, n, scroll int) []timeline.Item {
+	if n <= 0 || len(items) == 0 {
+		return nil
+	}
+	if n >= len(items) {
+		return items
+	}
+	if scroll < 0 {
+		scroll = 0
+	}
+	maxScroll := len(items) - n
+	if scroll > maxScroll {
+		scroll = maxScroll
+	}
+	end := len(items) - scroll
+	start := end - n
+	return items[start:end]
 }
 
 // window returns at most budget lines, keeping the line at keep visible by

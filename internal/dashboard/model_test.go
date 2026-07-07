@@ -108,6 +108,79 @@ func TestViewShowsRunsAndJobs(t *testing.T) {
 	}
 }
 
+func TestViewLeadsWithHumanStatusAndModeHelp(t *testing.T) {
+	m := seed(t, metasFixture())
+	view := m.View()
+	for _, want := range []string{
+		"ATTENTION", "job-3 needs input", "postgres or sqlite?",
+		"overview:", "j/k select", "enter focus detail",
+	} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("view missing hierarchy/help token %q:\n%s", want, view)
+		}
+	}
+
+	m = specialKey(m, tea.KeyEnter)
+	view = m.View()
+	for _, want := range []string{"detail:", "j/k scroll events", "esc overview"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("focused view missing help token %q:\n%s", want, view)
+		}
+	}
+}
+
+func TestActionNeededJobsSortBeforeRoutineRows(t *testing.T) {
+	now := time.Now()
+	m := seed(t, []*job.Meta{
+		{ID: "job-2", Run: "alpha", State: job.StateActive, Updated: now, Task: "routine active"},
+		{ID: "job-10", Run: "alpha", State: job.StateNeedsInput, Question: "approve?", Updated: now, Task: "needs a decision"},
+		{ID: "job-1", Run: "alpha", State: job.StateDone, Updated: now, Task: "done"},
+	})
+	if got := m.jobs[0].meta.ID; got != "job-10" {
+		t.Fatalf("first selectable job should be action-needed, got %s; order=%v", got, jobIDs(m.jobs))
+	}
+	if got := m.jobs[len(m.jobs)-1].meta.ID; got != "job-1" {
+		t.Fatalf("done job should sort after active work, got last=%s; order=%v", got, jobIDs(m.jobs))
+	}
+}
+
+func TestFocusedDetailScrollsEventsInsteadOfChangingSelection(t *testing.T) {
+	m := seed(t, metasFixture())
+	m.width = 100
+	m.height = 22 // leaves room for one visible event in the detail pane.
+	items := []timeline.Item{
+		{JobID: "job-3", Event: events.Event{Type: events.TypeText, Preview: "event 01 oldest", Time: time.Now().Add(-4 * time.Minute)}},
+		{JobID: "job-3", Event: events.Event{Type: events.TypeText, Preview: "event 02 middle", Time: time.Now().Add(-3 * time.Minute)}},
+		{JobID: "job-3", Event: events.Event{Type: events.TypeText, Preview: "event 03 middle", Time: time.Now().Add(-2 * time.Minute)}},
+		{JobID: "job-3", Event: events.Event{Type: events.TypeText, Preview: "event 04 newest", Time: time.Now().Add(-time.Minute)}},
+	}
+	m.detail = items
+	startJob := m.selectedJobID()
+
+	view := m.View()
+	if !strings.Contains(view, "event 04 newest") {
+		t.Fatalf("detail pane should default to newest event:\n%s", view)
+	}
+
+	m = specialKey(m, tea.KeyEnter)
+	m = key(m, "k")
+	if got := m.selectedJobID(); got != startJob {
+		t.Fatalf("focused j/k should scroll detail, not change selection: got %s want %s", got, startJob)
+	}
+	view = m.View()
+	if !strings.Contains(view, "event 03 middle") || strings.Contains(view, "event 04 newest") {
+		t.Fatalf("scrolling up should show the previous detail event only:\n%s", view)
+	}
+}
+
+func jobIDs(refs []jobRef) []string {
+	out := make([]string, len(refs))
+	for i, ref := range refs {
+		out[i] = ref.meta.ID
+	}
+	return out
+}
+
 func TestFirehoseToggle(t *testing.T) {
 	m := seed(t, metasFixture())
 	if m.firehose {

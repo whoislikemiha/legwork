@@ -1,0 +1,827 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>legwork serve mockup</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #171713;
+      --muted: #6c675a;
+      --faint: #9d9686;
+      --paper: #f8f4e8;
+      --panel: #fffdf5;
+      --line: #d9d0bd;
+      --line-strong: #b8ad98;
+      --blue: #315b8f;
+      --green: #2f6d50;
+      --red: #a43124;
+      --amber: #9a6819;
+      --violet: #6d527c;
+      --shadow: 0 14px 38px rgba(54, 47, 30, .12);
+      --mono: "SFMono-Regular", "Cascadia Mono", "Liberation Mono", Menlo, monospace;
+      --sans: "Aptos", "Segoe UI", "Helvetica Neue", sans-serif;
+      --serif: Georgia, "Iowan Old Style", serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      background:
+        linear-gradient(90deg, rgba(49,91,143,.08) 1px, transparent 1px) 0 0 / 84px 84px,
+        linear-gradient(rgba(49,91,143,.05) 1px, transparent 1px) 0 0 / 84px 84px,
+        var(--paper);
+      color: var(--ink);
+      font-family: var(--sans);
+      letter-spacing: 0;
+    }
+
+    button, input, select { font: inherit; }
+    .app {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    .rail {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+      border-right: 1px solid var(--line-strong);
+      background: rgba(255,253,245,.86);
+      backdrop-filter: blur(10px);
+      padding: 18px 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: 28px;
+      line-height: 1;
+      font-weight: 700;
+    }
+
+    .readonly {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--green);
+      color: var(--green);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .readonly::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 99px;
+      background: var(--green);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.46);
+      border-radius: 6px;
+      padding: 10px;
+      min-width: 0;
+    }
+
+    .metric b {
+      display: block;
+      font-family: var(--mono);
+      font-size: 20px;
+      line-height: 1.1;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 3px;
+    }
+
+    .nav-title {
+      margin: 22px 0 8px;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+
+    .run-list {
+      display: grid;
+      gap: 6px;
+    }
+
+    .run-link {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 10px;
+      border-radius: 6px;
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .run-link:hover, .run-link.active {
+      background: #eee5d4;
+    }
+
+    .run-link small {
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .content {
+      min-width: 0;
+      padding: 22px clamp(18px, 4vw, 44px) 42px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 20px;
+      border-bottom: 1px solid var(--line-strong);
+      padding-bottom: 15px;
+    }
+
+    .topbar h2 {
+      margin: 0;
+      font-family: var(--serif);
+      font-size: clamp(26px, 4vw, 46px);
+      line-height: 1.03;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .chip, .seg button, .icon-btn {
+      border: 1px solid var(--line-strong);
+      background: var(--panel);
+      border-radius: 6px;
+      color: var(--ink);
+      box-shadow: none;
+    }
+
+    .chip {
+      padding: 7px 9px;
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .seg {
+      display: inline-flex;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--panel);
+    }
+
+    .seg button {
+      border: 0;
+      border-radius: 0;
+      padding: 7px 10px;
+      cursor: default;
+      color: var(--muted);
+    }
+
+    .seg button[aria-pressed="true"] {
+      background: var(--ink);
+      color: var(--panel);
+    }
+
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(360px, .85fr);
+      gap: 18px;
+      align-items: start;
+    }
+
+    section {
+      min-width: 0;
+      margin-bottom: 18px;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 9px;
+    }
+
+    .section-head h3 {
+      margin: 0;
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+    }
+
+    .section-head .hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .run-table, .detail, .timeline, .diff, .state-shape, .sse {
+      border: 1px solid var(--line-strong);
+      background: rgba(255,253,245,.94);
+      border-radius: 7px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--muted);
+      background: #eee5d4;
+    }
+
+    tr:last-child td { border-bottom: 0; }
+    tbody tr:hover { background: #fbf6e9; }
+
+    .run-name {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .run-name strong {
+      overflow-wrap: anywhere;
+    }
+
+    .run-name small {
+      color: var(--muted);
+      font-family: var(--mono);
+    }
+
+    .state {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      white-space: normal;
+    }
+
+    .state::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--green);
+      flex: 0 0 auto;
+    }
+
+    .state.active::before { background: var(--blue); }
+    .state.blocked::before { background: var(--red); }
+    .state.closed::before { background: var(--faint); }
+    .state.high::before { background: var(--amber); }
+
+    .ctx-high {
+      color: var(--red);
+      font-weight: 800;
+    }
+
+    .note {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    .detail {
+      padding: 14px;
+    }
+
+    .job-head {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 12px;
+    }
+
+    .job-head h3 {
+      margin: 0 0 4px;
+      font-size: 21px;
+      font-family: var(--serif);
+    }
+
+    .job-head p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+
+    .job-facts {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 13px;
+    }
+
+    .fact {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 9px;
+      background: #fffaf0;
+      min-width: 0;
+    }
+
+    .fact b {
+      display: block;
+      font-family: var(--mono);
+      overflow-wrap: anywhere;
+    }
+
+    .fact span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .callout {
+      border-left: 5px solid var(--red);
+      background: #fff2ec;
+      padding: 10px 11px;
+      margin-bottom: 12px;
+      font-weight: 700;
+      line-height: 1.4;
+    }
+
+    .timeline {
+      max-height: 720px;
+      overflow: auto;
+    }
+
+    .event {
+      display: grid;
+      grid-template-columns: 84px 116px minmax(72px, 92px) minmax(0, 1fr);
+      gap: 10px;
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--line);
+      align-items: baseline;
+    }
+
+    .event:last-child { border-bottom: 0; }
+
+    .time, .badge, .etype, code {
+      font-family: var(--mono);
+      font-size: 12px;
+    }
+
+    .time { color: var(--muted); }
+    .badge {
+      color: var(--blue);
+      overflow-wrap: anywhere;
+    }
+    .etype {
+      color: var(--muted);
+      text-transform: lowercase;
+    }
+    .event .preview {
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .event.note-row {
+      background: #f1eadb;
+    }
+
+    .event.blocked-row {
+      background: #fff2ec;
+    }
+
+    .diff {
+      padding: 0;
+    }
+
+    .diff-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px 12px;
+      background: #eee5d4;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .diff pre, .state-shape pre, .sse pre {
+      margin: 0;
+      padding: 13px 14px;
+      overflow: auto;
+      font-family: var(--mono);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .diff .new { background: #e7f0df; display: inline; }
+    .diff .old { background: #ffe2d7; display: inline; }
+
+    .state-shape, .sse {
+      padding: 0;
+    }
+
+    .sse-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+    }
+
+    .muted { color: var(--muted); }
+
+    @media (max-width: 1120px) {
+      .grid, .sse-grid {
+        grid-template-columns: 1fr;
+      }
+      .timeline {
+        max-height: none;
+      }
+    }
+
+    @media (max-width: 780px) {
+      .app { grid-template-columns: 1fr; }
+      .rail {
+        position: static;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line-strong);
+      }
+      .summary { grid-template-columns: repeat(4, 1fr); }
+      .topbar {
+        align-items: stretch;
+        flex-direction: column;
+      }
+      .top-actions { justify-content: flex-start; }
+      .run-table {
+        overflow-x: auto;
+      }
+      table {
+        min-width: 720px;
+      }
+      .event {
+        grid-template-columns: 72px minmax(76px, 88px) minmax(0, 1fr);
+      }
+      .event .etype {
+        grid-column: 2;
+      }
+      .event .preview {
+        grid-column: 3;
+        grid-row: 1 / span 2;
+      }
+    }
+
+    @media (max-width: 560px) {
+      .content { padding-inline: 14px; }
+      .summary, .job-facts { grid-template-columns: 1fr 1fr; }
+      .job-head { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="rail" aria-label="runs">
+      <div class="brand">
+        <h1>legwork</h1>
+        <span class="readonly">read only</span>
+      </div>
+      <div class="summary" aria-label="current state summary">
+        <div class="metric"><b>8</b><span>runs</span></div>
+        <div class="metric"><b>19</b><span>jobs seen</span></div>
+        <div class="metric"><b>2</b><span>active</span></div>
+        <div class="metric"><b>0</b><span>actions here</span></div>
+      </div>
+
+      <div class="nav-title">live runs</div>
+      <nav class="run-list">
+        <a class="run-link active" href="#run-roadmap"><span>roadmap-next-dogfood-20260707-185304</span><small>2 active</small></a>
+        <a class="run-link" href="#run-presentation"><span>presentation</span><small>done</small></a>
+        <a class="run-link" href="#run-codex"><span>codex-adapter</span><small>done</small></a>
+        <a class="run-link" href="#run-passthrough"><span>passthrough</span><small>closed</small></a>
+        <a class="run-link" href="#run-ctx"><span>ctx-hint</span><small>closed</small></a>
+      </nav>
+
+      <div class="nav-title">state dir</div>
+      <p class="muted">
+        Sampled from <code>&lt;state-dir&gt;/jobs</code>, <code>&lt;state-dir&gt;/runs</code>,
+        and <code>&lt;state-dir&gt;/workspaces</code>. This mockup embeds the data so it
+        remains static.
+      </p>
+    </aside>
+
+    <main class="content">
+      <div class="topbar">
+        <div>
+          <h2>serve mockup</h2>
+          <p class="muted">Browser surface for humans watching multi-job legwork pipelines.</p>
+        </div>
+        <div class="top-actions" aria-label="read-only view controls">
+          <span class="chip">localhost only</span>
+          <span class="chip">SSE connected</span>
+          <div class="seg" aria-label="timeline filter">
+            <button aria-pressed="true">Curated</button>
+            <button aria-pressed="false">Firehose</button>
+          </div>
+          <button class="icon-btn" title="Refresh rendered fragments" aria-label="Refresh">↻</button>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div>
+          <section id="run-roadmap">
+            <div class="section-head">
+              <h3>Runs</h3>
+              <span class="hint">same rollup semantics as <code>legwork runs --json</code></span>
+            </div>
+            <div class="run-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th style="width: 31%">Run</th>
+                    <th style="width: 17%">Jobs</th>
+                    <th style="width: 17%">Cost</th>
+                    <th style="width: 13%">Ctx</th>
+                    <th>Latest note</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td class="run-name"><strong>roadmap-next-dogfood-20260707-185304</strong><small>updated 16:53:44</small></td>
+                    <td><span class="state active">2 active</span></td>
+                    <td>$0.00</td>
+                    <td>ok</td>
+                    <td class="note">queued ws-commit implementer and serve mockup/spec worker</td>
+                  </tr>
+                  <tr>
+                    <td class="run-name"><strong>presentation</strong><small>updated 2026-07-06 23:05</small></td>
+                    <td><span class="state closed">2 closed</span></td>
+                    <td>$9.68</td>
+                    <td class="ctx-high">was high</td>
+                    <td class="note">Human verdict on both dashboards: confusing/clunky scrolling; browser promoted.</td>
+                  </tr>
+                  <tr>
+                    <td class="run-name"><strong>codex-adapter</strong><small>updated 2026-07-06 12:52</small></td>
+                    <td><span class="state">done</span></td>
+                    <td>$14.40</td>
+                    <td>ok</td>
+                    <td class="note">real smoke green after sandbox fix; dangling commit recovered via fsck.</td>
+                  </tr>
+                  <tr>
+                    <td class="run-name"><strong>passthrough</strong><small>job-11 high context, job-13 closed</small></td>
+                    <td><span class="state closed">1 done / 1 closed</span></td>
+                    <td>$3.39</td>
+                    <td class="ctx-high">job-11 628k</td>
+                    <td class="note">--effort and --fallback-model shipped; --max-turns verified absent.</td>
+                  </tr>
+                  <tr>
+                    <td class="run-name"><strong>ctx-hint</strong><small>job-12 high context, job-14 closed</small></td>
+                    <td><span class="state closed">1 done / 1 closed</span></td>
+                    <td>$2.52</td>
+                    <td class="ctx-high">job-12 425k</td>
+                    <td class="note">Context threshold became a visible fresh-job-over-resume nudge.</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Timeline</h3>
+              <span class="hint">merged from job logs and run logs through <code>internal/timeline</code></span>
+            </div>
+            <div class="timeline" aria-label="merged event timeline">
+              <div class="event note-row">
+                <span class="time">Jul 07 16:53</span><span class="badge">[roadmap-next...]</span><span class="etype">queued</span>
+                <span class="preview">job-18: implement first-class <code>ws commit</code> inside workspace <code>ws-10</code>.</span>
+              </div>
+              <div class="event note-row">
+                <span class="time">Jul 07 16:53</span><span class="badge">[roadmap-next...]</span><span class="etype">queued</span>
+                <span class="preview">job-19: produce serve HTML mockup/spec only; do not implement Go endpoints.</span>
+              </div>
+              <div class="event">
+                <span class="time">Jul 07 16:54</span><span class="badge">job-19</span><span class="etype">tool</span>
+                <span class="preview">read ROADMAP Next, DESIGN §7, <code>internal/timeline</code>, dashboard, runs, tail, and current state-dir shape.</span>
+              </div>
+              <div class="event">
+                <span class="time">Jul 07 16:54</span><span class="badge">job-18</span><span class="etype">text</span>
+                <span class="preview">making command non-interactive and conservative: reject closed or busy workspaces, require <code>-m</code>.</span>
+              </div>
+              <div class="event note-row">
+                <span class="time">Jul 06 23:05</span><span class="badge">[presentation]</span><span class="etype">note</span>
+                <span class="preview">Verdict: Opus implementation won; both TUI dashboards judged confusing/clunky scrolling.</span>
+              </div>
+              <div class="event blocked-row">
+                <span class="time">Jul 06 22:40</span><span class="badge">job-16</span><span class="etype">blocked</span>
+                <span class="preview">Codex finished implementation but could not commit because worktree gitdir pointed outside writable root.</span>
+              </div>
+              <div class="event">
+                <span class="time">Jul 06 22:50</span><span class="badge">job-15</span><span class="etype">finished</span>
+                <span class="preview">done - presentation layer implemented, verified, and committed; shared <code>internal/timeline</code> shipped.</span>
+              </div>
+              <div class="event note-row">
+                <span class="time">Jul 06 12:52</span><span class="badge">[codex-adapter]</span><span class="etype">note</span>
+                <span class="preview">orchestrator recovered a dangling commit after merging branch into itself; suite green.</span>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>Diff Preview</h3>
+              <span class="hint">read from worktree; since-last-review highlight is visual only</span>
+            </div>
+            <div class="diff">
+              <div class="diff-toolbar">
+                <strong>ws-11 / docs/design/mockups</strong>
+                <span class="muted"><code>refs/legwork/ws-11/ckpt-0</code> baseline</span>
+              </div>
+              <pre><span class="new">+ docs/design/mockups/serve.html</span>
+<span class="new">+ docs/design/mockups/serve-spec.md</span>
+
+@@ serve surface invariants @@
+<span class="new">+ bind only 127.0.0.1 / localhost</span>
+<span class="new">+ GET endpoints only; no POST, PUT, PATCH, DELETE</span>
+<span class="new">+ browser receives SSE index events and refetches fragments</span>
+<span class="old">- do not add Go serve endpoints before approval</span></pre>
+            </div>
+          </section>
+        </div>
+
+        <div>
+          <section>
+            <div class="section-head">
+              <h3>Selected Job</h3>
+              <span class="hint">job detail fragment</span>
+            </div>
+            <div class="detail">
+              <div class="job-head">
+                <div>
+                  <h3>job-19</h3>
+                  <p>Codex worker in <code>ws-11</code>: serve mockup/spec counterpart. Active, model <code>gpt-5.5</code>.</p>
+                </div>
+                <span class="state active">active</span>
+              </div>
+
+              <div class="job-facts">
+                <div class="fact"><b>codex</b><span>agent</span></div>
+                <div class="fact"><b>ws-11</b><span>workspace</span></div>
+                <div class="fact"><b>0</b><span>checkpoints</span></div>
+                <div class="fact"><b>$0.00</b><span>cost so far</span></div>
+                <div class="fact"><b>-</b><span>context pending</span></div>
+                <div class="fact"><b>16:53:44</b><span>created</span></div>
+              </div>
+
+              <div class="callout">
+                Codex harness note: committing from this sandbox is unreliable when the gitdir lives under the main repo outside the workspace root. Workers should return artifacts and leave commits to the orchestrator.
+              </div>
+
+              <div class="timeline" style="max-height: 322px">
+                <div class="event">
+                  <span class="time">16:54:14</span><span class="badge">job-19</span><span class="etype">text</span>
+                  <span class="preview">loaded frontend design guidance; operational console, not a landing page.</span>
+                </div>
+                <div class="event">
+                  <span class="time">16:54:33</span><span class="badge">job-19</span><span class="etype">tool</span>
+                  <span class="preview">read <code>present_cmds.go</code>, <code>job.go</code>, <code>events.go</code>, <code>filter.go</code>.</span>
+                </div>
+                <div class="event">
+                  <span class="time">16:54:49</span><span class="badge">job-19</span><span class="etype">tool</span>
+                  <span class="preview">sampled real metas, run logs, job events, and workspace records.</span>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>State Dir Shape</h3>
+              <span class="hint">observed current layout</span>
+            </div>
+            <div class="state-shape">
+              <pre>&lt;state-dir&gt;/
+  counters.json
+  jobs/
+    job-19/
+      meta.json
+      events.jsonl
+      transcript.jsonl
+      runner.log
+      artifacts/
+  runs/
+    roadmap-next-dogfood-20260707-185304/
+      events.jsonl
+    presentation/
+      events.jsonl
+      design.md
+  workspaces/
+    ws-11/
+      meta.json
+      tree/</pre>
+            </div>
+          </section>
+
+          <section>
+            <div class="section-head">
+              <h3>SSE Contract Sketch</h3>
+              <span class="hint">browser stays dumb</span>
+            </div>
+            <div class="sse">
+              <pre>event: timeline
+data: {"seq":22,"scope":"all","fragments":["runs","timeline","job:job-19"]}
+
+event: health
+data: {"active":2,"needs_input":0,"context_high":2}
+
+event: heartbeat
+data: {"ts":"2026-07-07T16:55:00Z"}</pre>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <section>
+        <div class="section-head">
+          <h3>Fragment Boundaries</h3>
+          <span class="hint">candidate GET-only endpoints after approval</span>
+        </div>
+        <div class="sse-grid">
+          <div class="sse">
+            <pre>GET /                 shell + initial fragments
+GET /fragments/runs   run rollup table
+GET /fragments/timeline?since=&scope=
+GET /fragments/jobs/{id}
+GET /fragments/diff/{ws}?since_review=1
+GET /events           text/event-stream</pre>
+          </div>
+          <div class="sse">
+            <pre>No mutation routes.
+No file writes.
+No review cursor write until CLI supports same state.
+No agent stdin bridge.
+No shell command buttons.
+No remote bind by default.</pre>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

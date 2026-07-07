@@ -35,6 +35,13 @@ type Meta struct {
 // Store manages <root>/workspaces/ws-N/{meta.json,tree/}.
 type Store struct{ Root string }
 
+// CommitResult is the durable git result of an orchestrator-owned workspace
+// commit.
+type CommitResult struct {
+	OID     string
+	Summary string
+}
+
 func Open(root string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(root, "workspaces"), 0o700); err != nil {
 		return nil, err
@@ -267,6 +274,64 @@ func (s *Store) Uncommitted(m *Meta) (bool, error) {
 		return false, err
 	}
 	return strings.TrimSpace(out) != "", nil
+}
+
+// Commit stages the whole workspace tree and creates one normal git commit on
+// the workspace branch. It intentionally does not support allow-empty: legwork's
+// review gate is a concrete diff, so an empty orchestrator commit is more likely
+// to hide a mistaken close/merge sequence than to communicate useful state.
+func (s *Store) Commit(m *Meta, message string) (*CommitResult, error) {
+	if m.State == "closed" {
+		return nil, fmt.Errorf("%s is closed", m.ID)
+	}
+	message = strings.TrimSpace(message)
+	if message == "" {
+		return nil, fmt.Errorf("commit message is required")
+	}
+
+	run := func(args ...string) (string, error) {
+		cmd := exec.Command("git", append([]string{"-C", m.Tree}, args...)...)
+		cmd.Env = commitEnv(m.Tree)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+		}
+		return strings.TrimSpace(string(out)), nil
+	}
+	if _, err := run("add", "-A", "."); err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command("git", "-C", m.Tree, "diff", "--cached", "--quiet", "--exit-code")
+	cmd.Env = commitEnv(m.Tree)
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		return nil, fmt.Errorf("%s has no uncommitted changes to commit", m.ID)
+	}
+	if ee, ok := err.(*exec.ExitError); !ok || ee.ExitCode() != 1 {
+		return nil, fmt.Errorf("git diff --cached --quiet --exit-code: %v: %s", err, strings.TrimSpace(string(out)))
+	}
+
+	if _, err := run("commit", "-m", message); err != nil {
+		return nil, err
+	}
+	oid, err := run("rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	summary, _ := run("show", "--stat", "--oneline", "--summary", "--no-renames", "--format=%h %s", "--no-ext-diff", "--no-color", "HEAD")
+	return &CommitResult{OID: oid, Summary: summary}, nil
+}
+
+func commitEnv(tree string) []string {
+	env := os.Environ()
+	if _, err := git(tree, "config", "--get", "user.name"); err != nil {
+		env = append(env, "GIT_AUTHOR_NAME=legwork orchestrator", "GIT_COMMITTER_NAME=legwork orchestrator")
+	}
+	if _, err := git(tree, "config", "--get", "user.email"); err != nil {
+		env = append(env, "GIT_AUTHOR_EMAIL=legwork@localhost", "GIT_COMMITTER_EMAIL=legwork@localhost")
+	}
+	return env
 }
 
 // Close acknowledges the workspace and reclaims worktree, branch, and

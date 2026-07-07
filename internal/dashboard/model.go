@@ -41,8 +41,9 @@ type Model struct {
 	jobs    []jobRef // flattened selectable rows, aligned with the runs pane
 	sel     int      // index into jobs
 
-	stream []timeline.Item // curated, newest last, bounded
-	detail []timeline.Item // selected job's recent events
+	stream       []timeline.Item // curated, newest last, bounded
+	detail       []timeline.Item // selected job's recent events
+	detailScroll int             // 0 = newest detail events; larger scrolls toward older events
 
 	firehose bool // f: firehose vs curated in the detail pane
 	focus    bool // enter: detail focused
@@ -139,6 +140,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.stream = m.stream[len(m.stream)-maxStream:]
 		}
 		m.detail = msg.detail
+		m.clampDetailScroll()
 		return m, nil
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -153,12 +155,24 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		return m, tea.Quit
 	case "j", "down":
+		if m.focus {
+			m.detailScroll--
+			m.clampDetailScroll()
+			return m, nil
+		}
 		m.sel++
 		m.clampSel()
+		m.detailScroll = 0
 		return m, m.reload()
 	case "k", "up":
+		if m.focus {
+			m.detailScroll++
+			m.clampDetailScroll()
+			return m, nil
+		}
 		m.sel--
 		m.clampSel()
+		m.detailScroll = 0
 		return m, m.reload()
 	case "enter":
 		m.focus = true
@@ -168,6 +182,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "f":
 		m.firehose = !m.firehose
+		m.detailScroll = 0
 		return m, m.reload()
 	}
 	return m, nil
@@ -182,6 +197,19 @@ func (m *Model) clampSel() {
 	}
 	if m.sel < 0 {
 		m.sel = 0
+	}
+}
+
+func (m *Model) clampDetailScroll() {
+	if m.detailScroll < 0 {
+		m.detailScroll = 0
+	}
+	max := len(m.detail) - 1
+	if max < 0 {
+		max = 0
+	}
+	if m.detailScroll > max {
+		m.detailScroll = max
 	}
 }
 
@@ -200,8 +228,8 @@ func (m Model) selectedJob() *job.Meta {
 }
 
 // flattenJobs builds the selectable-row order: jobs grouped under their run in
-// rollup order (so the runs pane and the selection cursor stay aligned), each
-// run's jobs sorted by ID.
+// rollup order (so the runs pane and the selection cursor stay aligned), with
+// action-needed jobs before routine/closed rows and numeric ID as the tiebreaker.
 func flattenJobs(rollups []timeline.RunRollup, metas []*job.Meta) []jobRef {
 	byRun := map[string][]*job.Meta{}
 	for _, mm := range metas {
@@ -210,7 +238,7 @@ func flattenJobs(rollups []timeline.RunRollup, metas []*job.Meta) []jobRef {
 	var out []jobRef
 	for _, r := range rollups {
 		js := byRun[r.Label]
-		sortMetasByID(js)
+		sortMetasForAttention(js)
 		for _, mm := range js {
 			out = append(out, jobRef{run: r.Label, meta: mm})
 		}
@@ -218,12 +246,44 @@ func flattenJobs(rollups []timeline.RunRollup, metas []*job.Meta) []jobRef {
 	return out
 }
 
-func sortMetasByID(ms []*job.Meta) {
-	// Insertion sort by numeric-friendly ID; job lists are tiny.
+func sortMetasForAttention(ms []*job.Meta) {
+	// Insertion sort; job lists are tiny.
 	for i := 1; i < len(ms); i++ {
-		for j := i; j > 0 && idLess(ms[j].ID, ms[j-1].ID); j-- {
+		for j := i; j > 0 && metaLess(ms[j], ms[j-1]); j-- {
 			ms[j], ms[j-1] = ms[j-1], ms[j]
 		}
+	}
+}
+
+func metaLess(a, b *job.Meta) bool {
+	if jobStateRank(a.State) != jobStateRank(b.State) {
+		return jobStateRank(a.State) < jobStateRank(b.State)
+	}
+	return idLess(a.ID, b.ID)
+}
+
+func jobStateRank(s job.State) int {
+	switch s {
+	case job.StateNeedsInput:
+		return 0
+	case job.StateBlocked:
+		return 1
+	case job.StateFailed:
+		return 2
+	case job.StateAuthNeeded:
+		return 3
+	case job.StateInterrupted:
+		return 4
+	case job.StateActive:
+		return 5
+	case job.StateQueued:
+		return 6
+	case job.StateDone:
+		return 7
+	case job.StateClosed:
+		return 8
+	default:
+		return 9
 	}
 }
 

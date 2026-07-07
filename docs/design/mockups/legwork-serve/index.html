@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>legwork serve — mockup-first human surface</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070a0f;
+      --panel: #0d121b;
+      --panel-2: #121925;
+      --panel-3: #172131;
+      --line: #243145;
+      --muted: #8ea0b8;
+      --text: #edf4ff;
+      --soft: #c8d6ea;
+      --green: #59d49a;
+      --amber: #f1b561;
+      --red: #ff706f;
+      --blue: #7fb5ff;
+      --purple: #c09cff;
+      --cyan: #5fd7e5;
+      --shadow: 0 24px 80px rgba(0,0,0,.45);
+      --radius: 18px;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 18% 0%, rgba(73, 116, 255, .18), transparent 34rem),
+        radial-gradient(circle at 84% 8%, rgba(95, 215, 229, .13), transparent 28rem),
+        linear-gradient(180deg, #080b12 0%, #05070b 100%);
+    }
+    button, input { font: inherit; }
+    .shell { max-width: 1760px; margin: 0 auto; padding: 22px; }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(420px, 1fr) auto;
+      gap: 18px;
+      align-items: start;
+      margin-bottom: 18px;
+    }
+    .hero {
+      border: 1px solid rgba(127,181,255,.26);
+      background: linear-gradient(135deg, rgba(18,25,37,.92), rgba(13,18,27,.72));
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: var(--shadow);
+    }
+    .eyebrow { color: var(--cyan); font-weight: 800; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; }
+    h1 { margin: 8px 0 8px; font-size: clamp(28px, 4vw, 48px); letter-spacing: -.04em; line-height: .98; }
+    .hero p { margin: 0; color: var(--soft); max-width: 980px; line-height: 1.55; }
+    .safety-card {
+      min-width: 330px;
+      border: 1px solid rgba(89,212,154,.32);
+      background: linear-gradient(180deg, rgba(89,212,154,.12), rgba(13,18,27,.92));
+      border-radius: 22px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+    .safety-card strong { display: block; margin-bottom: 8px; color: var(--green); }
+    .safety-card code, .chip code { color: #d8ffe9; }
+    .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .chip { border: 1px solid var(--line); color: var(--soft); border-radius: 999px; padding: 7px 10px; background: rgba(255,255,255,.035); font-size: 12px; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 320px minmax(600px, 1fr) 420px;
+      gap: 18px;
+      align-items: start;
+    }
+    .panel {
+      border: 1px solid var(--line);
+      background: rgba(13,18,27,.84);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: 0 16px 50px rgba(0,0,0,.25);
+      backdrop-filter: blur(16px);
+    }
+    .panel-head { display:flex; justify-content:space-between; gap: 12px; align-items:center; padding: 16px 18px; border-bottom: 1px solid var(--line); background: rgba(18,25,37,.72); }
+    .panel-title { font-size: 13px; letter-spacing:.12em; text-transform: uppercase; font-weight: 800; color: #b8c8de; }
+    .panel-sub { color: var(--muted); font-size: 12px; margin-top: 3px; }
+    .panel-body { padding: 16px; }
+
+    .run-list { display: grid; gap: 10px; }
+    .run-btn {
+      width: 100%; text-align: left; border: 1px solid var(--line); border-radius: 15px;
+      background: rgba(255,255,255,.025); color: var(--text); padding: 12px; cursor: pointer;
+      transition: transform .15s ease, border-color .15s ease, background .15s ease;
+    }
+    .run-btn:hover { transform: translateY(-1px); border-color: rgba(127,181,255,.55); background: rgba(127,181,255,.08); }
+    .run-btn.active { border-color: rgba(95,215,229,.75); background: linear-gradient(135deg, rgba(95,215,229,.16), rgba(127,181,255,.07)); }
+    .run-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .run-name { font-weight: 800; font-size: 14px; overflow-wrap:anywhere; }
+    .run-note { color: var(--muted); font-size: 12px; margin-top: 8px; line-height:1.35; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+    .badge { display:inline-flex; align-items:center; gap:6px; border-radius:999px; border:1px solid var(--line); padding:3px 8px; font-size:11px; color:var(--soft); white-space:nowrap; }
+    .badge.active { border-color: rgba(127,181,255,.45); color: #afd0ff; }
+    .badge.closed { color: #a7b5c8; }
+    .badge.done { color: var(--green); }
+    .badge.warn { color: var(--amber); border-color: rgba(241,181,97,.45); }
+    .badge.readonly { color: var(--green); border-color: rgba(89,212,154,.4); background: rgba(89,212,154,.07); }
+
+    .stats { display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 14px; }
+    .stat { border:1px solid var(--line); border-radius:16px; background:rgba(255,255,255,.035); padding: 14px; min-height: 96px; }
+    .stat .num { font-size: 26px; font-weight: 900; letter-spacing:-.04em; }
+    .stat .label { color: var(--muted); font-size: 12px; margin-top: 4px; }
+    .stat.warn { border-color: rgba(241,181,97,.35); background: rgba(241,181,97,.07); }
+    .stat.good { border-color: rgba(89,212,154,.32); background: rgba(89,212,154,.06); }
+
+    .toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin: 12px 0 14px; }
+    .seg { border:1px solid var(--line); background: rgba(255,255,255,.035); border-radius: 999px; padding: 3px; display:inline-flex; gap:3px; }
+    .seg button { border:0; background:transparent; color:var(--muted); padding:7px 11px; border-radius:999px; cursor:pointer; }
+    .seg button.active { color:var(--text); background:rgba(127,181,255,.18); }
+    .ghost-btn { border:1px solid var(--line); color:var(--soft); background:rgba(255,255,255,.035); border-radius:12px; padding:8px 11px; cursor:pointer; }
+    .ghost-btn:hover { border-color: rgba(127,181,255,.55); }
+    .ghost-btn[disabled] { opacity: .52; cursor:not-allowed; }
+
+    .job-table { width:100%; border-collapse: collapse; overflow:hidden; border-radius: 16px; }
+    .job-table th { color:var(--muted); font-size:11px; text-align:left; font-weight:700; text-transform:uppercase; letter-spacing:.1em; padding: 10px; border-bottom:1px solid var(--line); }
+    .job-table td { padding: 11px 10px; border-bottom:1px solid rgba(36,49,69,.65); vertical-align:top; }
+    .job-table tr { cursor:pointer; }
+    .job-table tr:hover, .job-table tr.selected { background: rgba(127,181,255,.08); }
+    .job-id { font-weight:900; color:#dbeaff; }
+    .muted { color:var(--muted); }
+    .task { color:var(--soft); max-width:460px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ctx-high { color: var(--amber); font-weight: 800; }
+
+    .timeline { display:grid; gap: 10px; max-height: 620px; overflow:auto; padding-right: 4px; }
+    .event { display:grid; grid-template-columns: 118px 98px 1fr; gap: 10px; align-items:start; border:1px solid rgba(36,49,69,.75); border-radius:15px; padding: 11px; background: rgba(255,255,255,.027); }
+    .event.hide { display:none; }
+    .time { color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+    .etype { font-size:12px; font-weight:900; }
+    .etype.note { color: var(--purple); }
+    .etype.started, .etype.queued { color: var(--blue); }
+    .etype.finished { color: var(--green); }
+    .etype.tool-call { color: var(--amber); }
+    .etype.text { color: var(--soft); }
+    .preview { color: var(--soft); line-height:1.38; font-size: 13px; overflow-wrap:anywhere; }
+
+    .detail-title { display:flex; justify-content:space-between; align-items:start; gap:12px; margin-bottom:12px; }
+    .detail-title h2 { margin:0; font-size:28px; letter-spacing:-.03em; }
+    .kv { display:grid; grid-template-columns: 100px 1fr; gap:8px 12px; color:var(--soft); font-size:13px; }
+    .kv div:nth-child(odd) { color: var(--muted); }
+    .answer-box { border:1px dashed rgba(241,181,97,.45); border-radius:16px; padding: 13px; margin-top: 14px; background: rgba(241,181,97,.07); }
+    .answer-box strong { color: var(--amber); }
+    .disabled-actions { display:grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .disabled-actions button { border:1px solid var(--line); border-radius:12px; padding:10px; background:rgba(255,255,255,.035); color:var(--muted); }
+
+    .diff { margin-top: 16px; border:1px solid var(--line); border-radius:16px; overflow:hidden; background:#071019; }
+    .diff-head { padding: 11px 13px; background: rgba(18,25,37,.86); display:flex; justify-content:space-between; gap:10px; color:var(--soft); font-size:13px; }
+    pre { margin:0; padding: 12px 0; overflow:auto; font-size:12px; line-height:1.45; }
+    .line { display:block; padding: 0 14px; color:#b5c4d8; white-space:pre; }
+    .line.add { color:#b7f7d4; background:rgba(89,212,154,.09); }
+    .line.new { box-shadow: inset 4px 0 0 var(--cyan); background: rgba(95,215,229,.10); }
+    .line.del { color:#ffb4b4; background:rgba(255,112,111,.08); }
+
+    .footer-note { margin-top: 18px; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .pulse { display:inline-block; width:8px; height:8px; border-radius:999px; background:var(--green); box-shadow:0 0 0 rgba(89,212,154,.8); animation:pulse 1.8s infinite; }
+    @keyframes pulse { 70% { box-shadow:0 0 0 9px rgba(89,212,154,0); } 100% { box-shadow:0 0 0 0 rgba(89,212,154,0); } }
+
+    @media (max-width: 1280px) {
+      header { grid-template-columns: 1fr; }
+      .grid { grid-template-columns: 280px minmax(500px, 1fr); }
+      .side-right { grid-column: 1 / -1; }
+    }
+    @media (max-width: 900px) {
+      .shell { padding: 12px; }
+      .grid { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .event { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <section class="hero">
+        <div class="eyebrow">Mockup-first spec · docs/design/mockups/legwork-serve</div>
+        <h1>legwork serve as the human browser surface</h1>
+        <p>This static prototype renders a real snapshot from <code>~/.local/state/legwork</code> (jobs <strong>job-19</strong>, <strong>job-18</strong>, <strong>job-16</strong>, <strong>job-15</strong>, and run logs from <strong>roadmap-next-dogfood-20260707-185304</strong>, <strong>presentation</strong>, <strong>ctx-hint</strong>). The visual stance is “drill-in without losing the pipeline”: runs on the left, selected run/timeline in the center, selected job + diff/review affordances on the right.</p>
+        <div class="chips">
+          <span class="chip"><span class="pulse"></span> SSE: receive index events</span>
+          <span class="chip">Timeline: <code>internal/timeline.Poll()</code></span>
+          <span class="chip">Diffs: since-last-review highlight</span>
+          <span class="chip">No Go serve implementation yet</span>
+        </div>
+      </section>
+      <aside class="safety-card">
+        <strong>Safety invariant visible in-product</strong>
+        <div>Bind <code>127.0.0.1</code> only. Browser is strictly read-only. Mutation-shaped controls are disabled and point users to the CLI/ssh path.</div>
+        <div class="chips"><span class="chip"><code>GET /</code></span><span class="chip"><code>GET /events</code></span><span class="chip"><code>GET /fragments/*</code></span><span class="chip">no POST/PUT/DELETE</span></div>
+      </aside>
+    </header>
+
+    <main class="grid">
+      <aside class="panel">
+        <div class="panel-head">
+          <div><div class="panel-title">Runs</div><div class="panel-sub">Newest first, one line per label</div></div>
+          <span class="badge readonly">read-only</span>
+        </div>
+        <div class="panel-body"><div id="runList" class="run-list"></div></div>
+      </aside>
+
+      <section class="panel">
+        <div class="panel-head">
+          <div><div id="runTitle" class="panel-title">Selected run</div><div id="runSubtitle" class="panel-sub"></div></div>
+          <span class="badge active">live via SSE</span>
+        </div>
+        <div class="panel-body">
+          <div class="stats">
+            <div class="stat"><div id="statJobs" class="num">—</div><div class="label">jobs in run</div></div>
+            <div class="stat good"><div id="statActive" class="num">—</div><div class="label">currently active</div></div>
+            <div class="stat warn"><div id="statCtx" class="num">—</div><div class="label">context watch</div></div>
+            <div class="stat"><div id="statCost" class="num">—</div><div class="label">known spend</div></div>
+          </div>
+
+          <table class="job-table" aria-label="Jobs in selected run">
+            <thead><tr><th>job</th><th>state</th><th>health</th><th>task</th></tr></thead>
+            <tbody id="jobRows"></tbody>
+          </table>
+
+          <div class="toolbar">
+            <div class="seg" aria-label="timeline density">
+              <button id="curatedBtn" class="active" type="button">curated</button>
+              <button id="firehoseBtn" type="button">firehose</button>
+            </div>
+            <button id="sseBtn" class="ghost-btn" type="button">Simulate one SSE event</button>
+            <span class="muted">Browser receives events; rendered fragments are re-fetched by cursor.</span>
+          </div>
+          <div id="timeline" class="timeline" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <aside class="panel side-right">
+        <div class="panel-head">
+          <div><div class="panel-title">Job drill-in</div><div class="panel-sub">Deep details without leaving the run</div></div>
+          <span id="jobStateBadge" class="badge">—</span>
+        </div>
+        <div class="panel-body">
+          <div class="detail-title"><h2 id="jobTitle">job-19</h2><span id="agentBadge" class="badge active">codex</span></div>
+          <div id="jobKv" class="kv"></div>
+          <div class="answer-box">
+            <strong>Mutation path stays CLI-only.</strong>
+            <div class="muted" style="margin-top:6px">If this job asks for input, the web UI shows the question and offers copyable commands; it never sends <code>answer</code>, <code>resume</code>, <code>approve</code>, or <code>close</code>.</div>
+          </div>
+          <div class="disabled-actions">
+            <button disabled>answer via web disabled</button>
+            <button disabled>close via web disabled</button>
+          </div>
+
+          <section class="diff" aria-label="Diff preview mockup">
+            <div class="diff-head"><span>Diff preview · <code>--since-last-review</code></span><span class="badge warn">new lines highlighted</span></div>
+            <pre><span class="line">diff --git a/docs/design/mockups/legwork-serve/index.html b/docs/design/mockups/legwork-serve/index.html</span>
+<span class="line del">- dashboard TUI is the only rich human surface</span>
+<span class="line add new">+ serve gives humans native scroll, typography, clickable drill-in</span>
+<span class="line add new">+ SSE pushes index events; browser re-fetches read-only fragments</span>
+<span class="line add">+ mutation actions are shown as CLI commands, never web endpoints</span></pre>
+          </section>
+          <p class="footer-note">Diff content above is a rendering example; implementation should read the worktree diff as ground truth and overlay the shared review cursor. The rest of the screen is populated from real state-dir data captured at 2026-07-07T16:54:50Z.</p>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <script id="state-data" type="application/json">
+  {
+    "snapshot": "2026-07-07T16:54:50Z",
+    "runs": [
+      {"label":"roadmap-next-dogfood-20260707-185304","updated":"2026-07-07T16:54:01Z","summary":"2 active","cost":0,"context":"pending","note":"Two codex workers dispatched for the ROADMAP ## Next dogfood: ws commit (job-18) and serve mockup/spec (job-19)."},
+      {"label":"presentation","updated":"2026-07-06T23:05:35Z","summary":"2 closed","cost":9.68,"context":"historically high","note":"Verdict: opus (ws-6) wins; human verdict on both dashboards: confusing/clunky scrolling — promote serve mockup-first."},
+      {"label":"ctx-hint","updated":"2026-07-06T19:36:25Z","summary":"1 done · 1 closed","cost":2.52,"context":"ok now","note":"Shipped [health] context_threshold=150k default, ctx marker in ls, hint line in status, context_high in json."},
+      {"label":"passthrough","updated":"2026-07-06T19:36:25Z","summary":"1 done · 1 closed","cost":3.39,"context":"watch","note":"Shipped claude --effort and --fallback-model passthroughs; --max-turns verified absent and dropped."}
+    ],
+    "jobs": [
+      {"id":"job-19","run":"roadmap-next-dogfood-20260707-185304","agent":"codex","model":"gpt-5.5","workspace":"ws-11","state":"active","created":"2026-07-07T16:53:44Z","updated":"2026-07-07T16:53:44Z","ctx":0,"turns":0,"cost":0,"task":"Produce the legwork serve mockup/spec counterpart from the legwork/codex side: HTML mockup over representative real state-dir data plus concise spec.","result":""},
+      {"id":"job-18","run":"roadmap-next-dogfood-20260707-185304","agent":"codex","model":"gpt-5.5","workspace":"ws-10","state":"active","created":"2026-07-07T16:53:44Z","updated":"2026-07-07T16:53:44Z","ctx":0,"turns":0,"cost":0,"task":"Implement first-class legwork ws commit <ws> -m <msg> for orchestrator-owned commits inside a legwork workspace.","result":""},
+      {"id":"job-16","run":"presentation","agent":"codex","model":"","workspace":"ws-7","state":"closed","created":"2026-07-06T22:29:40Z","updated":"2026-07-06T23:05:35Z","ctx":5794647,"turns":1,"cost":0,"task":"Implement legwork's presentation layer: runs, tail, dashboard + shared internal/timeline.","result":"Implemented internal/timeline, runs, tail, and read-only Bubble Tea dashboard; blocked only on commit due sandbox gitdir permissions."},
+      {"id":"job-15","run":"presentation","agent":"claude","model":"opus","workspace":"ws-6","state":"closed","created":"2026-07-06T22:29:38Z","updated":"2026-07-06T23:05:35Z","ctx":190936,"turns":87,"cost":9.679014,"task":"Implement legwork's presentation layer from the approved design document.","result":"Presentation layer implemented, verified, and committed; internal/timeline became the shared read-only substrate."},
+      {"id":"job-14","run":"ctx-hint","agent":"claude","model":"opus","workspace":"ws-5","state":"closed","created":"2026-07-06T19:27:21Z","updated":"2026-07-06T19:36:25Z","ctx":62310,"turns":35,"cost":1.653686,"task":"Implement the Actionable context threshold feature.","result":"Added config-driven context threshold, ls/status markers, json context_high, tests, and docs."},
+      {"id":"job-13","run":"passthrough","agent":"claude","model":"opus","workspace":"ws-4","state":"closed","created":"2026-07-06T19:27:17Z","updated":"2026-07-06T19:36:25Z","ctx":73305,"turns":46,"cost":2.174834,"task":"Implement Claude flag passthroughs.","result":"Added --effort and --fallback-model passthroughs; codex rejects them; real-agent smoke returned PLUMBING-OK."}
+    ],
+    "events": [
+      {"run":"roadmap-next-dogfood-20260707-185304","job":"job-18","ts":"16:53:44","type":"queued","actor":"orchestrator","curated":true,"preview":"Read ROADMAP.md first section and implement first-class ws commit."},
+      {"run":"roadmap-next-dogfood-20260707-185304","job":"job-19","ts":"16:53:44","type":"queued","actor":"orchestrator","curated":true,"preview":"Produce the legwork serve mockup/spec counterpart over real state-dir data."},
+      {"run":"roadmap-next-dogfood-20260707-185304","job":"job-18","ts":"16:53:57","type":"text","actor":"main","curated":true,"preview":"I’ll read the roadmap/design context first, then trace the workspace command path and event model before editing."},
+      {"run":"roadmap-next-dogfood-20260707-185304","job":"job-19","ts":"16:54:00","type":"text","actor":"main","curated":true,"preview":"I’ll first read the required project docs and inspect existing timeline/dashboard code plus state layout."},
+      {"run":"roadmap-next-dogfood-20260707-185304","job":"job-19","ts":"16:54:01","type":"tool-call","actor":"main","curated":false,"preview":"sed -n '1,180p' ROADMAP.md"},
+      {"run":"roadmap-next-dogfood-20260707-185304","job":"job-18","ts":"16:53:57","type":"tool-call","actor":"main","curated":false,"preview":"rg -n \"workspace|close|diff|commit|event\" main.go workspace_cmds.go internal test README.md"},
+      {"run":"presentation","job":"job-15","ts":"22:50:53","type":"finished","actor":"runner","curated":true,"preview":"Done. The presentation layer is implemented, verified, and committed (`b1c89f7`)."},
+      {"run":"presentation","job":"job-16","ts":"22:40:46","type":"finished","actor":"runner","curated":true,"preview":"Implemented presentation layer; blocked only on commit because codex sandbox could not write gitdir."},
+      {"run":"presentation","job":"","ts":"23:05:35","type":"note","actor":"orchestrator","curated":true,"preview":"Verdict: opus wins. Human verdict on both dashboards: confusing/clunky scrolling; browser serve promoted mockup-first."},
+      {"run":"ctx-hint","job":"job-14","ts":"19:30:57","type":"finished","actor":"runner","curated":true,"preview":"Implemented context threshold feature: config, ContextHigh, ls/status hint, JSON, tests, docs."},
+      {"run":"ctx-hint","job":"","ts":"19:36:25","type":"note","actor":"orchestrator","curated":true,"preview":"Shipped: [health] context_threshold=150k default, ctx marker in ls, hint line in status."},
+      {"run":"passthrough","job":"job-13","ts":"19:36:25","type":"finished","actor":"runner","curated":true,"preview":"Feature implemented, verified, committed; real-agent haiku smoke with --effort low returned PLUMBING-OK."}
+    ]
+  }
+  </script>
+
+  <script>
+    const state = JSON.parse(document.getElementById('state-data').textContent);
+    let selectedRun = state.runs[0].label;
+    let selectedJob = 'job-19';
+    let firehose = false;
+    let tick = 0;
+
+    const $ = (id) => document.getElementById(id);
+    const fmtCost = (n) => n ? '$' + n.toFixed(n < 10 ? 2 : 0) : '$0';
+    const shortRun = (label) => label || '(no run)';
+    const jobHealth = (job) => {
+      if (!job.ctx) return 'pending';
+      if (job.ctx >= 150000) return `<span class="ctx-high">ctx:${Math.round(job.ctx/1000)}k!</span>`;
+      return `ctx:${Math.round(job.ctx/1000)}k`;
+    };
+    const badgeClass = (state) => state === 'active' ? 'active' : state === 'done' ? 'done' : state === 'closed' ? 'closed' : 'warn';
+
+    function renderRuns() {
+      $('runList').innerHTML = state.runs.map(run => `
+        <button type="button" class="run-btn ${run.label === selectedRun ? 'active' : ''}" data-run="${run.label}">
+          <div class="run-top"><span class="run-name">${shortRun(run.label)}</span><span class="badge ${run.summary.includes('active') ? 'active' : 'closed'}">${run.summary}</span></div>
+          <div class="run-note">${run.note}</div>
+        </button>`).join('');
+      document.querySelectorAll('.run-btn').forEach(btn => btn.addEventListener('click', () => {
+        selectedRun = btn.dataset.run;
+        const first = state.jobs.find(j => j.run === selectedRun);
+        if (first) selectedJob = first.id;
+        renderAll();
+      }));
+    }
+
+    function renderCenter() {
+      const run = state.runs.find(r => r.label === selectedRun);
+      const jobs = state.jobs.filter(j => j.run === selectedRun);
+      const active = jobs.filter(j => j.state === 'active').length;
+      const high = jobs.filter(j => j.ctx >= 150000 && j.state !== 'closed').length;
+      const cost = jobs.reduce((sum, j) => sum + (j.cost || 0), 0);
+      $('runTitle').textContent = shortRun(selectedRun);
+      $('runSubtitle').textContent = `${run.updated} · ${run.note}`;
+      $('statJobs').textContent = jobs.length;
+      $('statActive').textContent = active;
+      $('statCtx').textContent = high ? `${high}!` : (jobs.some(j => j.ctx >= 150000) ? 'historic' : 'ok');
+      $('statCost').textContent = fmtCost(cost);
+      $('jobRows').innerHTML = jobs.map(job => `
+        <tr data-job="${job.id}" class="${job.id === selectedJob ? 'selected' : ''}">
+          <td><div class="job-id">${job.id}</div><div class="muted">${job.agent}${job.model ? ' · ' + job.model : ''}</div></td>
+          <td><span class="badge ${badgeClass(job.state)}">${job.state}</span></td>
+          <td>${jobHealth(job)}<div class="muted">${job.turns || 0} turns · ${fmtCost(job.cost || 0)}</div></td>
+          <td><div class="task">${job.task}</div><div class="muted">${job.workspace || 'scratch'}</div></td>
+        </tr>`).join('');
+      document.querySelectorAll('#jobRows tr').forEach(row => row.addEventListener('click', () => { selectedJob = row.dataset.job; renderAll(); }));
+      renderTimeline();
+    }
+
+    function renderTimeline() {
+      const events = state.events.filter(e => e.run === selectedRun && (firehose || e.curated));
+      $('timeline').innerHTML = events.map(e => `
+        <article class="event ${!e.curated ? 'is-firehose' : ''}">
+          <div class="time">${e.ts}<br><span class="muted">${e.job || '[' + e.run + ']'}</span></div>
+          <div class="etype ${e.type}">${e.type}</div>
+          <div class="preview"><strong>${e.actor || 'system'}:</strong> ${e.preview}</div>
+        </article>`).join('') || '<div class="muted">No events in this scope.</div>';
+    }
+
+    function renderDetail() {
+      const job = state.jobs.find(j => j.id === selectedJob) || state.jobs[0];
+      $('jobTitle').textContent = job.id;
+      $('agentBadge').textContent = job.agent + (job.model ? ' · ' + job.model : '');
+      $('jobStateBadge').textContent = job.state;
+      $('jobStateBadge').className = 'badge ' + badgeClass(job.state);
+      $('jobKv').innerHTML = `
+        <div>run</div><div>${job.run}</div>
+        <div>workspace</div><div>${job.workspace || 'scratch'}</div>
+        <div>created</div><div>${job.created}</div>
+        <div>updated</div><div>${job.updated}</div>
+        <div>health</div><div>${jobHealth(job)} · ${job.turns || 0} turns · ${fmtCost(job.cost || 0)}</div>
+        <div>task</div><div>${job.task}</div>
+        <div>result</div><div>${job.result || '<span class="muted">still running; result not available yet</span>'}</div>`;
+    }
+
+    function renderAll() { renderRuns(); renderCenter(); renderDetail(); }
+    $('curatedBtn').addEventListener('click', () => { firehose = false; $('curatedBtn').classList.add('active'); $('firehoseBtn').classList.remove('active'); renderTimeline(); });
+    $('firehoseBtn').addEventListener('click', () => { firehose = true; $('firehoseBtn').classList.add('active'); $('curatedBtn').classList.remove('active'); renderTimeline(); });
+    $('sseBtn').addEventListener('click', () => {
+      tick += 1;
+      state.events.unshift({run:selectedRun, job:selectedJob, ts:'SSE+' + tick, type:'note', actor:'browser', curated:true, preview:'Mock SSE frame received: browser re-fetches read-only fragments; no mutation endpoint exists.'});
+      renderTimeline();
+    });
+    renderAll();
+  </script>
+</body>
+</html>

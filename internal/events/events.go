@@ -41,6 +41,7 @@ const (
 	TypeProgress    = "progress"
 	TypeUsage       = "usage"      // fields: cost_usd, tokens_in, tokens_out, context
 	TypeNote        = "note"       // orchestrator narration
+	TypeCommit      = "commit"     // orchestrator-owned workspace commit
 	TypeCheckpoint  = "checkpoint" // fields: ref, oid
 )
 

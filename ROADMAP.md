@@ -23,7 +23,12 @@ scriptable wait-for-my-pipeline primitive), and a read-only `dashboard` TUI
 (bubbletea/lipgloss). All three are renderers over a new shared `internal/timeline`
 package — source discovery, time-ordered merge with a Poll cursor, a curated/firehose
 significance filter, and per-run rollups — designed so `serve` (below) can adopt it
-unchanged. `ls` stays the flat per-job table.)_
+unchanged. The dashboard design pass now adds an attention banner, action-first
+job ordering, explicit overview/detail focus help, and scrollable selected-job
+events while preserving its read-only nature. `ls` stays the flat per-job table.)_
+
+_(`ws commit <ws> -m <msg>` shipped: orchestrator-owned, non-empty workspace commits
+with attributed `commit` events in the workspace lineage.)_
 
 - **`legwork serve` — the human surface, designed mockup-first.** Promoted from
   Later after the dashboard dogfood (2026-07-07): two independent TUI
@@ -36,19 +41,10 @@ unchanged. `ls` stays the flat per-job table.)_
   SSE loop, so no new read plumbing. DESIGN.md §7's invariants hold: binds
   localhost only, strictly read-only, no mutation endpoints ever (the CLI,
   hence ssh, is the only write path), diffs with since-last-review
-  highlighting, assets go:embed'd.
-- **Dashboard TUI design pass** — shipped v1 works but reads as a data dump;
-  needs a deliberate hierarchy/interaction pass (what draws the eye, scrolling
-  and focus model). Lesson recorded: structure specs aren't visual specs —
-  presentation surfaces need mockup-level design before implementation. Do it
-  after (and informed by) the `serve` design.
-- **`ws commit <ws> -m <msg>`** — first-class orchestrator commit inside a
-  workspace, recorded as an attributed event in the run log. Workers never
-  commit (the injected contract already forbids it — the 2026-07-07 dogfood
-  confirmed why: worker-authored messages lack the bigger picture, and codex's
-  sandbox can't even write the worktree gitdir under the main repo's
-  `.git/worktrees/`). The orchestrator owning history deserves a verb instead
-  of raw git-in-the-worktree.
+  highlighting, assets go:embed'd. Close the mockup approval loop too: workers
+  can sanity-check HTML/static fetches, but the dogfood run still ended with
+  "pending human visual approval"; `serve` needs a documented artifact +
+  screenshot/browser-review handoff before Go implementation starts.
 
 ## Soon
 
@@ -59,13 +55,13 @@ unchanged. `ls` stays the flat per-job table.)_
   without disturbing it (`ask`), A/B branch from a plan turn (`fork`).
 - **Claude flag passthroughs** — `--allowed-tools` / `--disallowed-tools`
   (optional tightening for callers who want it; see rejected below for why it's
-  not the default) remain. `--effort` and `--fallback-model` shipped: both
-  persist in meta and stick across resume, and are rejected for `--agent codex`
-  (claude-specific). `--max-turns` was verified absent from the installed claude
-  CLI (only `--max-budget-usd` exists) and dropped — not invented. Dogfood
-  (2026-07-06, doctor run) motivated `--effort`: a "Fable reasoning-low plan →
-  Opus reasoning-high implement" recipe couldn't be expressed and fell back to
-  prompt guidance; it now can.
+  not the default) remain. `--effort` shipped for both claude and codex (codex
+  clamps `xhigh`/`max` to high), while `--fallback-model` is claude-specific
+  and rejected for `--agent codex`. `--max-turns` was verified absent from the
+  installed claude CLI (only `--max-budget-usd` exists) and dropped — not
+  invented. Dogfood (2026-07-06, doctor run) motivated `--effort`: a "Fable
+  reasoning-low plan → Opus reasoning-high implement" recipe couldn't be
+  expressed and fell back to prompt guidance; it now can.
 - **Run artifacts** — a home for orchestration artifacts (plans, process notes)
   attached to the run record instead of the workspace diff. Dogfood: a read-only
   planner wrote its plan to `~/.claude/plans/`, it got copied into the repo for
@@ -75,12 +71,36 @@ unchanged. `ls` stays the flat per-job table.)_
   separate; interacts with the close tripwire, so design before building.
   Second dogfood hit (2026-07-06): the orchestrator's running feedback notes
   lived in a session scratchpad and were lost between sessions — run-attached
-  artifacts are the durable home for orchestrator process notes too.
-- **Actionable context threshold** — `ls`/`status` already report context size;
-  add a visible hint when it crosses a threshold (e.g. "context high — prefer a
-  fresh job over resume"). Dogfood: the signal was noticed but the orchestrator
-  had to invent the policy; a built-in nudge makes the fresh-reviewer pattern
-  the default.
+  artifacts are the durable home for orchestrator process notes too. Third hit
+  (mixed native-Hermes vs legwork/codex, 2026-07-07): comparison notes,
+  review-findings, native-results, and job/workspace maps lived in `/tmp`; make
+  these first-class run artifacts so a future orchestrator can resume the run
+  from legwork alone.
+- **Self-describing JSON shapes** — audit every `--json` surface for predictable,
+  documented envelopes and examples. Dogfood: `runs --json` returned a top-level
+  array, but the orchestrator instinctively queried `.runs[]`; either wrap list
+  outputs (`{"runs":[...]}` etc.) or make the exact shape prominent in help,
+  docs, and guide examples. Include shape consistency for single objects vs
+  lists, JSONL streams, and run/job provenance fields.
+- **Run selector consistency** — normalize how commands take run labels.
+  Dogfood repeatedly mixed the positional run argument in
+  `legwork note <run> <text>` with `--run` flags on dispatch and presentation
+  commands. Pick a small grammar and make it uniform in help/examples: either
+  run labels are always flag values on
+  multi-scope commands, or positional labels are accepted consistently with clear
+  disambiguation from job IDs.
+- **Codex sandbox validation ergonomics** — make Go/build validation work in
+  read-only or workspace-write Codex sandboxes without each worker rediscovering
+  `GOCACHE`, `GOMODCACHE`, `TMPDIR`, or `GOTMPDIR`. Dogfood jobs repeatedly hit
+  read-only `$HOME/.cache/go-build` and recovered with `/tmp` or `/dev/shm`
+  overrides. Consider injected env defaults, `doctor` checks, profile snippets,
+  or guide recipes that keep caches out of the reviewed worktree.
+- **Codex quota/limit observability** — surface subscription usage/quota/reset
+  signals when the CLI or provider exposes them, or classify limit failures and
+  notify orchestrators immediately when they hit. Dogfood: current Codex CLI help
+  exposes no quota/reset status, so legwork can only infer exhaustion after a
+  failed run; if proactive reset times stay unavailable, support
+  user-configured reset windows plus a documented manual fallback.
 - **Job acknowledge/archive** — `close` is workspace-only, so done
   workspace-less jobs (read-only planners, reviewers) linger in `ls` forever
   with no way to say "reviewed, done with this". Either a job-level

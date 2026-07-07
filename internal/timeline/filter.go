@@ -18,6 +18,7 @@ var curated = map[string]bool{
 	events.TypeCancel:      true,
 	events.TypeClosed:      true,
 	events.TypeNote:        true,
+	events.TypeCommit:      true,
 	events.TypeText:        true,
 	events.TypeCheckpoint:  true,
 }
