@@ -8,6 +8,35 @@ re-proposed.
 
 ## Next
 
+**Sandbox-friction fixes** — from the 2026-07-07 money_intelligence production run
+(9 workspaces driven by an orchestrator; every stall traced to the codex sandbox's
+no-network/no-tmp environment, and the worst failures were workers silently bending
+the product around it: deleting Google fonts + rewriting the build script to make
+`next build` pass offline, monkeypatching `fastapi.testclient` globally when pytest
+hung). Priority order:
+
+1. **Injected worker contract: anti-workaround rule.** Add one line to the injected
+   rules: never modify the test harness, build config, or dependencies to accommodate
+   sandbox limitations — report `blocked` with the exact failing command instead.
+   Highest leverage; kills the silent-workaround failure mode at the source.
+2. **Writable per-job `$TMPDIR` in every sandbox profile, including `--read-only`.**
+   Read-only must mean repo read-only, not no-tmp. Today `--read-only` reviewers
+   cannot run pytest at all ("no usable temp directory for capture", uv cache-lock
+   failures), and anyio's `start_blocking_portal` (FastAPI `TestClient`) reproducibly
+   hangs in the workspace-write sandbox — two independent jobs hit it. Diagnose the
+   hang while at it: if tmp doesn't cure it, it's the thread/socketpair policy.
+3. **`needs-provision` job state** (structured escalation): worker declares
+   `{"command": "uv add slowapi"}`, legwork surfaces it like `needs-input`, the
+   orchestrator approves, legwork runs it OUTSIDE the sandbox in the worktree, the
+   turn resumes. The orchestrator did this by hand three times in one run
+   (`uv add`, `uv sync` cache misses, `npm install`).
+4. **Orchestrator-side verify hook in `worktree.toml`** (e.g.
+   `verify = "uv run pytest tests/unit -q"`): legwork runs it outside the sandbox
+   after each turn and attaches the result to job status. Workers stop needing to
+   run suites inside a sandbox that can't; reviewers and the orchestrator get
+   "308 passed" for free in `status`. (Mitigation already proven: a `worktree.toml`
+   with `setup = [uv sync, npm ci]` eliminated the provisioning class entirely.)
+
 _(Codex adapter and `legwork gc` shipped — see below / the changelog. The three
 bugs the 2026-07-06 dogfood run surfaced — watch replaying a finished turn on
 resumed jobs, context telemetry summing cache reads across a turn's calls, and
@@ -32,6 +61,14 @@ with attributed `commit` events in the workspace lineage.)_
 
 ## Soon
 
+- **`serve` information density + progressive disclosure** — tighten the live
+  browser console so overview text is compact and predictable: clamp long run
+  notes/tasks/results to one or two lines, avoid mid-word/awkward wrapping,
+  show full prompts/results only in an explicit inspector or expandable detail,
+  prioritize counts/attention/state over raw prose, and keep selected-job detail
+  scannable with tabs/sections rather than a wall of prompt text. Dogfood: v1 is
+  useful, but the screenshot showed text cut all over the place and unrelated
+  prompt/context prose dominating the selected-job panel.
 - **`approve` / `needs-decision`** — route genuine permission judgment calls to
   the orchestrator via `--permission-prompt-tool` (approval gates fail closed);
   hooks handle policy denies (push, out-of-worktree writes) without a round-trip.
