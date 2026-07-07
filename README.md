@@ -53,7 +53,8 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   to one line per `--run` label (state, cost, context health, latest note); `tail`
   is `tail -f` across every job and run log, worker events and your notes
   interleaved — `--until-idle` turns it into a scriptable *wait for my pipeline*;
-  `dashboard` is a read-only TUI of all three. Every surface is a renderer over the
+  `dashboard` is a read-only TUI; `serve` is the local live browser console for
+  human operators during multi-agent runs. Every surface is a renderer over the
   same JSONL, so they can never disagree.
 - **Context as the health metric**: `ls` shows each session's context footprint
   (`ctx:145k`) — the early-warning signal for a worker spinning in circles. Once a
@@ -107,8 +108,8 @@ itself; don't repeat it in prompts.
 
 Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
 contract, workspaces/checkpoints/diff/commit/close, runs + narration, the
-`runs`/`tail`/`dashboard` presentation layer, notifier, context tracking, timeouts,
-`doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
+`runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
+timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
 [ROADMAP.md](ROADMAP.md) (including rejected ideas and why); the full design
 rationale in [DESIGN.md](DESIGN.md).
 

@@ -19,32 +19,16 @@ turn before changing it.)_
 
 _(The presentation layer shipped: `runs` (pipeline rollup, one line per run
 label), `tail` (`tail -f` across all jobs + run logs, `--until-idle` as the
-scriptable wait-for-my-pipeline primitive), and a read-only `dashboard` TUI
-(bubbletea/lipgloss). All three are renderers over a new shared `internal/timeline`
-package — source discovery, time-ordered merge with a Poll cursor, a curated/firehose
-significance filter, and per-run rollups — designed so `serve` (below) can adopt it
-unchanged. The dashboard design pass now adds an attention banner, action-first
-job ordering, explicit overview/detail focus help, and scrollable selected-job
-events while preserving its read-only nature. `ls` stays the flat per-job table.)_
+scriptable wait-for-my-pipeline primitive), a read-only `dashboard` TUI
+(bubbletea/lipgloss), and `serve`, a local live browser console. All four are
+renderers over shared JSONL/timeline plumbing. `serve` v1 keeps the hard safety
+line: localhost by default, GET-only HTTP, no mutation endpoints, real
+state-dir snapshots, and SSE refresh over `internal/timeline`. The selected-job
+diff/review area is intentionally a read-only placeholder until
+`diff --since-last-review` lands. `ls` stays the flat per-job table.)_
 
 _(`ws commit <ws> -m <msg>` shipped: orchestrator-owned, non-empty workspace commits
 with attributed `commit` events in the workspace lineage.)_
-
-- **`legwork serve` — the human surface, designed mockup-first.** Promoted from
-  Later after the dashboard dogfood (2026-07-07): two independent TUI
-  implementations both landed "confusing, clunky scrolling" with the human
-  judge — a browser is simply the better human medium (native scroll, real
-  typography, clickable drill-in). Process requirement: the visual design is
-  crafted as an HTML mockup over real state-dir data and approved by the human
-  *before* any Go is written; the mockup is the spec. `internal/timeline` is
-  the data layer — its discovery + merge + Poll cursor + rollups already fit an
-  SSE loop, so no new read plumbing. DESIGN.md §7's invariants hold: binds
-  localhost only, strictly read-only, no mutation endpoints ever (the CLI,
-  hence ssh, is the only write path), diffs with since-last-review
-  highlighting, assets go:embed'd. Close the mockup approval loop too: workers
-  can sanity-check HTML/static fetches, but the dogfood run still ended with
-  "pending human visual approval"; `serve` needs a documented artifact +
-  screenshot/browser-review handoff before Go implementation starts.
 
 ## Soon
 
@@ -101,6 +85,23 @@ with attributed `commit` events in the workspace lineage.)_
   exposes no quota/reset status, so legwork can only infer exhaustion after a
   failed run; if proactive reset times stay unavailable, support
   user-configured reset windows plus a documented manual fallback.
+- **Workspace lifecycle metadata + archive semantics** — make
+  `workspaces/<ws>/meta.json` the source of truth for review disposition and
+  retention, not just `open | closed`. Add durable fields such as
+  `closed_at`, `reason`, `superseded_by`, `final_commit`, `merged_into`, and a
+  retention policy (`preserve`, `compress`, `prune-after`, explicit delete).
+  Dogfood: `ws-13` is dead/superseded by live `serve`, but plain
+  `close --discard` would remove the branch/worktree/checkpoint refs that make
+  the wrong turn useful for later workflow analysis. Dead should mean "not
+  active / not mergeable", not "gone".
+- **Workspace archive / publish workflow** — formalize the post-review flow for
+  both shipped and dead work: commit the workspace branch with
+  `legwork ws commit`, record the final commit in meta, close with an explicit
+  disposition/reason, keep the branch as the durable artifact by default, treat
+  the worktree as cache, and make remote branch publishing an explicit
+  orchestrator decision (`ws publish` or `close --archive --push`) rather than a
+  worker default. GC should report/prune archived artifacts only through
+  explicit archive/prune policy, not by silently deleting analyzable branches.
 - **Job acknowledge/archive** — `close` is workspace-only, so done
   workspace-less jobs (read-only planners, reviewers) linger in `ls` forever
   with no way to say "reviewed, done with this". Either a job-level

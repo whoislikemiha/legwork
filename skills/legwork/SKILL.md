@@ -87,6 +87,14 @@ don't override with "commit when done"). Review the diff, then use
 `legwork ws commit <ws> -m <message>` so the workspace tree is committed and the
 decision is recorded in the job/run event logs, then land it.
 
+For dead or superseded work that is still useful for later analysis, do not run a
+plain `legwork close <ws> --discard`: today that reclaims the worktree, branch,
+and checkpoint refs. Instead, record a run note, commit the final workspace tree
+with `legwork ws commit`, and close only with an explicit retention choice such
+as `--discard --keep-worktree` until first-class archive/publish semantics land.
+Push/archive workspace branches only when the orchestrator explicitly decides to
+publish them; do not ask worker agents to `git commit` or `git push` directly.
+
 ## Cleanup: close + gc
 
 `close` acknowledges + reclaims **one** workspace (you own it, after the diff lands).
@@ -117,8 +125,8 @@ default 150000; `0` disables).
 
 ## Watching a pipeline
 
-Three read-only surfaces over the same event logs (all ssh-friendly except the
-TUI):
+Four read-only surfaces over the same event logs (`runs`/`tail` are ssh-friendly,
+`dashboard` needs a TTY, `serve` is a local browser surface):
 
 ```bash
 legwork runs                       # one line per --run label: state rollup, cost,
@@ -129,10 +137,17 @@ legwork tail --run L --until-idle  # blocks, exits 0 when no job in scope is
                                    # active/queued — the scriptable "wait for my pipeline"
 legwork dashboard                  # interactive TUI (needs a TTY): attention banner,
                                    # prioritized runs/jobs, detail focus + event scroll
+legwork serve                      # local browser console: prints a localhost URL,
+                                   # GET-only, live via SSE, no mutation endpoints
 ```
 
 Prefer `runs` over `ls` for the pipeline view; `tail --until-idle` replaces a
-status-polling loop; both take `--json`.
+status-polling loop; both take `--json`. Prefer `serve` when a human needs a
+run-centered browser view during live multi-agent work. It binds
+`127.0.0.1:0` by default; non-loopback `--addr` values require the explicit
+`--allow-remote` opt-in because the page exposes local job paths, tasks, events,
+and results. The v1 browser is observational: answer, resume, diff, close, and
+other mutations stay in the CLI/ssh path.
 
 ## Tips
 

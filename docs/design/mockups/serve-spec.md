@@ -1,6 +1,6 @@
 # legwork serve mockup/spec
 
-Status: mockup/spec only. Do not implement Go `serve` endpoints until a human approves the HTML direction.
+Status: historical mockup/spec baseline. The HTML direction was approved and `legwork serve` v1 is now implemented as a live read-only localhost surface; keep this file as the original design contract and update it only when it remains useful as design context.
 
 Artifacts:
 
@@ -64,7 +64,7 @@ Reuse `internal/timeline` directly:
 
 Store reads:
 
-- `job.Store.List`, `LoadMeta`, and `Reconcile` before rendering active/queued state.
+- `job.Store.List` and `LoadMeta` for persisted job state. Do **not** call `Reconcile` from `serve`; CLI/status/gc own reconciliation because it writes `meta.json` and appends events.
 - Workspace metadata from existing workspace package or direct read-only helper.
 - Diffs from worktree ground truth, matching current CLI diff behavior.
 
@@ -117,7 +117,7 @@ data: {"ts":"2026-07-07T16:55:15Z"}
 - A run-log lifecycle marker duplicated by a separately sourced job log should follow `timeline.Poll` semantics and avoid duplicate timeline rows.
 - Large logs need bounded initial rendering: newest N curated events, with explicit "load older" read-only pagination later.
 - Very long prompts/results must be clipped in tables and fully available in detail/preformatted blocks.
-- Active runners can disappear; render reconciled state exactly like CLI surfaces.
+- Active runners can disappear; render the last persisted state without mutating it. CLI/status/gc reconciliation owns writing `interrupted` state and events; opening `serve` must not write state.
 - The server must not hold exclusive locks or create state directories while discovering sources.
 
 ## UX Notes From Codex Dogfood

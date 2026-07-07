@@ -194,14 +194,16 @@ Notes make your reasoning auditable — report decisions as you make them.
 
 ## Watching a pipeline
 
-Three read-only surfaces render the same event logs at different zoom levels.
+Four read-only surfaces render the same event logs at different zoom levels.
 All are strictly read-only; `runs` and `tail` are plain-stdout (work over
-`ssh host legwork ...`, no TTY), `dashboard` needs a terminal.
+`ssh host legwork ...`, no TTY), `dashboard` needs a terminal, and `serve`
+starts a local browser console.
 
 ```
 legwork runs                 -> one line per run label, rolled up (the overview)
 legwork tail                 -> tail -f across all jobs + run logs (the live feed)
 legwork dashboard            -> interactive TUI: runs + selected-job + timeline
+legwork serve                -> browser operator console on localhost (GET-only)
 ```
 
 `runs` is the pipeline overview `ls` never was — one line per `--run` label,
@@ -243,6 +245,14 @@ arrows) move the selection across jobs and `enter` focuses detail; in detail,
 jobs get the loudest treatment on every pane. It needs a TTY; without one it
 points you at `tail` and exits 2.
 
+`serve` is the browser view for a human watching live multi-agent work. It prints
+a URL and blocks until interrupted. By default it binds `127.0.0.1:0`; non-loopback
+`--addr` values are rejected unless `--allow-remote` is explicit, because the page
+shows local task, event, path, and result data. The HTTP surface is GET-only:
+`/` serves embedded HTML/CSS/JS, `/api/snapshot` returns the run/job/attention/
+timeline snapshot, and `/events` is an SSE stream that tells the browser to refresh.
+Mutation-shaped controls are disabled; answer/resume/diff/close remain CLI actions.
+
 ## Quick reference
 
 ```
@@ -251,7 +261,8 @@ run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P] [--effort E] [--fallback-model M] <task>
 resume <job> <msg>   answer <job> <msg>   cancel <job>
 status <job>         events <job|run> [--run] [--since N]   ls   watch <job>
-runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]   dashboard
+runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]
+dashboard            serve [--addr 127.0.0.1:0] [--allow-remote]
 ws new --repo R      ws ls               ws commit <ws> -m M      diff <ws> [--stat]
 close <ws> [--merged [--into <ref>] [--force]|--discard|--keep-worktree]
 gc [--dry-run] [--close-merged [--close-merged-into <ref>]] [--json]
