@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -108,14 +109,63 @@ func OpenStore() (*Store, error) {
 
 func (s *Store) JobDir(id string) string { return filepath.Join(s.Root, "jobs", id) }
 
+func safePathLabel(kind, label string) (string, error) {
+	if label == "" {
+		return "", fmt.Errorf("%s label is required", kind)
+	}
+	if label == "." || label == ".." || filepath.IsAbs(label) ||
+		strings.Contains(label, "/") || strings.Contains(label, `\`) {
+		return "", fmt.Errorf("invalid %s label %q", kind, label)
+	}
+	return label, nil
+}
+
+// ValidateRunLabel checks a run label without touching the state directory.
+func ValidateRunLabel(label string) error {
+	_, err := safePathLabel("run", label)
+	return err
+}
+
+// RunDir is the state dir for a run label. Labels are path components, not
+// paths: traversal is rejected before joining with the state root.
+func (s *Store) RunDir(label string, create bool) (string, error) {
+	label, err := safePathLabel("run", label)
+	if err != nil {
+		return "", err
+	}
+	dir := filepath.Join(s.Root, "runs", label)
+	if create {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return "", err
+		}
+	}
+	return dir, nil
+}
+
 // RunEventsPath is the run-level event log: job lifecycle markers plus
 // orchestrator narration (legwork note). A run is a label, zero semantics.
 func (s *Store) RunEventsPath(label string) (string, error) {
-	dir := filepath.Join(s.Root, "runs", label)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	dir, err := s.RunDir(label, true)
+	if err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, "events.jsonl"), nil
+}
+
+// RunArtifactDir is the run-attached artifact directory. It lives under the
+// state dir, never under a repo worktree.
+func (s *Store) RunArtifactDir(label string, create bool) (string, error) {
+	dir, err := s.RunDir(label, create)
+	if err != nil {
+		return "", err
+	}
+	artifacts := filepath.Join(dir, "artifacts")
+	if create {
+		if err := os.MkdirAll(artifacts, 0o700); err != nil {
+			return "", err
+		}
+	}
+	return artifacts, nil
 }
 
 // Counters persists the high-water mark of every ID sequence — the highest ID

@@ -47,7 +47,7 @@ health, recipes).`,
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), statusCmd(), eventsCmd(),
 		lsCmd(), watchCmd(), cancelCmd(), ackCmd(), wsCmd(), diffCmd(), closeCmd(),
 		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd(),
-		runsCmd(), tailCmd(), dashboardCmd(), serveCmd())
+		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd())
 	return root
 }
 
@@ -172,6 +172,11 @@ func runCmd() *cobra.Command {
 		Short: "Start a job; prints the job ID immediately",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if runLabel != "" {
+				if err := job.ValidateRunLabel(runLabel); err != nil {
+					return err
+				}
+			}
 			s, err := openStore()
 			if err != nil {
 				return err

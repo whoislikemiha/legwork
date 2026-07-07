@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -68,6 +70,26 @@ func TestTimeoutRejectsBadDuration(t *testing.T) {
 	if out, err := e.legworkErr("run", "--agent", "fake", "--timeout", "banana", "x"); err == nil {
 		t.Fatalf("bad --timeout accepted:\n%s", out)
 	}
+}
+
+func TestRunRejectsBadRunLabelBeforeAllocatingJob(t *testing.T) {
+	e := newEnv(t)
+	if out, err := e.legworkErr("run", "--agent", "fake", "--run", "../pipe", "x"); err == nil {
+		t.Fatalf("bad --run accepted:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(e.state, "jobs", "job-1")); !os.IsNotExist(err) {
+		t.Fatalf("invalid --run allocated job-1: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(e.state, "counters.json")); !os.IsNotExist(err) {
+		t.Fatalf("invalid --run advanced counters: %v", err)
+	}
+
+	e.writeScript(t, resultDone)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "valid job"))
+	if id != "job-1" {
+		t.Fatalf("first valid job id = %q, want job-1", id)
+	}
+	e.waitState(t, id, "done")
 }
 
 // Dispatch options live in meta.json, not env: a resumed turn must run with

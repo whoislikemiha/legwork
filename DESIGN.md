@@ -118,6 +118,7 @@ legwork cancel    # SIGINT the turn; session survives, resumable
 legwork close     # acknowledge + reclaim (see §8); --merged | --discard | --keep-worktree
 legwork gc        # reclamation per policy; --dry-run; --close-merged (opt-in)
 legwork note      # orchestrator narration into run events
+legwork artifact  # save/list/get run-attached orchestration artifacts
 legwork guide     # print the orchestrator skill (docs travel with the binary)
 ```
 

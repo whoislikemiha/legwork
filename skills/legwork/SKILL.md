@@ -160,6 +160,25 @@ run-centered browser view during live multi-agent work. It binds
 and results. The v1 browser is observational: answer, resume, diff, close, and
 other mutations stay in the CLI/ssh path.
 
+## Run artifacts
+
+Keep orchestration files out of workspace diffs. Plans, review notes,
+job/workspace maps, comparison notes, and process notes belong under the run
+record:
+
+```bash
+legwork artifact save --run <label> --name plan.md ./plan.md
+legwork artifact save --run <label> --name notes.md -     # stdin
+legwork artifact list --run <label> --json
+legwork artifact get --run <label> plan.md
+```
+
+Names are single safe path components; traversal is rejected. Existing artifacts
+are not replaced unless `--overwrite` is explicit. v1 stores UTF-8 text/markdown
+artifacts and rejects binary data. `artifact save` records an `artifact` event in
+the run log, so `tail --run <label>` and `events <label> --run` show when the
+record changed.
+
 ## Tips
 
 - Group pipeline jobs: `--run <label>`; narrate decisions:

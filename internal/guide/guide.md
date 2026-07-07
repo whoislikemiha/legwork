@@ -200,10 +200,19 @@ Group a pipeline's jobs with `--run <label>`; narrate your decisions:
 ```
 legwork run --run auth-refactor --read-only --agent claude "plan the refactor"
 legwork note auth-refactor "plan approved; splitting implement into 2 workspaces"
+legwork artifact save --run auth-refactor --name plan.md ./plan.md
+legwork artifact list --run auth-refactor
+legwork artifact get --run auth-refactor plan.md
 legwork events auth-refactor --run      -> merged timeline: jobs + your notes
 ```
 
 Notes make your reasoning auditable — report decisions as you make them.
+Artifacts make your process durable without polluting workspace diffs: plans,
+review notes, job/workspace maps, comparison notes, and other orchestration files
+belong under the run record. Save from stdin with `-`; use `--overwrite` to replace
+an existing artifact deliberately. v1 accepts UTF-8 text/markdown artifacts and
+rejects binary data. `artifact save/list/get` support `--json`; `save` records an
+`artifact` event in the run log.
 
 ## Watching a pipeline
 
@@ -281,7 +290,10 @@ ws new --repo R      ws ls               ws commit <ws> -m M      diff <ws> [--s
 close <ws> [--merged [--into <ref>] [--force]|--discard|--keep-worktree|--preserve]
            [--reason TEXT] [--superseded-by ID] [--retention POLICY]
 gc [--dry-run] [--close-merged [--close-merged-into <ref>]] [--json]
-note <run> <text>    guide
+note <run> <text>
+artifact save --run L --name N [--overwrite] <path|->
+artifact list --run L          artifact get --run L N
+guide
 ```
 
 Exit code 0 = success; non-zero = the command failed (message on stderr).

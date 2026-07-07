@@ -88,20 +88,6 @@ _(Workspace lifecycle metadata shipped: close records optional `closed_at`, `rea
   invented. Dogfood (2026-07-06, doctor run) motivated `--effort`: a "Fable
   reasoning-low plan → Opus reasoning-high implement" recipe couldn't be
   expressed and fell back to prompt guidance; it now can.
-- **Run artifacts** — a home for orchestration artifacts (plans, process notes)
-  attached to the run record instead of the workspace diff. Dogfood: a read-only
-  planner wrote its plan to `~/.claude/plans/`, it got copied into the repo for
-  the implementer, and review had to catch it as a scratch file that must not
-  ship. Something like `legwork artifact save/get --run L` keeps
-  intended-for-merge (workspace diff) and intended-for-the-record (run) cleanly
-  separate; interacts with the close tripwire, so design before building.
-  Second dogfood hit (2026-07-06): the orchestrator's running feedback notes
-  lived in a session scratchpad and were lost between sessions — run-attached
-  artifacts are the durable home for orchestrator process notes too. Third hit
-  (mixed native-Hermes vs legwork/codex, 2026-07-07): comparison notes,
-  review-findings, native-results, and job/workspace maps lived in `/tmp`; make
-  these first-class run artifacts so a future orchestrator can resume the run
-  from legwork alone.
 - **Self-describing JSON shapes** — audit every `--json` surface for predictable,
   documented envelopes and examples. Dogfood: `runs --json` returned a top-level
   array, but the orchestrator instinctively queried `.runs[]`; either wrap list

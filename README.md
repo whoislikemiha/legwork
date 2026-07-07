@@ -62,6 +62,10 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   `dashboard` is a read-only TUI; `serve` is the local live browser console for
   human operators during multi-agent runs. Every surface is a renderer over the
   same JSONL, so they can never disagree.
+- **Run artifacts stay out of diffs**: `legwork artifact save/list/get --run <label>`
+  stores plans, review notes, job maps, and process notes under the state dir's run
+  record, not in repo worktrees. v1 accepts UTF-8 text/markdown artifacts; binary
+  blobs are rejected.
 - **Context as the health metric**: `ls` shows each session's context footprint
   (`ctx:145k`) — the early-warning signal for a worker spinning in circles. Once a
   job crosses a threshold, `ls` marks it `ctx:180k!` and `status` prints a `hint:`
@@ -115,7 +119,7 @@ itself; don't repeat it in prompts.
 ## Status
 
 Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
-contract, workspaces/checkpoints/diff/commit/close, runs + narration, the
+contract, workspaces/checkpoints/diff/commit/close, runs + narration/artifacts, the
 `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
 job `ack`, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
 [ROADMAP.md](ROADMAP.md) (including rejected ideas and why); the full design
