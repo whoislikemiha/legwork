@@ -339,6 +339,34 @@ func (s *Store) CloseJobsForWorkspace(wsID string) error {
 	return nil
 }
 
+// Close marks one job as acknowledged/closed and stamps the retention anchor.
+func (s *Store) Close(m *Meta) error {
+	if m.State == StateClosed {
+		return fmt.Errorf("%s is already closed", m.ID)
+	}
+	prev := m.State
+	now := time.Now().UTC()
+	m.State = StateClosed
+	m.Closed = now
+	m.Question = ""
+	if err := s.SaveMeta(m); err != nil {
+		return err
+	}
+	if log, err := events.Open(filepath.Join(s.JobDir(m.ID), "events.jsonl")); err == nil {
+		_, _ = log.Append(events.Event{Type: events.TypeClosed, Actor: "orchestrator",
+			Preview: "job acknowledged", Fields: map[string]any{"previous_state": string(prev)}})
+	}
+	return nil
+}
+
+func Terminal(s State) bool {
+	switch s {
+	case StateDone, StateBlocked, StateFailed, StateAuthNeeded:
+		return true
+	}
+	return false
+}
+
 // Alive reports whether the job's runner process is still running, and
 // reconciles a stale "active" state to interrupted.
 func (s *Store) Alive(m *Meta) bool {

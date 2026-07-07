@@ -45,7 +45,7 @@ health, recipes).`,
 		SilenceErrors: true,
 	}
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), statusCmd(), eventsCmd(),
-		lsCmd(), watchCmd(), cancelCmd(), wsCmd(), diffCmd(), closeCmd(),
+		lsCmd(), watchCmd(), cancelCmd(), ackCmd(), wsCmd(), diffCmd(), closeCmd(),
 		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd(),
 		runsCmd(), tailCmd(), dashboardCmd(), serveCmd())
 	return root
@@ -534,6 +534,52 @@ func lsCmd() *cobra.Command {
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
+	return c
+}
+
+func ackCmd() *cobra.Command {
+	var asJSON, force bool
+	c := &cobra.Command{
+		Use:   "ack <job>",
+		Short: "Acknowledge a terminal workspace-less job",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, err := openStore()
+			if err != nil {
+				return err
+			}
+			m, err := s.LoadMeta(args[0])
+			if err != nil {
+				return err
+			}
+			s.Reconcile(m)
+			if m.Workspace != "" {
+				return fmt.Errorf("%s belongs to workspace %s; close the workspace with legwork close %s", m.ID, m.Workspace, m.Workspace)
+			}
+			if m.State == job.StateClosed {
+				return fmt.Errorf("%s is already closed", m.ID)
+			}
+			switch m.State {
+			case job.StateActive:
+				return fmt.Errorf("%s is active; cancel it first or wait for the turn to end", m.ID)
+			case job.StateQueued:
+				return fmt.Errorf("%s is queued; cancel it first or wait for the turn to start", m.ID)
+			}
+			if !job.Terminal(m.State) && !force {
+				return fmt.Errorf("%s is %s; only terminal jobs can be acknowledged without --force", m.ID, m.State)
+			}
+			if err := s.Close(m); err != nil {
+				return err
+			}
+			if asJSON {
+				return printJSON(m)
+			}
+			fmt.Printf("%s acknowledged\n", m.ID)
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&force, "force", false, "acknowledge a non-terminal workspace-less job after explicit operator review")
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
 	return c
 }

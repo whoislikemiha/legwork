@@ -135,11 +135,11 @@ _(Workspace lifecycle metadata shipped: close records optional `closed_at`, `rea
   orchestrator decision (`ws publish` or `close --archive --push`) rather than a
   worker default. GC should report/prune archived artifacts only through
   explicit archive/prune policy, not by silently deleting analyzable branches.
-- **Job acknowledge/archive** — `close` is workspace-only, so done
-  workspace-less jobs (read-only planners, reviewers) linger in `ls` forever
-  with no way to say "reviewed, done with this". Either a job-level
-  close/archive verb or an `ls` default that hides acknowledged jobs
-  (`--all` to show); gc retention covers reclamation but not the signal.
+- **Closed-job visibility in `ls`** — `legwork ack <job>` now acknowledges
+  terminal workspace-less jobs and stamps `closed`; decide whether `ls` should
+  hide acknowledged jobs by default with an `--all` escape hatch. Keep this
+  separate from the acknowledgment verb because it affects dashboard/run
+  expectations too.
 - **`ws refresh`** — reconcile an open workspace with a moved base. Dogfood:
   two parallel workspaces both landed; the second had to be told to
   `git merge main` by hand inside its tree and resolve conflicts. A first-class

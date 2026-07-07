@@ -141,15 +141,20 @@ Scratch/research jobs need no workspace: plain `run` gets a scratch dir;
 `run --dir <path>` works in-place — combine with `--read-only` for plan/research
 turns (harness-enforced: the agent cannot edit).
 
-## Cleanup: close + gc
+## Cleanup: ack, close + gc
 
-Two separate acts. `close` **acknowledges** one workspace with a disposition,
-records archive metadata in `workspaces/<ws>/meta.json`, and reclaims its
-worktree/branch/refs immediately unless `--preserve` or `--keep-worktree` is set —
-you own that call. `gc` **reclaims opportunistically**: closed and provably-orphaned
-things only, **never unclosed work**.
+Three separate acts. `ack` **acknowledges** one terminal workspace-less job
+(planner, reviewer, read-only check) and stamps its retention anchor. It is job-level
+only: workspace jobs are acknowledged by closing their workspace. `close`
+**acknowledges** one workspace with a disposition, records archive metadata in
+`workspaces/<ws>/meta.json`, and reclaims its worktree/branch/refs immediately
+unless `--preserve` or `--keep-worktree` is set — you own that call. `gc`
+**reclaims opportunistically**: closed and provably-orphaned things only,
+**never unclosed work**.
 
 ```
+legwork ack job-14            -> mark reviewed terminal workspace-less job closed
+legwork ack job-14 --force    -> acknowledge a non-terminal workspace-less job
 legwork gc                    -> reconcile dead runners, compress/retire transcripts,
                                  sweep orphan refs/worktrees, report orphan branches
 legwork gc --dry-run          -> same summary prefixed "would"; mutates nothing
@@ -269,6 +274,7 @@ run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P] [--effort E] [--fallback-model M] <task>
 resume <job> <msg>   answer <job> <msg>   cancel <job>
 status <job>         events <job|run> [--run] [--since N]   ls   watch <job>
+ack <job> [--force] [--json]
 runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]
 dashboard            serve [--addr 127.0.0.1:0] [--allow-remote]
 ws new --repo R      ws ls               ws commit <ws> -m M      diff <ws> [--stat]

@@ -153,6 +153,70 @@ func TestNeedsInputAnswerLoop(t *testing.T) {
 	}
 }
 
+func TestAckWorkspaceLessTerminalJob(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t, resultDone)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--read-only", "review only"))
+	e.waitState(t, id, "done")
+
+	out := e.legwork(t, "ack", id, "--json")
+	var m map[string]any
+	if err := json.Unmarshal([]byte(out), &m); err != nil {
+		t.Fatalf("bad ack json: %v\n%s", err, out)
+	}
+	if m["state"] != "closed" {
+		t.Fatalf("ack state = %v", m["state"])
+	}
+	closed, ok := m["closed"].(string)
+	if !ok || closed == "" {
+		t.Fatalf("closed timestamp missing: %+v", m)
+	}
+	if _, err := time.Parse(time.RFC3339Nano, closed); err != nil {
+		t.Fatalf("closed timestamp not RFC3339: %q: %v", closed, err)
+	}
+	evs := e.legwork(t, "events", id)
+	if !strings.Contains(evs, "closed") || !strings.Contains(evs, "job acknowledged") {
+		t.Fatalf("ack event missing:\n%s", evs)
+	}
+}
+
+func TestAckRefusesNonTerminalWithoutForce(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"s2"}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.01,"usage":{"input_tokens":1,"output_tokens":1},"session_id":"s2","result":"state: needs-input\nquestion: postgres or sqlite?"}`,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "needs decision"))
+	e.waitState(t, id, "needs-input")
+
+	if out, err := e.legworkErr("ack", id); err == nil {
+		t.Fatalf("ack must refuse needs-input without force:\n%s", out)
+	} else if !strings.Contains(out, "only terminal jobs") {
+		t.Fatalf("ack refusal should explain force:\n%s", out)
+	}
+	e.legwork(t, "ack", id, "--force")
+	m := e.legwork(t, "status", id, "--json")
+	if !strings.Contains(m, `"state": "closed"`) || strings.Contains(m, `"question"`) {
+		t.Fatalf("forced ack did not close/clear question:\n%s", m)
+	}
+}
+
+func TestAckRefusesWorkspaceJob(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	e.writeScript(t, resultDone)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "workspace work"))
+	e.waitState(t, id, "done")
+
+	if out, err := e.legworkErr("ack", id); err == nil {
+		t.Fatalf("ack must refuse workspace job:\n%s", out)
+	} else if !strings.Contains(out, "belongs to workspace "+wsID) {
+		t.Fatalf("workspace refusal should point to workspace close:\n%s", out)
+	}
+}
+
 // Mid-turn death: no result line -> interrupted, never a lie.
 func TestMidTurnDeath(t *testing.T) {
 	e := newEnv(t)

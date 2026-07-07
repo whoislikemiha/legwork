@@ -51,7 +51,8 @@ Act on `state`:
 - `done` — verify, then next phase (`legwork resume "$job" "..."` continues the same
   session; dispatch options — `--read-only`, `--append-prompt`, `--timeout`,
   `--effort` (codex clamps xhigh/max to high), `--fallback-model` (claude only),
-  model — stick for every turn) or close.
+  model — stick for every turn), `legwork ack "$job"` for reviewed workspace-less
+  jobs, or `legwork close <ws>` for workspace jobs.
 - `needs-input` — `legwork answer "$job" "<decision>"`; escalate to the human only
   if it is genuinely their call.
 - `blocked` / `failed` — read `legwork events "$job"`; fix and resume, or start a
@@ -101,12 +102,16 @@ legwork close "$ws" --discard \
 Push/archive workspace branches only when the orchestrator explicitly decides to
 publish them; do not ask worker agents to `git commit` or `git push` directly.
 
-## Cleanup: close + gc
+## Cleanup: ack, close + gc
 
-`close` acknowledges + reclaims **one** workspace (you own it, after the diff lands).
-`gc` reclaims opportunistically — closed/orphaned things only, **never unclosed work**:
+`ack` acknowledges **one terminal workspace-less job** (planner, reviewer,
+read-only check) and stamps the retention anchor. `close` acknowledges + reclaims
+**one** workspace (you own it, after the diff lands). `gc` reclaims opportunistically
+— closed/orphaned things only, **never unclosed work**:
 
 ```bash
+legwork ack job-14             # mark reviewed terminal workspace-less job closed
+legwork ack job-14 --force     # acknowledge a non-terminal workspace-less job
 legwork gc                     # reconcile dead runners -> interrupted; compress/retire
                                # transcripts; sweep orphan refs/worktrees (index kept)
 legwork gc --dry-run           # same summary, mutates nothing

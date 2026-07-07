@@ -6,7 +6,8 @@ legwork is a CLI for dispatching and supervising **headless coding-agent jobs**
 (Claude Code and Codex) — built so that *another agent* can be the one
 driving. An orchestrator (or you) runs tasks as detached jobs, reads structured
 events, reviews diffs behind a gate, answers the worker's questions, and closes the
-work when it lands. Locally, or over plain ssh — the CLI is the API.
+work when it lands. Workspace-less read-only jobs can be acknowledged with `ack`
+once reviewed. Locally, or over plain ssh — the CLI is the API.
 
 ```console
 $ legwork ws new --repo ~/code/myapp
@@ -49,6 +50,9 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   `retention`) for later audit. Bootstrap uses the
   [workstree](https://github.com/whoislikemiha/workstree) convention when the repo
   declares it.
+- **Workspace-less jobs can be acknowledged**: `legwork ack <job>` marks a terminal
+  planner/reviewer/read-only job closed and stamps the retention anchor. `close`
+  stays workspace-only because it also reclaims worktrees, branches, and refs.
 - **Wake-on-event**: a configurable notifier command receives JSON payloads — point
   it at ntfy for your phone, or at whatever re-invokes your orchestrator.
 - **A presentation layer that finds the story**: `runs` rolls a whole pipeline up
@@ -113,7 +117,7 @@ itself; don't repeat it in prompts.
 Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
 contract, workspaces/checkpoints/diff/commit/close, runs + narration, the
 `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
-timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
+job `ack`, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
 [ROADMAP.md](ROADMAP.md) (including rejected ideas and why); the full design
 rationale in [DESIGN.md](DESIGN.md).
 
