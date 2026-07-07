@@ -102,6 +102,11 @@ legwork close "$ws" --discard \
 Push/archive workspace branches only when the orchestrator explicitly decides to
 publish them; do not ask worker agents to `git commit` or `git push` directly.
 
+Keep worker prompts scoped to the assigned repo and task. Do not mention
+unrelated repositories, workstreams, or things the worker should "ignore" unless
+that context is required to complete the task; negative context can make workers
+wander toward irrelevant systems.
+
 ## Cleanup: ack, close + gc
 
 `ack` acknowledges **one terminal workspace-less job** (planner, reviewer,
