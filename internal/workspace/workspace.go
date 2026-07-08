@@ -5,6 +5,7 @@ package workspace
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -66,6 +67,35 @@ type reclaimOptions struct {
 	KeepWorktree bool
 	KeepBranch   bool
 	KeepRefs     bool
+}
+
+type MergeErrorKind string
+
+const (
+	MergeErrorGuard    MergeErrorKind = "guard-refused"
+	MergeErrorConflict MergeErrorKind = "conflict"
+)
+
+type MergeError struct {
+	Kind MergeErrorKind
+	Err  error
+}
+
+func (e *MergeError) Error() string { return e.Err.Error() }
+
+func (e *MergeError) Unwrap() error { return e.Err }
+
+type MergeResult struct {
+	Target       string `json:"target"`
+	TargetBranch string `json:"target_branch"`
+	Commit       string `json:"commit,omitempty"`
+	Message      string `json:"message,omitempty"`
+}
+
+type checkoutState struct {
+	Branch   string
+	Commit   string
+	Detached bool
 }
 
 func Open(root string) (*Store, error) {
@@ -362,6 +392,126 @@ func commitEnv(tree string) []string {
 		env = append(env, "GIT_AUTHOR_EMAIL=legwork@localhost", "GIT_COMMITTER_EMAIL=legwork@localhost")
 	}
 	return env
+}
+
+func mergeGuardf(format string, args ...any) error {
+	return &MergeError{Kind: MergeErrorGuard, Err: fmt.Errorf(format, args...)}
+}
+
+func mergeConflictf(format string, args ...any) error {
+	return &MergeError{Kind: MergeErrorConflict, Err: fmt.Errorf(format, args...)}
+}
+
+func currentCheckout(repo string) (checkoutState, error) {
+	if branch, err := git(repo, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil {
+		return checkoutState{Branch: branch}, nil
+	}
+	oid, err := git(repo, "rev-parse", "--verify", "HEAD")
+	if err != nil {
+		return checkoutState{}, err
+	}
+	return checkoutState{Commit: oid, Detached: true}, nil
+}
+
+func restoreCheckout(repo string, st checkoutState) error {
+	if st.Detached {
+		_, err := git(repo, "switch", "--quiet", "--detach", st.Commit)
+		return err
+	}
+	_, err := git(repo, "switch", "--quiet", st.Branch)
+	return err
+}
+
+func restoreAfterFailure(repo string, st checkoutState, err error) error {
+	if rerr := restoreCheckout(repo, st); rerr != nil {
+		var mergeErr *MergeError
+		if errors.As(err, &mergeErr) {
+			return &MergeError{
+				Kind: mergeErr.Kind,
+				Err:  fmt.Errorf("%s; restore original checkout failed: %v", mergeErr.Error(), rerr),
+			}
+		}
+		return fmt.Errorf("%w; restore original checkout failed: %v", err, rerr)
+	}
+	return err
+}
+
+// MergeInto performs the local landing merge for close --merge-into. The
+// target must resolve to a local branch; the command never pushes, rebases, or
+// force-updates refs. Conflicts are aborted before returning.
+func (s *Store) MergeInto(m *Meta, targetRef, message string) (*MergeResult, error) {
+	if m.State == "closed" {
+		return nil, mergeGuardf("%s is closed", m.ID)
+	}
+	targetRef = strings.TrimSpace(targetRef)
+	if targetRef == "" {
+		return nil, mergeGuardf("--merge-into requires a target ref")
+	}
+	if uncommitted, err := s.Uncommitted(m); err != nil {
+		return nil, err
+	} else if uncommitted {
+		return nil, mergeGuardf("%s has uncommitted work; run `legwork ws commit %s -m ...` before --merge-into", m.ID, m.ID)
+	}
+
+	target, err := git(m.Repo, "rev-parse", "--symbolic-full-name", "--verify", targetRef)
+	if err != nil {
+		return nil, mergeGuardf("resolve --merge-into %s: %w", targetRef, err)
+	}
+	if !strings.HasPrefix(target, "refs/heads/") {
+		return nil, mergeGuardf("--merge-into requires a local branch ref, got %s", target)
+	}
+	targetBranch := strings.TrimPrefix(target, "refs/heads/")
+	if targetBranch == m.Branch {
+		return nil, mergeGuardf("refusing to merge %s into itself", m.Branch)
+	}
+
+	if current, err := git(m.Repo, "symbolic-ref", "--quiet", "--short", "HEAD"); err == nil && current == m.Branch {
+		return nil, mergeGuardf("refusing to run merge with workspace branch %s checked out as HEAD", m.Branch)
+	}
+	if status, err := git(m.Repo, "status", "--porcelain"); err != nil {
+		return nil, err
+	} else if strings.TrimSpace(status) != "" {
+		return nil, mergeGuardf("target checkout %s has uncommitted changes; clean it before --merge-into", m.Repo)
+	}
+
+	original, err := currentCheckout(m.Repo)
+	if err != nil {
+		return nil, mergeGuardf("record original checkout: %w", err)
+	}
+	if _, err := git(m.Repo, "switch", "--quiet", targetBranch); err != nil {
+		return nil, mergeGuardf("switch to %s: %w", targetBranch, err)
+	}
+	if current, err := git(m.Repo, "symbolic-ref", "--quiet", "--short", "HEAD"); err != nil {
+		return nil, restoreAfterFailure(m.Repo, original, mergeGuardf("verify target HEAD: %w", err))
+	} else if current == m.Branch {
+		return nil, restoreAfterFailure(m.Repo, original, mergeGuardf("refusing to run merge with workspace branch %s checked out as HEAD", m.Branch))
+	} else if current != targetBranch {
+		return nil, restoreAfterFailure(m.Repo, original, mergeGuardf("expected HEAD %s after switch, got %s", targetBranch, current))
+	}
+
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = fmt.Sprintf("Merge %s into %s", m.Branch, targetBranch)
+	}
+	cmd := exec.Command("git", "-C", m.Repo, "merge", "--no-ff", "-m", message, m.Branch)
+	cmd.Env = commitEnv(m.Repo)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if conflicts, cerr := git(m.Repo, "diff", "--name-only", "--diff-filter=U"); cerr == nil && strings.TrimSpace(conflicts) != "" {
+			abortOut, abortErr := git(m.Repo, "merge", "--abort")
+			if abortErr != nil {
+				return nil, restoreAfterFailure(m.Repo, original, mergeConflictf("merge %s into %s conflicted, and merge --abort failed: %v: %s", m.Branch, targetBranch, abortErr, abortOut))
+			}
+			return nil, restoreAfterFailure(m.Repo, original, mergeConflictf("merge %s into %s conflicted: %s", m.Branch, targetBranch, strings.TrimSpace(conflicts)))
+		}
+		_, _ = git(m.Repo, "merge", "--abort")
+		return nil, restoreAfterFailure(m.Repo, original, mergeGuardf("git merge --no-ff %s: %v: %s", m.Branch, err, strings.TrimSpace(string(out))))
+	}
+	commit, err := git(m.Repo, "rev-parse", "--verify", target)
+	if err != nil {
+		return nil, err
+	}
+	return &MergeResult{Target: target, TargetBranch: targetBranch, Commit: commit, Message: message}, nil
 }
 
 // Close acknowledges the workspace and reclaims disposable local cache.

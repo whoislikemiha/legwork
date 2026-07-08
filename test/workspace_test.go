@@ -272,6 +272,240 @@ func TestCloseMergedVerifies(t *testing.T) {
 	}
 }
 
+func TestCloseMergeIntoLandsAndCloses(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	branch := ws["branch"].(string)
+
+	e.writeScript(t, "#write landed.txt content", resultDone)
+	jid := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "do"))
+	e.waitState(t, jid, "done")
+	e.legwork(t, "ws", "commit", wsID, "-m", "workspace output")
+
+	out := e.legwork(t, "close", wsID, "--merge-into", "main", "-m", "land workspace", "--json")
+	var got struct {
+		OK          bool   `json:"ok"`
+		Workspace   string `json:"workspace"`
+		State       string `json:"state"`
+		Disposition string `json:"disposition"`
+		MergedInto  string `json:"merged_into"`
+		Merge       struct {
+			Target       string `json:"target"`
+			TargetBranch string `json:"target_branch"`
+			Commit       string `json:"commit"`
+			Message      string `json:"message"`
+		} `json:"merge"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad close json: %v\n%s", err, out)
+	}
+	if !got.OK || got.Workspace != wsID || got.State != "closed" || got.Disposition != "merged" {
+		t.Fatalf("unexpected close json: %+v", got)
+	}
+	if got.MergedInto != "refs/heads/main" || got.Merge.Target != "refs/heads/main" || got.Merge.TargetBranch != "main" || got.Merge.Commit == "" {
+		t.Fatalf("merge metadata missing: %+v", got)
+	}
+	if got.Merge.Message != "land workspace" {
+		t.Fatalf("merge message = %q", got.Merge.Message)
+	}
+	if msg, _ := gitInErr(repo, "log", "-1", "--format=%s"); msg != "land workspace" {
+		t.Fatalf("target branch did not receive merge commit, log subject %q", msg)
+	}
+	if content, err := os.ReadFile(filepath.Join(repo, "landed.txt")); err != nil || string(content) != "content\n" {
+		t.Fatalf("target branch missing workspace file, content=%q err=%v", content, err)
+	}
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out != "" {
+		t.Fatalf("workspace branch not reclaimed: %s", out)
+	}
+}
+
+func TestCloseMergeIntoRefusesWorkspaceBranchTarget(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	branch := ws["branch"].(string)
+
+	out, err := e.legworkErr("close", wsID, "--merge-into", branch, "--json")
+	if err == nil {
+		t.Fatalf("--merge-into workspace branch must fail:\n%s", out)
+	}
+	if code := exitCode(err); code != 3 {
+		t.Fatalf("guard refusal exit code = %d, want 3\n%s", code, out)
+	}
+	var got closeBlockedJSON
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad close error json: %v\n%s", err, out)
+	}
+	if got.OK || got.State != "blocked" || got.Blocked.Kind != "guard-refused" {
+		t.Fatalf("unexpected guard json: %+v", got)
+	}
+	if m := e.wsStatus(t, wsID); m["state"] != "open" {
+		t.Fatalf("workspace must stay open after guard refusal: %v", m)
+	}
+}
+
+func TestCloseMergeIntoRefusesUncommittedWorkspace(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+
+	if err := os.WriteFile(filepath.Join(tree, "scratch.txt"), []byte("uncommitted\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := e.legworkErr("close", wsID, "--merge-into", "main", "--json")
+	assertCloseMergeGuard(t, out, err)
+	if m := e.wsStatus(t, wsID); m["state"] != "open" {
+		t.Fatalf("workspace must stay open after uncommitted-work guard: %v", m)
+	}
+	if status, _ := gitInErr(tree, "status", "--porcelain"); !strings.Contains(status, "scratch.txt") {
+		t.Fatalf("workspace uncommitted file should remain:\n%s", status)
+	}
+}
+
+func TestCloseMergeIntoRefusesDirtyTargetCheckout(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+
+	if err := os.WriteFile(filepath.Join(tree, "landed.txt"), []byte("content\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.legwork(t, "ws", "commit", wsID, "-m", "workspace output")
+	if err := os.WriteFile(filepath.Join(repo, "dirty.txt"), []byte("dirty\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := e.legworkErr("close", wsID, "--merge-into", "main", "--json")
+	assertCloseMergeGuard(t, out, err)
+	if m := e.wsStatus(t, wsID); m["state"] != "open" {
+		t.Fatalf("workspace must stay open after dirty-target guard: %v", m)
+	}
+	if status, _ := gitInErr(repo, "status", "--porcelain"); !strings.Contains(status, "dirty.txt") {
+		t.Fatalf("target checkout dirty file should remain:\n%s", status)
+	}
+}
+
+func TestCloseMergeIntoRefusesRemoteTarget(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	remote := t.TempDir()
+	gitIn(t, remote, "init", "-q", "--bare")
+	gitIn(t, repo, "remote", "add", "origin", remote)
+	gitIn(t, repo, "push", "-q", "origin", "main")
+	gitIn(t, repo, "remote", "set-head", "origin", "main")
+
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	out, err := e.legworkErr("close", wsID, "--merge-into", "origin/main", "--json")
+	assertCloseMergeGuard(t, out, err)
+	if m := e.wsStatus(t, wsID); m["state"] != "open" {
+		t.Fatalf("workspace must stay open after remote-target guard: %v", m)
+	}
+}
+
+func TestCloseMergeIntoRefusesUnresolvedTarget(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+
+	out, err := e.legworkErr("close", wsID, "--merge-into", "no/such/ref", "--json")
+	assertCloseMergeGuard(t, out, err)
+	if m := e.wsStatus(t, wsID); m["state"] != "open" {
+		t.Fatalf("workspace must stay open after unresolved-target guard: %v", m)
+	}
+}
+
+func TestCloseMergeIntoConflictAbortsClean(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+
+	if err := os.WriteFile(filepath.Join(tree, "README.md"), []byte("workspace\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.legwork(t, "ws", "commit", wsID, "-m", "workspace readme")
+
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, repo, "add", ".")
+	gitIn(t, repo, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "main readme")
+	gitIn(t, repo, "switch", "-q", "-c", "develop")
+
+	out, err := e.legworkErr("close", wsID, "--merge-into", "main", "--json")
+	if err == nil {
+		t.Fatalf("conflicting --merge-into must fail:\n%s", out)
+	}
+	if code := exitCode(err); code != 1 {
+		t.Fatalf("conflict exit code = %d, want 1\n%s", code, out)
+	}
+	var got closeBlockedJSON
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad close conflict json: %v\n%s", err, out)
+	}
+	if got.OK || got.State != "blocked" || got.Blocked.Kind != "conflict" {
+		t.Fatalf("unexpected conflict json: %+v", got)
+	}
+	if m := e.wsStatus(t, wsID); m["state"] != "open" {
+		t.Fatalf("workspace must stay open after conflict: %v", m)
+	}
+	if status, _ := gitInErr(repo, "status", "--porcelain"); status != "" {
+		t.Fatalf("target checkout not clean after aborted conflict:\n%s", status)
+	}
+	if branch, _ := gitInErr(repo, "symbolic-ref", "--quiet", "--short", "HEAD"); branch != "develop" {
+		t.Fatalf("source checkout should be restored to develop after conflict, got %q", branch)
+	}
+	if _, err := os.Stat(filepath.Join(repo, ".git", "MERGE_HEAD")); !os.IsNotExist(err) {
+		t.Fatalf("MERGE_HEAD should be gone after abort, err=%v", err)
+	}
+	if content, err := os.ReadFile(filepath.Join(repo, "README.md")); err != nil || string(content) != "main\n" {
+		t.Fatalf("target file not restored after abort, content=%q err=%v", content, err)
+	}
+}
+
+type closeBlockedJSON struct {
+	OK      bool   `json:"ok"`
+	State   string `json:"state"`
+	Blocked struct {
+		Kind   string `json:"kind"`
+		Detail string `json:"detail"`
+	} `json:"blocked"`
+}
+
+func exitCode(err error) int {
+	if ee, ok := err.(*exec.ExitError); ok {
+		return ee.ExitCode()
+	}
+	return -1
+}
+
+func assertCloseMergeGuard(t *testing.T, out string, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("--merge-into guard must fail:\n%s", out)
+	}
+	if code := exitCode(err); code != 3 {
+		t.Fatalf("guard refusal exit code = %d, want 3\n%s", code, out)
+	}
+	var got closeBlockedJSON
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad close guard json: %v\n%s", err, out)
+	}
+	if got.OK || got.State != "blocked" || got.Blocked.Kind != "guard-refused" {
+		t.Fatalf("unexpected guard json: %+v", got)
+	}
+}
+
 // With a remote configured, the auto-detected target is origin/HEAD: work
 // merged into local main but not pushed must refuse with a message naming the
 // push, and closing succeeds once pushed.

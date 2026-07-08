@@ -39,3 +39,39 @@ checklist — explicitly not a `pr` verb.
 None.
 
 ## Log
+
+- Implemented minimal `close --merge-into <local-branch>` landing path. Touched
+  `workspace_cmds.go`, `internal/workspace/workspace.go`, `test/workspace_test.go`,
+  `internal/guide/guide.md`, `skills/legwork/SKILL.md`, and `README.md`.
+- Added guarded local `git merge --no-ff` support with generated/provided `-m`
+  message, conflict abort, workspace-branch/self-merge guard, dirty target guard,
+  local-branch-only target guard, JSON success/error envelope, and distinct exit
+  codes: `0` merged, `1` conflict, `3` guard-refused.
+- Added e2e coverage for successful `--merge-into`, workspace-branch target guard,
+  and conflict abort/clean target checkout.
+- Verification blocked by sandbox read-only Go cache before tests ran. Exact command:
+  `go test ./test -run 'TestCloseMergeInto|TestCloseMerged' -count=1`; failure:
+  `open /home/miha/.cache/go-build/a7/a78caedf02e275969223c8268f59c4a7fb706fa0495c86414cdee846f973b535-d: read-only file system`.
+- Review finding 1: fixed post-switch failure cleanup in `internal/workspace/workspace.go`
+  by recording the original source checkout and restoring it after target-HEAD
+  verification failures, merge conflicts, and other post-switch merge failures.
+- Review finding 2: extended `test/workspace_test.go` with guard e2e coverage for
+  uncommitted workspace work, dirty target/source checkout, remote target refs, and
+  unresolved target refs; the conflict test now proves the original branch is restored.
+- Review findings 3-4: adjusted `internal/guide/guide.md` wording to emphasize that
+  the merge runs from the source checkout with a post-switch HEAD recheck, and that
+  `blocked.kind` is the authoritative JSON discriminator while `1`/`3` cover
+  conflict/guard-refused for `--merge-into`.
+- Verification completed with approved env-only cache override:
+  `GOCACHE=/tmp/lw-go-cache go test ./test -run 'TestCloseMergeInto|TestCloseMerged' -count=1`,
+  `GOCACHE=/tmp/lw-go-cache gofmt -l .`,
+  `GOCACHE=/tmp/lw-go-cache go vet ./...`,
+  `GOCACHE=/tmp/lw-go-cache go build ./...`, and
+  `GOCACHE=/tmp/lw-go-cache go test ./... -count=1` all passed. Real-agent smoke
+  checks intentionally skipped per orchestrator guidance.
+
+## Friction
+
+- Running Go verification in the worker sandbox failed because the default
+  `/home/miha/.cache/go-build` is read-only; a worker-visible writable Go cache or
+  injected `GOCACHE` would let verification run without changing project config.

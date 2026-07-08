@@ -78,9 +78,8 @@ legwork run --workspace "$ws" --agent claude "implement X"
 legwork diff "$ws"                     # changes vs base, incl. untracked
 legwork resume <job> "fix review finding Y"                 # same lineage
 legwork ws commit "$ws" -m "message" --json   # records final_commit; refuses empty
-legwork close "$ws" --merged --reason "landed" # verified; records closed_at/merged_into
-                                       # against the default branch (--into <ref>
-                                       # to override); drops the local checkout
+legwork close "$ws" --merge-into main  # no-ff merge locally, records closed_at/merged_into
+                                       # and closes; --discard throws work away
 ```
 
 One active job per workspace; parallelism = multiple workspaces. `close` refuses
@@ -90,7 +89,11 @@ bypass it reflexively.
 You own git history — workers never commit (the injected contract forbids it;
 don't override with "commit when done"). Review the diff, then use
 `legwork ws commit <ws> -m <message>` so the workspace tree is committed and the
-decision is recorded in the job/run event logs, then land it.
+decision is recorded in the job/run event logs, then land it with
+`legwork close <ws> --merge-into <local-branch>`. It refuses dirty target checkouts,
+remote targets, self-merges, and conflicts (aborted cleanly; `--json` distinguishes
+`conflict` from `guard-refused`). If work landed some other way, use
+`close --merged --into <ref>` for verified acknowledgment.
 
 For dead or superseded work that is still useful for later analysis, record a run
 note, commit the final workspace tree with `legwork ws commit`, then close with

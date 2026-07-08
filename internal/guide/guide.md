@@ -119,6 +119,7 @@ legwork run --workspace ws-N --agent claude "implement X per plan.md"
 legwork diff ws-N [--stat]               -> changes vs base, incl. untracked files
 legwork resume <job> "review feedback: fix Y"
 legwork ws commit ws-N -m "message" --json -> orchestrator commit, recorded as final_commit
+legwork close ws-N --merge-into main     -> no-ff merge locally, then close as merged
 legwork close ws-N --merged|--discard [--reason TEXT] [--retention POLICY]
                                          -> records disposition metadata, then drops
                                             the local worktree cache
@@ -136,11 +137,21 @@ workspace metadata, and writes an attributed `commit` event in the workspace
 lineage's job/run logs. Then land it.
 
 `close` without a flag refuses if there are unreviewed changes — that's the review
-gate. You (or the human) land the diff (PR, merge), then close `--merged`.
+gate. After review, the usual local landing path is
+`legwork close <ws> --merge-into main`: legwork requires the workspace tree to be
+committed, switches the source checkout to that local target branch, runs
+`git merge --no-ff`, aborts cleanly on conflicts, records `merged_into`, then
+closes. It refuses remote targets, self-merges, dirty target checkouts, and
+rechecks HEAD after switching so the merge never runs from the workspace branch.
+On a failed/conflicted merge it restores the checkout that was current before the
+switch. Use `-m` to supply the merge commit message, and `--json` for
+`{ok,state,blocked}` output where `blocked.kind` distinguishes `conflict` from
+`guard-refused`; the `--merge-into` conflict path exits `1`, guard refusals exit
+`3`, and ordinary CLI failures remain normal non-zero errors.
+
+If the work landed by another path (PR, manual merge), close `--merged`.
 `--merged` is verified, not trusted: the branch must actually be an ancestor of
-the default branch (or `--into <ref>`), else close refuses — this catches the
-classic mistake of running the merge inside the worktree (a no-op) and then
-closing the review gate. Merge from the main checkout. The verified target is
+the default branch (or `--into <ref>`), else close refuses. The verified target is
 recorded as `merged_into`. `--force` skips the check for work that landed somewhere
 legwork can't see (cherry-pick, another remote). For superseded/dead work, add
 `--reason`, `--superseded-by`, and `--retention`; use `--preserve` when the
@@ -309,7 +320,7 @@ ack <job> [--force] [--json]
 runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]
 dashboard            serve [--addr 127.0.0.1:0] [--allow-remote]
 ws new --repo R      ws ls               ws commit <ws> -m M      diff <ws> [--stat]
-close <ws> [--merged [--into <ref>] [--force]|--discard|--keep-worktree|--preserve]
+close <ws> [--merge-into <branch> [-m <message>]|--merged [--into <ref>] [--force]|--discard|--keep-worktree|--preserve] [--json]
            [--reason TEXT] [--superseded-by ID] [--retention POLICY]
 gc [--dry-run] [--close-merged [--close-merged-into <ref>]] [--json]
 note <run> <text>

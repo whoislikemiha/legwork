@@ -19,7 +19,7 @@ $ legwork result job-7         # raw final report
 $ legwork diff ws-1            # the reviewable diff (incl. untracked files)
 $ legwork answer job-7 "use the token-bucket approach"   # if it asked
 $ legwork ws commit ws-1 -m "add API rate limiting"
-$ legwork close ws-1 --merged --reason "landed in main"  # verified, records metadata, reclaims
+$ legwork close ws-1 --merge-into main --reason "landed in main" # merges, records, reclaims
 ```
 
 ## Why
@@ -50,9 +50,12 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Workspaces are review gates**: one worktree + one branch + one diff + one close.
   Workers never commit; the orchestrator reviews the diff, runs
   `legwork ws commit <ws> -m <message>` to make an attributed non-empty commit, then
-  lands and closes it. The workspace `meta.json` records the final commit and close
-  disposition fields (`closed_at`, `reason`, `superseded_by`, `merged_into`,
-  `retention`) for later audit. Bootstrap uses the
+  lands and closes it. `legwork close <ws> --merge-into main` performs the local
+  `--no-ff` merge and closes in one guarded step: conflicts abort cleanly, dirty
+  target checkouts and self-merges are refused, and `--json` distinguishes
+  `conflict` from `guard-refused`. The workspace `meta.json` records the final
+  commit and close disposition fields (`closed_at`, `reason`, `superseded_by`,
+  `merged_into`, `retention`) for later audit. Bootstrap uses the
   [workstree](https://github.com/whoislikemiha/workstree) convention when the repo
   declares it.
 - **Workspace-less jobs can be acknowledged**: `legwork ack <job>` marks a terminal

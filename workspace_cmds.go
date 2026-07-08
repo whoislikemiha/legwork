@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -257,7 +259,8 @@ func diffCmd() *cobra.Command {
 
 func closeCmd() *cobra.Command {
 	var merged, discard, keepWorktree, preserve, force bool
-	var mergedInto, reason, supersededBy, retention string
+	var mergedInto, mergeTarget, mergeMessage, reason, supersededBy, retention string
+	var asJSON bool
 	c := &cobra.Command{
 		Use:   "close <workspace>",
 		Short: "Acknowledge a workspace and reclaim its local worktree cache",
@@ -280,6 +283,18 @@ func closeCmd() *cobra.Command {
 			switch {
 			case merged && discard:
 				return fmt.Errorf("--merged and --discard are mutually exclusive")
+			case mergeTarget != "" && discard:
+				return fmt.Errorf("--merge-into and --discard are mutually exclusive")
+			case mergeTarget != "" && merged:
+				return fmt.Errorf("--merge-into already implies --merged")
+			case mergeTarget != "" && mergedInto != "":
+				return fmt.Errorf("--merge-into cannot be combined with --into")
+			case mergeTarget != "" && force:
+				return fmt.Errorf("--merge-into cannot be combined with --force")
+			case mergeMessage != "" && mergeTarget == "":
+				return fmt.Errorf("-m/--message is only valid with --merge-into")
+			case mergeTarget != "":
+				disposition = "merged"
 			case merged:
 				disposition = "merged"
 			case discard:
@@ -293,10 +308,28 @@ func closeCmd() *cobra.Command {
 					retention = "preserve"
 				}
 			}
+			verifiedTarget := ""
+			var merge *workspace.MergeResult
+			if mergeTarget != "" {
+				res, err := wss.MergeInto(m, mergeTarget, mergeMessage)
+				if err != nil {
+					var mergeErr *workspace.MergeError
+					if errors.As(err, &mergeErr) {
+						exit := 3
+						if mergeErr.Kind == workspace.MergeErrorConflict {
+							exit = 1
+						}
+						closeFail(asJSON, m.ID, string(mergeErr.Kind), mergeErr.Error(), exit)
+						return nil
+					}
+					return err
+				}
+				merge = res
+				verifiedTarget = res.Target
+			}
 			// --merged is a claim; verify it before closing the review gate.
 			// (A merge mistakenly run inside the worktree is a no-op — closing
 			// on top of that leaves the work dangling.)
-			verifiedTarget := ""
 			if merged && !force {
 				target := mergedInto
 				if target == "" {
@@ -340,11 +373,23 @@ func closeCmd() *cobra.Command {
 			// Close the workspace's jobs too: the lineage is acknowledged, and
 			// each job's Closed timestamp anchors gc's retention clock.
 			_ = s.CloseJobsForWorkspace(m.ID)
+			if asJSON {
+				return printJSON(closeOutput{
+					OK:          true,
+					Workspace:   m.ID,
+					State:       m.State,
+					Disposition: m.Disposition,
+					MergedInto:  m.MergedInto,
+					Merge:       merge,
+				})
+			}
 			fmt.Printf("%s closed (%s)\n", m.ID, m.Disposition)
 			return nil
 		},
 	}
 	c.Flags().BoolVar(&merged, "merged", false, "changes landed elsewhere (verified via merge-base against --into or the default branch)")
+	c.Flags().StringVar(&mergeTarget, "merge-into", "", "merge the workspace branch into this local branch, then close as merged")
+	c.Flags().StringVarP(&mergeMessage, "message", "m", "", "merge commit message for --merge-into (default: generated)")
 	c.Flags().BoolVar(&discard, "discard", false, "throw the changes away")
 	c.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "acknowledge but keep the worktree on disk")
 	c.Flags().BoolVar(&preserve, "preserve", false, "record retention=preserve and keep branch/checkpoint refs")
@@ -353,5 +398,35 @@ func closeCmd() *cobra.Command {
 	c.Flags().StringVar(&supersededBy, "superseded-by", "", "workspace/run/branch that supersedes this workspace")
 	c.Flags().StringVar(&retention, "retention", "", "retention policy recorded in workspace metadata (for example preserve, compress, prune-after:<duration>, delete)")
 	c.Flags().BoolVar(&force, "force", false, "skip --merged verification")
+	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
 	return c
+}
+
+type closeOutput struct {
+	OK          bool                   `json:"ok"`
+	Workspace   string                 `json:"workspace"`
+	State       string                 `json:"state"`
+	Disposition string                 `json:"disposition,omitempty"`
+	MergedInto  string                 `json:"merged_into,omitempty"`
+	Merge       *workspace.MergeResult `json:"merge,omitempty"`
+	Blocked     *closeBlocked          `json:"blocked,omitempty"`
+}
+
+type closeBlocked struct {
+	Kind   string `json:"kind"`
+	Detail string `json:"detail"`
+}
+
+func closeFail(asJSON bool, workspaceID, kind, detail string, code int) {
+	if asJSON {
+		_ = printJSON(closeOutput{
+			OK:        false,
+			Workspace: workspaceID,
+			State:     "blocked",
+			Blocked:   &closeBlocked{Kind: kind, Detail: detail},
+		})
+	} else {
+		fmt.Fprintf(os.Stderr, "legwork: %s\n", detail)
+	}
+	os.Exit(code)
 }
