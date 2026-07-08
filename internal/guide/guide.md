@@ -344,6 +344,170 @@ shows local task, event, path, and result data. The HTTP surface is GET-only:
 timeline snapshot, and `/events` is an SSE stream that tells the browser to refresh.
 Mutation-shaped controls are disabled; answer/resume/diff/close remain CLI actions.
 
+## Recipes
+
+The verbs above are the mechanics; these are the plays. The single-job loop
+(`run` → `status` → route → `resume`/land) is covered above — the recipes here
+are the *campaign*: how to run many tasks at once, what to put in an
+append-prompt, and the handful of patterns the corpus proves earn their tokens.
+Follow them literally; every step has a default so you never have to derive one.
+
+### The campaign shape (running a wave of tasks)
+
+This is the top-level recipe the others slot into. Given N tasks (e.g. a set of
+`planning/tasks/*.md` files), run them as one supervised wave:
+
+1. **Preflight once.** `legwork doctor --agent <A> [--model <M>]` for each
+   agent+model you will dispatch. A green probe validates auth and model
+   acceptance before you spawn anything. Omit `--model` to accept the agent's
+   default (see preflight facts below).
+2. **Sketch the conflict graph.** Read the task set and list which tasks touch
+   the same files or packages. That is the only planning artifact you need —
+   overlaps decide landing order, not dispatch order. Save it as a run artifact
+   (`artifact save`), don't hand-maintain a table.
+3. **One workspace per task; implement in parallel.** `legwork ws new --repo R`
+   per task, then `legwork run --workspace ws-N --run <wave> ...` for each. All
+   implementers run at once — parallelism is workspaces, and `ws new` is safe to
+   call back-to-back (facts below). Dispatch cheap implementers; save the big
+   model for review.
+4. **Review each diff before trusting it.** `legwork ws review ws-N` per
+   workspace (big model, high effort by default). This is not optional
+   discipline — first-pass SHIP across the corpus was ~3/8; independent
+   high-effort review caught real, shippable-looking bugs on ~62% of first
+   passes. Route each verdict: `SHIP` → land; `FIX` → `resume` the implementer
+   (or a fresh fix job) with the findings, then re-review.
+5. **Verify outside the sandbox.** Run the repo's suite yourself (the orchestrator
+   seat), not in a worker turn — nested real-agent runs and some test suites
+   cannot complete inside a worker sandbox, so verification is orchestrator-side
+   by construction. For this repo: `gofmt -l . && go vet ./... && go test ./...
+   -count=1`.
+6. **Land serially, most-isolated first.** Land the workspaces that touch nothing
+   else first, the high-overlap ones last, one at a time:
+   `legwork ws commit ws-N -m "..."` then `legwork close ws-N --merge-into main`.
+   Conflicts are expected exactly where your conflict graph predicted them —
+   resolve them at merge time as orchestrator work (they are usually unions).
+   **Re-run the suite on the target branch after every merge**: some conflicts
+   are semantic and invisible to git (in the 2026-07-08 wave, one workspace's
+   test asserted behavior another workspace's landed policy reversed — caught
+   only by the post-merge suite run).
+7. **Update the board and clean up.** Move task files / flip your project board
+   *after* the branch is truly merged (`close --merge-into` verifies this; a raw
+   `git merge` run from inside the workspace tree is a no-op because HEAD there is
+   already the branch). Then `legwork gc` to reclaim closed worktrees.
+
+Worked instance (2026-07-08 `next-roadmap` wave): 7 tasks, 4 known file-overlap
+pairs, 7 codex implementers in ws-53…ws-59 running in parallel, reviewed one by
+one, landed serially most-isolated-first. 2/7 shipped on first review, 5 took one
+FIX round each; every conflict landed as a union except the one semantic
+collision above.
+
+### Append-prompt: what belongs where
+
+Three channels carry three different things — keep them separate:
+
+- **The prompt** is *only the task pointer* ("implement the task in
+  `planning/tasks/foo.md`"). legwork injects the worker contract itself.
+- **The task file** carries scope, design, and constraints — the durable "what
+  and why" that outlives any single run.
+- **`--append-prompt` / `--append-prompt-file`** carries *run-specific policy
+  only*: the verification reality of this sandbox, doc conventions, repo
+  invariants the worker must not erode.
+
+**The rule with teeth:** run `legwork rules` first and read what the contract
+already says. If your append-prompt restates anything in it — commit/push policy,
+the `state:` values, how to report `blocked` — delete those lines. A paraphrase
+does not reinforce the contract; it competes with it. (This is easy to slip:
+in the 2026-07-08 handover a top-tier orchestrator wrote a ~40-line append-prompt
+that re-specified commit policy and a full blocked-reporting protocol *minutes
+after* acknowledging the no-paraphrase rule. Reading `legwork rules` first is what
+prevents it.)
+
+A known-good append-prompt for this repo (note what it does *not* say — nothing
+about commits, status blocks, or blocked kinds; the contract owns those):
+
+```text
+Verification before claiming done: gofmt -l . && go vet ./... && go test ./... -count=1.
+Docs travel in threes: internal/guide/guide.md is canonical — write there first, then
+reconcile skills/legwork/SKILL.md and README.md. Keep the three consistent.
+Do not erode the DESIGN.md hard rules (no database/daemon; the event schema is a public
+interface; the close review tripwire stays).
+Delegate any large-output command to a cheap subagent and return only a summary, so your
+context stays lean.
+```
+
+Multi-line text belongs in a file, not a shell variable:
+`--append-prompt-file <path>` (or `-` for stdin) reads it verbatim and stores the
+text, sidestepping shell-quoting corruption. Reuse one across a wave by saving it
+as a run artifact (see "Grouping and narration").
+
+### Preflight facts (each saves a round of derivation)
+
+- **Model names:** omit `--model` to use the agent's configured default; `doctor`'s
+  probe confirms whatever that resolves to. You do not need to discover the exact
+  model string before dispatching.
+- **`ws new` concurrency:** back-to-back and concurrent `ws new` calls are safe.
+  ID allocation is serialized internally by an exclusive lock, so there is no
+  duplicate-ID or lost-update risk — no need to serialize creation yourself.
+- **Go caches in codex sandboxes are handled:** codex workspace-write turns get a
+  per-job writable `TMPDIR`, `GOCACHE`, `GOMODCACHE`, and `GOTMPDIR` automatically.
+  Do not inject a `GOCACHE=/tmp/...` override in an append-prompt — it is
+  unnecessary and can point at a read-only path.
+- **The ws↔task map is `runs`/`ls` plus an artifact**, not a table you maintain by
+  hand — `legwork runs` already rolls the wave up per label.
+
+### Competition: two implementations, keep the winner
+
+When a task is high-stakes or the right approach is genuinely uncertain, dispatch
+two implementers on the *same* task into *separate* workspaces (e.g.
+`--agent claude` in one, `--agent codex` in another), `ws review` both, pick the
+stronger diff, and `close --discard` the loser — optionally grafting one good fix
+from the discarded branch first. Evidence: the `presentation` run pitted job-15
+(opus/ws-6) against job-16 (codex/ws-7); the orchestrator kept opus and discarded
+codex except for one grafted fix. Use sparingly — it doubles implementer cost.
+
+### Design-only pipeline (no code)
+
+For work where the design is the risk, run the whole loop without writing code:
+
+1. `legwork run --read-only --run <label> "produce a design doc for X"` — a
+   read-only turn cannot edit, so it can only think and write prose.
+2. Save the output as an artifact; `legwork ws review`-style, dispatch an
+   *adversarial design review* (`--read-only`) that attacks the design, not code.
+3. Route the verdict like any review: revise on findings, re-review, stop when the
+   design holds. No workspace, no diff, no merge.
+
+Evidence: `p1-bank-sync` ran design doc → adversarial design review
+(`needs-changes`) → revision entirely in read-only turns (job-31 → job-35 →
+job-36).
+
+### Reviewer seeding & poisoned-context restart
+
+- **Seed reviewers with the diff, not the tree.** `legwork ws review` already does
+  this (it dispatches the reviewer seeded with `legwork diff <ws>` output). If you
+  hand-roll a reviewer for any reason, seed it the same way — pipe `legwork diff
+  <ws>` into the prompt so it starts from the change under review instead of
+  rediscovering it against base.
+- **A poisoned context does not recover.** When a job shows high `ctx` and no new
+  diff progress, do **not** `resume "keep going"` — that pays to re-read the stuck
+  context every turn. `legwork cancel <job>`, then start a **fresh job** re-seeded
+  from artifacts (the plan file, `legwork diff` output). Fresh-and-seeded beats
+  resume-and-hope every time this pattern appears.
+
+### Note at every phase boundary
+
+Run notes are what make a pipeline legible after the fact — and adoption is
+uneven (self-dev runs in the corpus averaged ~1.5 notes/job and read like an
+operator journal; sparse runs force you to reconstruct the story from previews).
+Drop one `legwork note <run> "..."` at each phase boundary:
+
+- workspace created / task dispatched,
+- plan or design approved,
+- review verdict (SHIP/FIX + the gist),
+- landed (with the merge commit).
+
+Five short notes turn an opaque run into a readable narrative for the next
+orchestrator (often future-you) at trivial cost.
+
 ## Quick reference
 
 ```

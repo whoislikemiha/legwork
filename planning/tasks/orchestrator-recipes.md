@@ -80,3 +80,27 @@ recipes concurrently guarantees three-way doc conflicts) and after `rules-verb`
 (the AP norm references it).
 
 ## Log
+
+- 2026-07-08: Wrote the `## Recipes` section in `internal/guide/guide.md` (canonical):
+  campaign shape (preflight → conflict graph → parallel implement → `ws review` →
+  orchestrator-side verify → serial land most-isolated-first with post-merge suite
+  re-run → board update → gc), append-prompt norms with a known-good worked example
+  and the `legwork rules`-first negative rule, preflight facts (model default via
+  probe, `ws new` back-to-back safety, auto per-job codex Go caches, ws↔task map via
+  `runs`+artifact), and the F1 competition / F2 design-only / F3 reviewer-seeding +
+  poisoned-context / E2 phase-boundary-note recipes. Condensed the same into
+  `skills/legwork/SKILL.md` and added a one-line mention to `README.md`.
+- Current-state reconciliation applied: referenced `ws review`/`result`/`close
+  --merge-into`/`approve`/`rules`/`version`/`--append-prompt-file` as verbs (no flag
+  restatement); did NOT document the retired `GOCACHE=/tmp` workaround (codex
+  workspace-write turns get per-job writable caches automatically).
+- Verified `ws new` concurrency from source: `newID` → `job.AllocID` takes an
+  exclusive `flock` (`LockAlloc` on `.alloc.lock`), so concurrent/back-to-back
+  `ws new` is safe — no duplicate-ID or lost-update risk. Documented as fact, not
+  speculation.
+- Spot-checked every documented command against `--help` and ran the fake-agent flow
+  end-to-end (`ws new` → `run --agent fake` → `ls`/`runs` → `ws review --agent fake`;
+  `doctor --agent fake`; `--append-prompt-file -`; `result`; `rules`) — all pass,
+  zero API spend. `gofmt`/`go vet` clean; full suite green except the known
+  pre-existing `TestCodexPassthroughs` teardown race (passed on isolated retry with
+  no code change).

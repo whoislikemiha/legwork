@@ -232,6 +232,42 @@ legwork artifact get --run <label> append-prompt.md |
   legwork run --run <label> --append-prompt-file - --agent claude "task"
 ```
 
+## Recipes
+
+`legwork guide` carries these in full with the evidence; the plays in short:
+
+**The campaign shape (a wave of N tasks).** `doctor` per agent+model → read the
+tasks and note which touch the same files (that ordering, saved as an artifact,
+decides landing) → one workspace per task, implement **in parallel** → `ws review`
+each diff → verify the suite **yourself, outside any sandbox** → land **serially,
+most-isolated first** (`ws commit` then `close --merge-into main`), resolving
+conflicts at merge time and **re-running the suite on the target after each merge**
+(some conflicts are semantic, invisible to git) → move task files / update the
+board only once merged → `gc`. Never land implementer output unreviewed:
+first-pass SHIP runs ~3/8.
+
+**Append-prompt norms.** The prompt is only the task pointer; the task file holds
+scope/design/constraints; `--append-prompt` holds run-specific policy only
+(verification reality, doc conventions, repo invariants). Run `legwork rules`
+first — if your append-prompt restates the contract (commit policy, `state:`
+values, blocked reporting), delete those lines; a paraphrase competes with the
+injected contract. A good ~5-line append-prompt names how to verify and the repo's
+doc/invariant rules and says nothing about commits or status blocks.
+
+**Preflight facts:** omit `--model` to take the agent default (the probe confirms
+it); `ws new` is safe to call back-to-back (ID allocation is internally
+serialized); codex workspace-write turns get writable `TMPDIR`/`GOCACHE` per job —
+never inject a `GOCACHE=/tmp` override; the ws↔task map is `runs`/`ls` + an
+artifact, not a hand-built table.
+
+**Other plays:** *competition* — two implementers on one task in separate
+workspaces, review both, keep the winner, `--discard` the loser (optionally graft
+one fix). *Design-only* — read-only design turn → artifact → adversarial design
+review → revise, no code. *Poisoned context* — high `ctx` + stale diff → `cancel`
++ **fresh job re-seeded from artifacts**, never `resume "keep going"`. *Notes* —
+one `note` at each phase boundary (created / plan approved / dispatched / verdict /
+landed) so the run reads as a narrative.
+
 ## Tips
 
 - Group pipeline jobs: `--run <label>`; narrate decisions:
