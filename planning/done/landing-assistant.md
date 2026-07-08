@@ -75,3 +75,11 @@ None.
 - Running Go verification in the worker sandbox failed because the default
   `/home/miha/.cache/go-build` is read-only; a worker-visible writable Go cache or
   injected `GOCACHE` would let verification run without changing project config.
+
+## Verdict
+
+Review job-129 (opus, high): FIX round 1 (HEAD left switched on failure paths, untested guards
+on a checkout-mutating op, unreachable-guard doc emphasis, overloaded exit 1); job-134: **SHIP**
+round 2. Orchestrator note: at landing, ws-59's branch-deletion assertion collided semantically
+with ws-58's branch-durable policy — resolved on main in favor of branch-durable (test updated,
+8faddf1). Suite green on main. Landed 2026-07-08 via merge of legwork/ws-59 (9d7e735).

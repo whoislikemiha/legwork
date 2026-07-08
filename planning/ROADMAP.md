@@ -33,10 +33,6 @@ most-isolated first.
 - [ ] [Structured `blocked` reasons + `needs-provision`](tasks/structured-blocked-provision.md) —
   **P0/P1.** `ws-57` / `job-119`. `blocked: {kind: provision|verify|decision, detail}` so routing
   is scriptable; the "verify" case is the most common — 7/7 in wave 1 (AUDIT A3).
-- [ ] [Landing assistant](tasks/landing-assistant.md) — **P1.** `ws-59` / `job-121`. Minimal:
-  `close <ws> --merge-into <ref>` does the `--no-ff` merge itself with a HEAD guard (field
-  2026-07-08: a hand-run merge inside the workspace tree silently no-opped → near false-landed
-  state). Full `land` workflow later.
 
 ## Next
 
