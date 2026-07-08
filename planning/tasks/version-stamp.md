@@ -1,6 +1,11 @@
 # Version stamping — commit + date in `legwork version`
 
-Status: later · Priority: P2 (small) · Origin: Miha + orchestrator exchange 2026-07-08 · Depends: — · Workspace: —
+Status: next · Priority: P2 (small; promoted 2026-07-08) · Origin: Miha + orchestrator exchange 2026-07-08 · Depends: — · Workspace: —
+
+**Why promoted:** CLAUDE.md instructs orchestrators to record `legwork version` in
+field notes — a dangling reference until this lands — and the 2026-07-08 handover
+transcript shows the "is my installed binary current?" question burning a detour on
+every cold start. Small task, disproportionate friction.
 
 ## Goal
 

@@ -21,35 +21,60 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-*(nothing)*
+Wave 1 (`--run next-roadmap`, dispatched 2026-07-08 by the Opus 4.8 orchestrator, taken over by
+Fable 5 the same day): all seven implemented in one turn each; all seven ended `blocked` on
+sandbox verification (read-only `GOCACHE` — the *cannot-verify* case, itself on this board).
+Awaiting independent review + orchestrator verification outside the sandbox + serial landing,
+most-isolated first.
+
+- [ ] [`result` verb](tasks/result-verb.md) — **P1.** `ws-53` / `job-115`. `legwork result
+  <job|run>` prints the final report raw; kills the `status --json | python -c` pipeline (the
+  most-repeated command of the 2026-07-08 session). Pairs with `wait`.
+- [ ] [`ws review` verb](tasks/ws-review-verb.md) — **P1.** `ws-54` / `job-116`. First-class
+  independent reviewer over the workspace diff. The corpus's strongest quality signal: 3/8
+  first-pass SHIP; review caught real bugs on ~62% of first passes (AUDIT D1).
+- [ ] [Sandbox anti-workaround rule](tasks/sandbox-anti-workaround.md) — **P0.** `ws-55` /
+  `job-117`. Injected worker rule: never modify test harness/build/deps to fit the sandbox;
+  report `blocked` with the exact failing command instead (AUDIT A1). Wave-1 evidence it works
+  as prompt text: 7/7 workers blocked honestly, zero harness edits.
+- [ ] [Writable per-job `$TMPDIR` in every sandbox profile](tasks/writable-tmpdir.md) — **P0.**
+  `ws-56` / `job-118`. Read-only must mean repo-read-only, not no-tmp; plus codex Go cache env.
+  Wave-1 evidence: all seven jobs blocked on read-only `GOCACHE` (AUDIT A2).
+- [ ] [Structured `blocked` reasons + `needs-provision`](tasks/structured-blocked-provision.md) —
+  **P0/P1.** `ws-57` / `job-119`. `blocked: {kind: provision|verify|decision, detail}` so routing
+  is scriptable; the "verify" case is the most common — 7/7 in wave 1 (AUDIT A3).
+- [ ] [Worktree reclamation — branch is durable, worktree is cache](tasks/worktree-reclaim.md) —
+  **P1.** `ws-58` / `job-120`. Drop the local checkout after `ws commit`, keep the branch —
+  never `git branch -D` on a normal close. Decouple worktree removal from branch deletion; make
+  legwork-owned orphan-tree reclaim actionable (AUDIT G1–G4).
+- [ ] [Landing assistant](tasks/landing-assistant.md) — **P1.** `ws-59` / `job-121`. Minimal:
+  `close <ws> --merge-into <ref>` does the `--no-ff` merge itself with a HEAD guard (field
+  2026-07-08: a hand-run merge inside the workspace tree silently no-opped → near false-landed
+  state). Full `land` workflow later.
 
 ## Next
 
-- [ ] [Sandbox anti-workaround rule](tasks/sandbox-anti-workaround.md) — **P0.** Injected worker
-  rule: never modify test harness/build/deps to fit the sandbox; report `blocked` with the exact
-  failing command instead. Kills the silent-workaround failure mode at the source (AUDIT A1).
-- [ ] [Writable per-job `$TMPDIR` in every sandbox profile](tasks/writable-tmpdir.md) — **P0.**
-  Read-only must mean repo-read-only, not no-tmp; diagnose the anyio/TestClient hang while at it
-  (AUDIT A2).
-- [ ] [Structured `blocked` reasons + `needs-provision`](tasks/structured-blocked-provision.md) —
-  **P0/P1.** `blocked: {kind: provision|verify|decision, detail}` so routing is scriptable; the
-  "verify" case is the most common (AUDIT A3).
-- [ ] [`ws review` verb](tasks/ws-review-verb.md) — **P1.** First-class independent reviewer over
-  the workspace diff. The corpus's strongest quality signal: 3/8 first-pass SHIP; review caught
-  real bugs on ~62% of first passes (AUDIT D1).
-- [ ] [Worktree reclamation — branch is durable, worktree is cache](tasks/worktree-reclaim.md) —
-  **P1.** Worktrees are the entire disk cost: ~1.6 G gitignored `node_modules`/`.next` of a 2.5 G
-  state dir (legwork's own logs are 32 M). Drop the local checkout after `ws commit`, keep the
-  branch and push it to origin — never `git branch -D` on a normal close (branches are free on
-  GitHub; the worktree is the disk cost). Decouple worktree removal from branch deletion; make
-  legwork-owned orphan-tree reclaim actionable (AUDIT G1–G4).
-- [ ] [Landing assistant](tasks/landing-assistant.md) — **P1.** Minimal: `close <ws>
-  --merge-into <ref>` does the `--no-ff` merge itself with a HEAD guard (field 2026-07-08: a
-  hand-run merge inside the workspace tree silently no-opped → near false-landed state). Full
-  `land` workflow later. Promoted from the remainders list.
-- [ ] [`result` verb](tasks/result-verb.md) — **P1.** `legwork result <job|run>` prints the final
-  report raw; kills the `status --json | python -c` pipeline that was the most-repeated command
-  of the 2026-07-08 orchestrator session. Pairs with `wait`.
+Wave 2 — how-to-orchestrate delivery, seeded by the 2026-07-08 handover analysis
+([field notes](../docs/field-notes-2026-07-08.md)): a top-tier orchestrator spent ~70% of its
+reasoning re-deriving campaign strategy the docs don't carry; smaller orchestrators can't. Lands
+after wave 1 (doc files conflict; two tasks depend on wave-1 contract changes).
+
+- [ ] [Orchestrator recipes + doc consistency](tasks/orchestrator-recipes.md) — **P1, promoted
+  from Later/P2.** The campaign-shape recipe (conflict plan → parallel implement → serial land),
+  append-prompt norms + a worked example, small preflight facts (model defaults, `ws new`
+  concurrency), plus the original F1–F3/E2 recipes. The cheapest capability uplift on the board:
+  moves strategy from per-run frontier-model reasoning into the guide, once (AUDIT E2, F1–F3;
+  field-notes 2026-07-08).
+- [ ] [`legwork rules` verb](tasks/rules-verb.md) — **P1, new.** Print the injected worker
+  contract verbatim. "Never paraphrase the contract" is unfollowable when the contract text
+  lives only in Go source — even Opus-high restated contract territory in its append-prompt
+  minutes after acknowledging the rule (field-notes 2026-07-08). After wave 1's contract changes.
+- [ ] [Version stamping](tasks/version-stamp.md) — **P2, small, promoted.** `legwork version` =
+  commit + dirty + date. CLAUDE.md already tells orchestrators to record it — dangling reference
+  — and "is my binary current?" burns a detour on every cold start.
+- [ ] [`--append-prompt-file`](tasks/append-prompt-file.md) — **P2, small, new.** Multi-line
+  append-prompts from a file/stdin instead of shell quoting; the silent-degradation footgun
+  (field-notes 2026-07-08).
 
 ## Later
 
@@ -61,9 +86,6 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
   crying-wolf `!` stop lying (AUDIT B1–B2).
 - [ ] [Per-job blocking wait](tasks/per-job-wait.md) — **P2.** `legwork wait --job X --until
   done|blocked|needs-input` (AUDIT E1; field-notes 2026-07-07 #1).
-- [ ] [Orchestrator recipes + doc consistency](tasks/orchestrator-recipes.md) — **P2.** Document
-  the competition and design-only pipelines, reviewer-diff handoff, poisoned-context restart, and
-  phase-boundary note discipline (AUDIT E2, F1–F3).
 - [ ] [Verify the ask-early path actually fires](tasks/verify-ask-early.md) — **P2.** 0
   `needs-input` in 96 jobs; prove the contract path works before trusting it (AUDIT A4).
 - [ ] [Unified job/run addressing](tasks/unified-addressing.md) — **P2.** Every verb takes a job
@@ -75,8 +97,6 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 - [ ] [Honest cost accounting + per-run rollup](tasks/cost-rollup.md) — **P2.** codex jobs report
   `$0.00` (subscription) next to Opus `$1.23`; show basis + token totals, roll up per run. May
   fold into quality-receipts.
-- [ ] [Version stamping](tasks/version-stamp.md) — **P2, small.** `legwork version` = commit +
-  dirty + date (ldflags / ReadBuildInfo), also in `--json`.
 - [ ] Small remainders — carried from the pre-system roadmap; **no task file yet, create one when
   picked up** (each is a real item, just not currently scheduled):
   - **Native-feel adapter surface** (P1) — expose the loop (`run`/`status`/`events`/`diff`/`ws
