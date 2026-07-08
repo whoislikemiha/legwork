@@ -33,10 +33,6 @@ most-isolated first.
 - [ ] [Structured `blocked` reasons + `needs-provision`](tasks/structured-blocked-provision.md) —
   **P0/P1.** `ws-57` / `job-119`. `blocked: {kind: provision|verify|decision, detail}` so routing
   is scriptable; the "verify" case is the most common — 7/7 in wave 1 (AUDIT A3).
-- [ ] [Worktree reclamation — branch is durable, worktree is cache](tasks/worktree-reclaim.md) —
-  **P1.** `ws-58` / `job-120`. Drop the local checkout after `ws commit`, keep the branch —
-  never `git branch -D` on a normal close. Decouple worktree removal from branch deletion; make
-  legwork-owned orphan-tree reclaim actionable (AUDIT G1–G4).
 - [ ] [Landing assistant](tasks/landing-assistant.md) — **P1.** `ws-59` / `job-121`. Minimal:
   `close <ws> --merge-into <ref>` does the `--no-ff` merge itself with a HEAD guard (field
   2026-07-08: a hand-run merge inside the workspace tree silently no-opped → near false-landed

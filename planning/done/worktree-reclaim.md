@@ -100,3 +100,12 @@ total. Coordinate the "caches outside the tree" sub-item with writable-tmpdir.md
 - Verification hit a read-only default Go build cache (`/home/miha/.cache/go-build`) before tests
   started; the worker sandbox should provide writable Go cache env defaults so package setup can run
   without harness edits.
+
+## Verdict
+
+Review job-128 (opus, high): FIX round 1 (orphan-tree race vs live ws new — the serious one,
+DESIGN §8 drift, --keep-worktree ref semantics, gc --json semantic shift, branch-ownership
+inconsistency); grace-gated under alloc lock + docs reconciled; job-133: **SHIP** round 2.
+Orchestrator verification: suite green in worktree and on main after merge (one README
+conflict vs ws-56, resolved by keeping both sentences). Landed on main 2026-07-08 via merge
+of legwork/ws-58 (9ae6181).
