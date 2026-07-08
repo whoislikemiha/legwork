@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
+	"compress/gzip"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"syscall"
@@ -45,7 +48,7 @@ health, recipes).`,
 		SilenceErrors: true,
 	}
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), statusCmd(), eventsCmd(),
-		lsCmd(), watchCmd(), cancelCmd(), ackCmd(), wsCmd(), diffCmd(), closeCmd(),
+		resultCmd(), lsCmd(), watchCmd(), cancelCmd(), ackCmd(), wsCmd(), diffCmd(), closeCmd(),
 		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd(),
 		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd())
 	return root
@@ -381,6 +384,14 @@ type metaOut struct {
 	ContextHigh bool `json:"context_high,omitempty"`
 }
 
+type resultOut struct {
+	Job    string `json:"job"`
+	Run    string `json:"run,omitempty"`
+	Turn   int    `json:"turn,omitempty"`
+	State  string `json:"state"`
+	Result string `json:"result"`
+}
+
 func statusCmd() *cobra.Command {
 	var asJSON bool
 	c := &cobra.Command{
@@ -425,6 +436,189 @@ func statusCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
 	return c
+}
+
+func resultCmd() *cobra.Command {
+	var asJSON bool
+	var turn int
+	c := &cobra.Command{
+		Use:   "result <job|run>",
+		Short: "Print a job's final report, or the newest job in a run",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("turn") && turn <= 0 {
+				return fmt.Errorf("--turn must be positive")
+			}
+			s, err := openStore()
+			if err != nil {
+				return err
+			}
+			m, err := resolveResultJob(s, args[0])
+			if err != nil {
+				return err
+			}
+			s.Reconcile(m)
+
+			var res resultOut
+			if turn > 0 {
+				res, err = retainedResult(s, m, turn)
+				if err != nil {
+					return err
+				}
+			} else {
+				if m.State == job.StateQueued || m.State == job.StateActive {
+					exitNoResult("%s has no result yet", m.ID)
+				}
+				res = resultOut{Job: m.ID, Run: m.Run, State: string(m.State), Result: m.Result}
+				if asJSON {
+					n, err := retainedResultCount(s, m)
+					if err != nil {
+						return err
+					}
+					res.Turn = n
+				}
+			}
+
+			if asJSON {
+				return printJSON(res)
+			}
+			fmt.Print(res.Result)
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
+	c.Flags().IntVar(&turn, "turn", 0, "print the Nth retained turn result (1-based)")
+	return c
+}
+
+func resolveResultJob(s *job.Store, arg string) (*job.Meta, error) {
+	m, jobErr := s.LoadMeta(arg)
+	metas, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	var runJobs []*job.Meta
+	for _, jm := range metas {
+		if jm.Run == arg {
+			runJobs = append(runJobs, jm)
+		}
+	}
+	if jobErr == nil && len(runJobs) > 0 {
+		return nil, fmt.Errorf("%q is both a job id and a run label", arg)
+	}
+	if jobErr == nil {
+		return m, nil
+	}
+	if len(runJobs) == 0 {
+		if err := job.ValidateRunLabel(arg); err != nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("no job or run %q", arg)
+	}
+	newest := runJobs[0]
+	for _, jm := range runJobs[1:] {
+		if jm.Created.After(newest.Created) || (jm.Created.Equal(newest.Created) && jm.Updated.After(newest.Updated)) {
+			newest = jm
+		}
+	}
+	return newest, nil
+}
+
+func retainedResult(s *job.Store, m *job.Meta, turn int) (resultOut, error) {
+	results, err := retainedResults(s, m)
+	if err != nil {
+		return resultOut{}, err
+	}
+	if turn == 0 || turn > len(results) {
+		return resultOut{}, fmt.Errorf("%s turn %d result is not retained", m.ID, turn)
+	}
+	res := results[turn-1]
+	return resultOut{Job: m.ID, Run: m.Run, Turn: turn, State: res.State, Result: res.Result}, nil
+}
+
+func retainedResultCount(s *job.Store, m *job.Meta) (int, error) {
+	results, err := retainedResults(s, m)
+	if err != nil {
+		return 0, err
+	}
+	return len(results), nil
+}
+
+func retainedResults(s *job.Store, m *job.Meta) ([]*adapter.TurnResult, error) {
+	r, err := openRetainedTranscript(s, m)
+	if err != nil {
+		return nil, err
+	}
+	if r == nil {
+		return nil, nil
+	}
+	defer r.Close()
+	ad, err := adapter.New(m.Agent)
+	if err != nil {
+		return nil, err
+	}
+	parser := ad.Parser()
+	var results []*adapter.TurnResult
+	// transcript.jsonl also captures agent stderr. Non-JSON noise is ignored
+	// by the adapters, so replaying it preserves the same parser behavior as
+	// the live runner without treating the transcript as a clean stdout stream.
+	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 256*1024), 16*1024*1024)
+	for sc.Scan() {
+		_, res, perr := parser.Line(sc.Bytes())
+		if perr != nil {
+			continue
+		}
+		if res != nil {
+			results = append(results, res)
+			parser = ad.Parser()
+		}
+	}
+	return results, sc.Err()
+}
+
+func openRetainedTranscript(s *job.Store, m *job.Meta) (io.ReadCloser, error) {
+	plain := filepath.Join(s.JobDir(m.ID), "transcript.jsonl")
+	f, err := os.Open(plain)
+	if err == nil {
+		return f, nil
+	}
+	if !os.IsNotExist(err) {
+		return nil, err
+	}
+	gzf, err := os.Open(plain + ".gz")
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	zr, err := gzip.NewReader(gzf)
+	if err != nil {
+		gzf.Close()
+		return nil, err
+	}
+	return multiReadCloser{Reader: zr, closers: []io.Closer{zr, gzf}}, nil
+}
+
+type multiReadCloser struct {
+	io.Reader
+	closers []io.Closer
+}
+
+func (m multiReadCloser) Close() error {
+	var first error
+	for _, c := range m.closers {
+		if err := c.Close(); first == nil && err != nil {
+			first = err
+		}
+	}
+	return first
+}
+
+func exitNoResult(format string, args ...any) {
+	fmt.Fprintf(os.Stderr, format+"\n", args...)
+	os.Exit(1)
 }
 
 func eventsCmd() *cobra.Command {

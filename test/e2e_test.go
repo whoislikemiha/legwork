@@ -153,6 +153,145 @@ func TestNeedsInputAnswerLoop(t *testing.T) {
 	}
 }
 
+func TestResultPrintsRawJSONAndRunLatest(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"s1"}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":10,"output_tokens":5},"session_id":"s1","result":"line one\nline two\n\nstate: done"}`,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--run", "pipe", "do it"))
+	e.waitState(t, id, "done")
+
+	if out := e.legwork(t, "result", id); out != "line one\nline two" {
+		t.Fatalf("raw result mismatch:\n%q", out)
+	}
+	if out := e.legwork(t, "result", "pipe"); out != "line one\nline two" {
+		t.Fatalf("run result mismatch:\n%q", out)
+	}
+
+	out := e.legwork(t, "result", id, "--json")
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad result json: %v\n%s", err, out)
+	}
+	if got["job"] != id || got["run"] != "pipe" || got["state"] != "done" || got["result"] != "line one\nline two" {
+		t.Fatalf("bad result envelope: %+v", got)
+	}
+}
+
+func TestResultTurnSelectsRetainedTurn(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"s1"}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s1","result":"first report\n\nstate: done"}`,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "first"))
+	e.waitState(t, id, "done")
+
+	e.writeScript(t,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s1","result":"second report\n\nstate: done"}`,
+	)
+	e.legwork(t, "resume", id, "second")
+	e.waitState(t, id, "done")
+
+	if out := e.legwork(t, "result", id); out != "second report" {
+		t.Fatalf("default result should be latest:\n%q", out)
+	}
+	if out := e.legwork(t, "result", id, "--turn", "1"); out != "first report" {
+		t.Fatalf("turn 1 result mismatch:\n%q", out)
+	}
+	if out := e.legwork(t, "result", id, "--turn", "2"); out != "second report" {
+		t.Fatalf("turn 2 result mismatch:\n%q", out)
+	}
+	if out, err := e.legworkErr("result", id, "--turn", "3"); err == nil {
+		t.Fatalf("missing retained turn must fail:\n%s", out)
+	} else if !strings.Contains(out, "turn 3 result is not retained") {
+		t.Fatalf("missing turn error should explain retention:\n%s", out)
+	}
+}
+
+func TestResultTurnReadsCompressedTranscript(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"s1"}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s1","result":"compressed report\n\nstate: done"}`,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "compress me"))
+	e.waitState(t, id, "done")
+
+	cfg := gcConfig(t, "transcript_compress_after = \"0s\"\n")
+	e.gcJSON(t, cfg)
+
+	plain := filepath.Join(e.state, "jobs", id, "transcript.jsonl")
+	if _, err := os.Stat(plain); !os.IsNotExist(err) {
+		t.Fatalf("plain transcript should be compressed away: %v", err)
+	}
+	if _, err := os.Stat(plain + ".gz"); err != nil {
+		t.Fatalf("compressed transcript missing: %v", err)
+	}
+	if out := e.legwork(t, "result", id, "--turn", "1"); out != "compressed report" {
+		t.Fatalf("compressed transcript result mismatch:\n%q", out)
+	}
+}
+
+func TestResultTurnReparseKeepsMissingStatusBlocked(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s1","result":"I totally finished everything!"}`,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "sloppy"))
+	e.waitState(t, id, "blocked")
+
+	out := e.legwork(t, "result", id, "--turn", "1", "--json")
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad result json: %v\n%s", err, out)
+	}
+	if got["state"] != "blocked" || got["result"] != "I totally finished everything!" {
+		t.Fatalf("missing status block did not reparse as blocked: %+v", got)
+	}
+}
+
+func TestResultTurnUsesCodexParserAcrossTurns(t *testing.T) {
+	e := newEnv(t)
+	e.parser = "codex"
+	e.writeScript(t,
+		`{"type":"thread.started","thread_id":"cx-result"}`,
+		`{"type":"item.completed","item":{"type":"agent_message","text":"first codex report\n\nstate: done"}}`,
+		codexDone,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "first"))
+	e.waitState(t, id, "done")
+
+	e.writeScript(t,
+		`{"type":"thread.started","thread_id":"cx-result"}`,
+		`{"type":"item.completed","item":{"type":"agent_message","text":"second codex report\n\nstate: done"}}`,
+		codexDone,
+	)
+	e.legwork(t, "resume", id, "second")
+	e.waitState(t, id, "done")
+
+	if out := e.legwork(t, "result", id, "--turn", "1"); out != "first codex report" {
+		t.Fatalf("codex turn 1 result mismatch:\n%q", out)
+	}
+	if out := e.legwork(t, "result", id, "--turn", "2"); out != "second codex report" {
+		t.Fatalf("codex turn 2 result mismatch:\n%q", out)
+	}
+}
+
+func TestResultRefusesActiveLatestTurn(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t, "#sleep 5000", resultDone)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "slow"))
+
+	if out, err := e.legworkErr("result", id); err == nil {
+		t.Fatalf("active job without latest result must fail:\n%s", out)
+	} else if !strings.Contains(out, "has no result yet") {
+		t.Fatalf("active result error should explain no result:\n%s", out)
+	}
+	e.waitState(t, id, "done")
+}
+
 func TestAckWorkspaceLessTerminalJob(t *testing.T) {
 	e := newEnv(t)
 	e.writeScript(t, resultDone)

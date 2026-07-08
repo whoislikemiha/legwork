@@ -45,6 +45,7 @@ notifier — each `ok | warn | fail | skip`.
 ```bash
 job=$(legwork run --agent claude "the task")     # returns immediately
 legwork status "$job" --json                      # poll, or configure wake-on-event
+legwork result "$job"                             # raw final report once done
 ```
 
 Act on `state`:
@@ -145,6 +146,7 @@ Four read-only surfaces over the same event logs (`runs`/`tail` are ssh-friendly
 `dashboard` needs a TTY, `serve` is a local browser surface):
 
 ```bash
+legwork result <job|run>          # raw final report; run resolves to newest job
 legwork runs                       # one line per --run label: state rollup, cost,
                                    # ctx health, your latest note (the overview)
 legwork tail                       # tail -f across all jobs + run logs, notes
@@ -157,9 +159,11 @@ legwork serve                      # local browser console: prints a localhost U
                                    # GET-only, live via SSE, no mutation endpoints
 ```
 
-Prefer `runs` over `ls` for the pipeline view; `tail --until-idle` replaces a
-status-polling loop; both take `--json`. Prefer `serve` when a human needs a
-run-centered browser view during live multi-agent work. It binds
+Prefer `result` over `status --json` surgery when you need the worker's final
+report; use `--turn N` for an earlier retained turn. Prefer `runs` over `ls` for
+the pipeline view; `tail --until-idle` replaces a status-polling loop; both take
+`--json`. Prefer `serve` when a human needs a run-centered browser view during
+live multi-agent work. It binds
 `127.0.0.1:0` by default; non-loopback `--addr` values require the explicit
 `--allow-remote` opt-in because the page exposes local job paths, tasks, events,
 and results. The v1 browser is observational: answer, resume, diff, close, and

@@ -15,6 +15,7 @@ ws-1
 $ legwork run --workspace ws-1 --agent claude "add rate limiting to the API, run the tests"
 job-7
 $ legwork watch job-7          # live events: tool calls, text, checkpoint, finished
+$ legwork result job-7         # raw final report
 $ legwork diff ws-1            # the reviewable diff (incl. untracked files)
 $ legwork answer job-7 "use the token-bucket approach"   # if it asked
 $ legwork ws commit ws-1 -m "add API rate limiting"
@@ -59,9 +60,10 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   to one line per `--run` label (state, cost, context health, latest note); `tail`
   is `tail -f` across every job and run log, worker events and your notes
   interleaved — `--until-idle` turns it into a scriptable *wait for my pipeline*;
-  `dashboard` is a read-only TUI; `serve` is the local live browser console for
-  human operators during multi-agent runs. Every surface is a renderer over the
-  same JSONL, so they can never disagree.
+  `result <job|run>` prints the worker's final report raw (with `--turn N` for an
+  earlier retained turn); `dashboard` is a read-only TUI; `serve` is the local
+  live browser console for human operators during multi-agent runs. Every surface
+  is a renderer over the same JSONL, so they can never disagree.
 - **Run artifacts stay out of diffs**: `legwork artifact save/list/get --run <label>`
   stores plans, review notes, job maps, and process notes under the state dir's run
   record, not in repo worktrees. v1 accepts UTF-8 text/markdown artifacts; binary
@@ -121,7 +123,7 @@ sandbox anti-workaround guard) itself; don't repeat it in prompts.
 Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
 contract, workspaces/checkpoints/diff/commit/close, runs + narration/artifacts, the
 `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
-job `ack`, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
+job `result`/`ack`, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
 [planning/ROADMAP.md](planning/ROADMAP.md) (the work board — one task per file, plus rejected
 ideas and why); the full design rationale in [DESIGN.md](DESIGN.md).
 

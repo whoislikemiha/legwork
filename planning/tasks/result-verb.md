@@ -31,3 +31,28 @@ not require JSON surgery.
 None.
 
 ## Log
+
+- Implemented `legwork result <job|run>` in `main.go`: raw stdout by default,
+  `--json` envelope, run labels resolving to the newest job, `--turn N` for retained
+  transcript results, and non-zero exit for active/queued jobs with no latest result.
+- Added e2e coverage in `test/e2e_test.go` for raw output, JSON output, run-label
+  resolution, retained turn selection, and active-job refusal.
+- Updated docs in `internal/guide/guide.md`, `skills/legwork/SKILL.md`, and
+  `README.md`.
+- Verification blocked by sandbox read-only Go build cache. Exact failing command:
+  `go test ./test -run 'TestResult' -count=1`; failure:
+  `open /home/miha/.cache/go-build/88/8823b627c5300e97093d7e7ff4f9f7b0ff54aa2c34d487daa81e2abcfe0959a8-d: read-only file system`.
+- Review fix: `retainedResults` now reads retained compressed transcripts by falling
+  back from `transcript.jsonl` to `transcript.jsonl.gz`; added
+  `TestResultTurnReadsCompressedTranscript`.
+- Review fix: default raw `legwork result <job|run>` no longer reparses the transcript
+  just to populate `turn`; the count is computed only for `--json`.
+- Review fix: added e2e coverage for missing-status-block reparse preserving
+  `blocked`, and for codex-parser replay across retained turns.
+- Review fix: lengthened the active-job result refusal test sleep window to avoid CI
+  timing flakes, and made explicit `--turn 0` invalid.
+- Verification passed with sandbox cache override:
+  `GOCACHE=/tmp/lw-go-cache go test ./test -run TestResult -count=1`,
+  `gofmt -l .`, `GOCACHE=/tmp/lw-go-cache go vet ./...`,
+  `GOCACHE=/tmp/lw-go-cache go build ./...`, and
+  `GOCACHE=/tmp/lw-go-cache go test ./... -count=1`.

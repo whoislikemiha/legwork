@@ -31,6 +31,7 @@ legwork status <job> --json              -> state decides your next move:
   failed       read events; retry as a fresh job or escalate
   auth-required tell the human: agent login needed on this machine (claude /login, codex login)
   interrupted  the turn died mid-flight (crash/cancel); session survives -> resume
+legwork result <job|run>                 -> print the final report, raw
 legwork resume <job> "next instruction"  -> another turn in the same session
 ```
 
@@ -243,6 +244,11 @@ ctx-hint      2     1 active · 1 done  $2.76  ok  2m    dispatched implementer 
 Jobs with no `--run` collapse into one `(no run)` line. `--json` emits the
 rollup array (`label, jobs, cost_usd, context_high, updated, last_note`).
 
+`result` is the pipe-friendly way to fetch the worker's final report. It prints
+the raw `result` field for a job, or for the newest job in a run label; use
+`--turn N` for an earlier retained turn and `--json` when a script needs an
+envelope.
+
 `tail` follows the merged stream — worker events and your notes interleaved by
 time, newest at the bottom. It backfills the last `-n` events (default 30) then
 follows live. Scope with `--run <label>` or `--job <id>`; add `--full` for the
@@ -283,7 +289,8 @@ doctor [--agent A] [--model M] [--dir R] [--no-probe]   (preflight before dispat
 run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P] [--effort E] [--fallback-model M] <task>
 resume <job> <msg>   answer <job> <msg>   cancel <job>
-status <job>         events <job|run> [--run] [--since N]   ls   watch <job>
+status <job>         result <job|run> [--turn N]            ls   watch <job>
+events <job|run> [--run] [--since N]
 ack <job> [--force] [--json]
 runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]
 dashboard            serve [--addr 127.0.0.1:0] [--allow-remote]
