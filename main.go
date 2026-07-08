@@ -46,14 +46,14 @@ jobs, observe structured events, review diffs, steer with follow-up turns.
 The loop: run -> (notification or status) -> done? verify : answer/resume -> close.
 Run 'legwork guide' for the full orchestrator guide (notifications, workspaces,
 health, recipes).`,
-		Version:       version,
+		Version:       versionSummary(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), approveCmd(), statusCmd(), eventsCmd(),
 		resultCmd(), lsCmd(), watchCmd(), cancelCmd(), ackCmd(), wsCmd(), diffCmd(), closeCmd(),
 		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd(),
-		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd())
+		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd(), versionCmd())
 	return root
 }
 

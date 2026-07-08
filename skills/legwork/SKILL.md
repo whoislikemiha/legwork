@@ -10,6 +10,10 @@ instantly, read structured events, act on the final state. Every command works o
 ssh (`ssh host legwork ...`) and takes `--json`. Full built-in reference:
 `legwork guide`.
 
+When recording field notes or diagnosing version skew, run `legwork version --json`.
+It reports version (or `dev`), commit, dirty flag, and date, with Go VCS metadata as
+the fallback for ordinary local builds.
+
 ## Rules of engagement
 
 - **Your task prompt is only the task.** legwork injects the worker contract itself

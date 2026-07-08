@@ -5,6 +5,10 @@ legwork runs headless coding-agent turns (claude, codex, fake) as supervised
 and a final state, you steer with new turns. Locally or over ssh — every command
 below works as `ssh host legwork ...`. All verbs take `--json`.
 
+Record `legwork version --json` in field notes and handoffs when build identity
+matters. It reports the release version (or `dev`), commit, dirty flag, and date;
+ordinary `go build`/`go install` builds fall back to Go's embedded VCS metadata.
+
 Agents differ; legwork normalizes them, it doesn't pretend they're identical.
 `--agent claude` uses a permission mode; `--agent codex` runs in a kernel sandbox
 (`--read-only` → codex's read-only sandbox, otherwise workspace-write) and both

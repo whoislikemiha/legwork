@@ -33,3 +33,9 @@ flag, build date. "Which build are you on" must not require file-mtime forensics
 None.
 
 ## Log
+
+## Friction
+
+- Verification prompt required `GOCACHE=/tmp/lw-go-cache`, but that path was read-only
+  in this codex sandbox; a writable per-job cache plus the existing module cache was
+  needed to run vet/tests without network.

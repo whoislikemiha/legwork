@@ -122,7 +122,9 @@ It covers the run→observe→steer loop, hooking notifications up as your wake-
 signal, workspace review flow, and health recipes (spotting and recovering a
 poisoned-context worker). Preflight a machine before dispatching with
 `legwork doctor` (agent binary, auth, model, state dir, notifier — machine-readable,
-stable exit codes). Smoke-test any setup without API spend:
+stable exit codes). Record `legwork version --json` in field notes when build
+identity matters; it prints version (or `dev`), commit, dirty flag, and date.
+Smoke-test any setup without API spend:
 `legwork run --agent fake "test"`.
 
 A loadable skill for agent harnesses ships at
