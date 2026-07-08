@@ -69,9 +69,8 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Workspace-less jobs can be acknowledged**: `legwork ack <job>` marks a terminal
   planner/reviewer/read-only job closed and stamps the retention anchor. `close`
   stays workspace-only because it also records the disposition and reclaims local
-  workspace cache.
-  Both `ack` and workspace `close` best-effort remove each closed job's per-job
-  temp/cache tree while preserving events, transcripts, and artifacts.
+  workspace cache. Both `ack` and workspace `close` best-effort remove each closed
+  job's per-job temp/cache tree while preserving events, transcripts, and artifacts.
 - **Wake-on-event**: a configurable notifier command receives JSON payloads — point
   it at ntfy for your phone, or at whatever re-invokes your orchestrator.
 - **A presentation layer that finds the story**: `runs` rolls a whole pipeline up

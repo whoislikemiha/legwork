@@ -104,3 +104,10 @@ recipes concurrently guarantees three-way doc conflicts) and after `rules-verb`
   zero API spend. `gofmt`/`go vet` clean; full suite green except the known
   pre-existing `TestCodexPassthroughs` teardown race (passed on isolated retry with
   no code change).
+
+## Verdict
+
+Implemented by opus 4.8 high (job-141, $2.33), cross-reviewed by codex gpt-5.5 (job-142):
+**SHIP, zero findings**. Suite green on main. Landed 2026-07-08 via close --merge-into main.
+Dispatch itself dogfooded the norms it documents: task prompt was a pointer, policy arrived via
+--append-prompt-file, nothing restated the contract.

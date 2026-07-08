@@ -174,3 +174,25 @@ Promoted `orchestrator-recipes` (Later/P2 → Next/P1, scope expanded) and
 `append-prompt-file` (Next/P2); recorded the seven wave-1 tasks as In flight
 with their ws/job mapping; took over review + verification + serial landing of
 wave 1.
+
+## Wave 2 close-out (same day)
+
+All four gap-fix tasks landed: `legwork version`, `legwork rules`,
+`--append-prompt-file` (codex gpt-5.5 implementers, `ws review` opus reviewers,
+all SHIP first pass), then `orchestrator-recipes` (opus implementer at high
+effort — prose task, big model; codex cross-review: SHIP, zero findings). The
+guide now carries a `## Recipes` section with the campaign shape, append-prompt
+norms anchored on `legwork rules`, and the preflight facts; the skill and README
+are reconciled. Every gap this file identifies is now either landed or a filed
+board item.
+
+Wave 2 also dogfooded everything wave 1 built, and it held: `ws review`
+replaced the hand-assembled reviewer prompts (one command vs a 15-line script);
+`close --merge-into` landed three workspaces in one step each and its
+conflict path aborted cleanly and restored HEAD when ws-61 collided;
+`result` fed verdict extraction; ws-61's worker reported the structured
+`blocked: {kind: verify}` and routing needed zero prose parsing; a worker
+friction note flagged that my append-prompt's `GOCACHE=/tmp` advice had been
+obsoleted mid-run by wave 1's per-job caches — the tool now outpaces
+orchestrator habits within a single session, which is exactly the drift
+`legwork rules` + the recipes section exist to absorb.

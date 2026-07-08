@@ -27,17 +27,10 @@ run retrospective)*
 
 ## Next
 
-Wave 2 — how-to-orchestrate delivery, seeded by the 2026-07-08 handover analysis
-([field notes](../docs/field-notes-2026-07-08.md)): a top-tier orchestrator spent ~70% of its
-reasoning re-deriving campaign strategy the docs don't carry; smaller orchestrators can't. Lands
-after wave 1 (doc files conflict; two tasks depend on wave-1 contract changes).
-
-- [ ] [Orchestrator recipes + doc consistency](tasks/orchestrator-recipes.md) — **P1, promoted
-  from Later/P2.** The campaign-shape recipe (conflict plan → parallel implement → serial land),
-  append-prompt norms + a worked example, small preflight facts (model defaults, `ws new`
-  concurrency), plus the original F1–F3/E2 recipes. The cheapest capability uplift on the board:
-  moves strategy from per-run frontier-model reasoning into the guide, once (AUDIT E2, F1–F3;
-  field-notes 2026-07-08).
+*(nothing scheduled — both 2026-07-08 waves landed: wave 1 = the seven dogfood-audit tasks,
+wave 2 = the how-to-orchestrate delivery (recipes, `rules`, `version`, `--append-prompt-file`).
+Pick the next batch from Later; quality-receipts and the truthful health signal are the
+standing P1s.)*
 
 ## Later
 

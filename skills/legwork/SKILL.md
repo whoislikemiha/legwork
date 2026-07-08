@@ -95,6 +95,9 @@ legwork resume <job> "fix review finding Y"                 # same lineage
 legwork ws commit "$ws" -m "message" --json   # records final_commit; refuses empty
 legwork close "$ws" --merge-into main  # no-ff merge locally, records closed_at/merged_into
                                        # and closes; --discard throws work away
+legwork close "$ws" --merged --reason "landed" # work landed by another path: verified
+                                       # against the default branch (--into <ref>
+                                       # to override); drops the local checkout
 ```
 
 One active job per workspace; parallelism = multiple workspaces. `close` refuses
