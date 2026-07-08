@@ -38,3 +38,12 @@ while here.
 None. Mechanical for the tmp part; the hang diagnosis may need a live repro.
 
 ## Log
+
+- Implemented per-job `jobs/<id>/tmp` creation in the runner and inject `TMPDIR` into every agent process. Codex turns also get `GOCACHE`, `GOMODCACHE`, and `GOTMPDIR` under that temp tree; workspace-write codex turns add the temp tree as a sandbox writable root so caches stay out of the reviewed worktree.
+- Cleanup: `ack` and workspace `close` remove each closed job's temp/cache tree while leaving events, transcripts, and artifacts on the normal retention path.
+- Files touched: `internal/runner/runner.go`, `internal/adapter/adapter.go`, `internal/adapter/codex.go`, `internal/job/job.go`, `internal/adapter/codex_test.go`, `internal/runner/runner_test.go`, `test/e2e_test.go`, `internal/guide/guide.md`, `skills/legwork/SKILL.md`, `README.md`.
+- Tests added: runner unit coverage for temp layout/env merging, Codex command coverage for workspace-write writable-root config and absence of inert read-only writable-root config, and e2e coverage that `ack` removes the job temp dir.
+- anyio/FastAPI `TestClient` hang hypothesis: because the hang was observed in a different Python/FastAPI repo and not reproducible in this Go workspace, I did not attempt a local repro. If the hang persists after writable `TMPDIR`, the likely root is Codex sandbox syscall policy around thread creation and/or `socketpair`/loopback primitives used by `anyio.start_blocking_portal`, not temp-file creation. The next confirmation should run the original FastAPI test under a real Codex workspace-write job with this change; if temp/cache writes succeed but the portal still stalls, inspect denied syscalls or socket/thread restrictions in the sandbox.
+- Review fix 1/3/4: verified against local Codex 0.142.5 help/binary strings that writable roots are a workspace-write facility and no read-only writable-root exception is exposed. Stopped emitting inert `sandbox_workspace_write.*` keys on codex read-only turns, changed the read-only unit test to assert those keys are absent, and documented the codex read-only asymmetry in the guide, README, and skill.
+- Review fix 2: per orchestrator instruction for this follow-up, skipped real codex/claude smoke checks; orchestrator will run them outside this sandbox.
+- Review fix 5: made job temp cleanup best-effort after close metadata/event recording so `ack`/workspace close cannot be wedged by a transient `RemoveAll` failure.

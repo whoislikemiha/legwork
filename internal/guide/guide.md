@@ -9,8 +9,13 @@ Agents differ; legwork normalizes them, it doesn't pretend they're identical.
 `--agent claude` uses a permission mode; `--agent codex` runs in a kernel sandbox
 (`--read-only` → codex's read-only sandbox, otherwise workspace-write) and both
 fork sessions and run subagents. The loop, states, resume, and status block are
-identical across agents. On codex's subscription auth, per-turn cost is nominal
-(reported as 0) — watch `context`, not cost.
+identical across agents. Every turn gets a per-job `TMPDIR`; in codex
+workspace-write turns that temp tree is added as a writable sandbox root, and
+codex also gets per-job `GOCACHE`, `GOMODCACHE`, and `GOTMPDIR` there so
+build/test caches stay out of reviewed worktrees. Codex read-only is stricter:
+the sandbox has no writable-root exception, so temp-writing test suites may still
+need a workspace-write review/verification turn. On codex's subscription auth,
+per-turn cost is nominal (reported as 0) — watch `context`, not cost.
 
 **Your task prompt is ONLY the task.** legwork itself injects the worker's rules —
 the status block contract (`state: done|needs-input|blocked`), ask-early behavior,
@@ -153,6 +158,8 @@ only: workspace jobs are acknowledged by closing their workspace. `close`
 unless `--preserve` or `--keep-worktree` is set — you own that call. `gc`
 **reclaims opportunistically**: closed and provably-orphaned things only,
 **never unclosed work**.
+`ack` and `close` also remove each closed job's per-job temp/cache tree; events,
+transcripts, and artifacts remain on the normal retention path.
 
 ```
 legwork ack job-14            -> mark reviewed terminal workspace-less job closed

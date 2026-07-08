@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -135,10 +136,16 @@ func Run(store *job.Store, id string) error {
 		Effort:        m.Effort,
 		FallbackModel: m.FallbackModel,
 	}
+	tmp, err := prepareJobTemp(dir)
+	if err != nil {
+		return fail(job.StateFailed, "job temp: %v", err)
+	}
+	req.TempDir = tmp.Root
 	cmd, err := ad.Command(req)
 	if err != nil {
 		return fail(job.StateFailed, "command: %v", err)
 	}
+	cmd.Env = tmp.ApplyEnv(cmd.Env, m.Agent)
 
 	transcript, err := os.OpenFile(filepath.Join(dir, "transcript.jsonl"),
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
@@ -249,4 +256,66 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+type jobTemp struct {
+	Root    string
+	GoCache string
+	GoMod   string
+	GoTmp   string
+}
+
+func prepareJobTemp(jobDir string) (jobTemp, error) {
+	t := jobTemp{
+		Root:    filepath.Join(jobDir, "tmp"),
+		GoCache: filepath.Join(jobDir, "tmp", "go-build"),
+		GoMod:   filepath.Join(jobDir, "tmp", "go-mod"),
+		GoTmp:   filepath.Join(jobDir, "tmp", "go-tmp"),
+	}
+	for _, dir := range []string{t.Root, t.GoCache, t.GoMod, t.GoTmp} {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
+			return jobTemp{}, err
+		}
+	}
+	return t, nil
+}
+
+func (t jobTemp) ApplyEnv(base []string, agent string) []string {
+	env := base
+	if len(env) == 0 {
+		env = os.Environ()
+	}
+	overrides := []string{"TMPDIR=" + t.Root}
+	if agent == "codex" {
+		overrides = append(overrides,
+			"GOCACHE="+t.GoCache,
+			"GOMODCACHE="+t.GoMod,
+			"GOTMPDIR="+t.GoTmp,
+		)
+	}
+	return mergeEnv(env, overrides...)
+}
+
+func mergeEnv(base []string, overrides ...string) []string {
+	out := append([]string{}, base...)
+	index := map[string]int{}
+	for i, kv := range out {
+		if eq := strings.IndexByte(kv, '='); eq >= 0 {
+			index[kv[:eq]] = i
+		}
+	}
+	for _, kv := range overrides {
+		eq := strings.IndexByte(kv, '=')
+		if eq < 0 {
+			continue
+		}
+		k := kv[:eq]
+		if i, ok := index[k]; ok {
+			out[i] = kv
+			continue
+		}
+		index[k] = len(out)
+		out = append(out, kv)
+	}
+	return out
 }

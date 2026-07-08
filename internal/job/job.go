@@ -109,6 +109,10 @@ func OpenStore() (*Store, error) {
 
 func (s *Store) JobDir(id string) string { return filepath.Join(s.Root, "jobs", id) }
 
+func (s *Store) TempDir(id string) string { return filepath.Join(s.JobDir(id), "tmp") }
+
+func (s *Store) CleanTemp(id string) error { return os.RemoveAll(s.TempDir(id)) }
+
 func safePathLabel(kind, label string) (string, error) {
 	if label == "" {
 		return "", fmt.Errorf("%s label is required", kind)
@@ -378,13 +382,17 @@ func (s *Store) CloseJobsForWorkspace(wsID string) error {
 	}
 	now := time.Now().UTC()
 	for _, jm := range metas {
-		if jm.Workspace == wsID && jm.State != StateClosed {
+		if jm.Workspace != wsID {
+			continue
+		}
+		if jm.State != StateClosed {
 			jm.State = StateClosed
 			jm.Closed = now
 			if err := s.SaveMeta(jm); err != nil {
 				return err
 			}
 		}
+		s.cleanTempBestEffort(jm.ID)
 	}
 	return nil
 }
@@ -406,7 +414,17 @@ func (s *Store) Close(m *Meta) error {
 		_, _ = log.Append(events.Event{Type: events.TypeClosed, Actor: "orchestrator",
 			Preview: "job acknowledged", Fields: map[string]any{"previous_state": string(prev)}})
 	}
+	s.cleanTempBestEffort(m.ID)
 	return nil
+}
+
+func (s *Store) cleanTempBestEffort(id string) {
+	if err := s.CleanTemp(id); err != nil {
+		if log, lerr := events.Open(filepath.Join(s.JobDir(id), "events.jsonl")); lerr == nil {
+			_, _ = log.Append(events.Event{Type: events.TypeProgress, Actor: "orchestrator",
+				Preview: "temp cleanup failed: " + err.Error()})
+		}
+	}
 }
 
 func Terminal(s State) bool {

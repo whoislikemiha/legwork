@@ -23,7 +23,10 @@ ssh (`ssh host legwork ...`) and takes `--json`. Full built-in reference:
 - **Pick the agent with `--agent`** (`claude` | `codex`). claude uses a permission
   mode; codex runs in a kernel sandbox (`--read-only` → read-only sandbox, else
   workspace-write). Loop, states, resume, status block are identical. On codex's
-  subscription auth, cost is reported as 0 — watch `context` for health.
+  subscription auth, cost is reported as 0 — watch `context` for health. Every job
+  gets a per-job `TMPDIR`; in codex workspace-write turns it is a writable sandbox
+  root with per-job Go cache dirs. Codex read-only has no writable-root exception,
+  so temp-writing suites may need workspace-write verification.
 
 ## Preflight
 
@@ -129,6 +132,8 @@ legwork gc --close-merged      # also close open workspaces whose branch landed 
 gc also auto-runs cheaply on `run`/`resume`/`answer` (git-style, gated ~24h). Its blast
 radius is only what legwork created; repo branches/refs/worktrees are never touched.
 Config: `[gc]` in `config.toml` (`auto`, `auto_interval`, `transcript_retain`, …).
+`ack` and `close` remove each closed job's per-job temp/cache tree while keeping
+events, transcripts, and artifacts on the normal retention path.
 
 ## Health and recovery
 

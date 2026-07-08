@@ -319,6 +319,23 @@ func TestAckWorkspaceLessTerminalJob(t *testing.T) {
 	}
 }
 
+func TestAckRemovesJobTempDir(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t, resultDone)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "uses temp"))
+	e.waitState(t, id, "done")
+
+	tmp := filepath.Join(e.state, "jobs", id, "tmp")
+	if info, err := os.Stat(tmp); err != nil || !info.IsDir() {
+		t.Fatalf("job temp missing before ack: info=%v err=%v", info, err)
+	}
+
+	e.legwork(t, "ack", id)
+	if _, err := os.Stat(tmp); !os.IsNotExist(err) {
+		t.Fatalf("job temp still exists after ack: %v", err)
+	}
+}
+
 func TestAckRefusesNonTerminalWithoutForce(t *testing.T) {
 	e := newEnv(t)
 	e.writeScript(t,

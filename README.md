@@ -34,8 +34,12 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Per-agent, not lowest-common-denominator**: `--agent claude` uses a permission
   mode; `--agent codex` runs in a kernel sandbox (`--read-only` → read-only sandbox,
   else workspace-write) and needs `codex login`. The loop, states, and status-block
-  contract are identical. codex's subscription auth reports cost as 0 — watch
-  `context` for health. Agent-specific passthroughs stay explicit: `--effort`
+  contract are identical. Every job gets a per-job `TMPDIR`; for codex
+  workspace-write turns, that temp tree is a writable sandbox root and codex also
+  gets per-job Go cache dirs (`GOCACHE`, `GOMODCACHE`, `GOTMPDIR`) so build/test
+  caches stay out of reviewed worktrees. Codex read-only has no writable-root
+  exception, so temp-writing suites may need workspace-write verification. codex's
+  subscription auth reports cost as 0 — watch `context` for health. Agent-specific passthroughs stay explicit: `--effort`
   reaches both claude and codex (codex clamps `xhigh`/`max` to its `high` ceiling),
   while `--fallback-model` is claude-only and rejected for codex rather than dropped.
 - **Jobs are detached**: `run` returns an ID immediately; the runner survives your
@@ -54,6 +58,8 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Workspace-less jobs can be acknowledged**: `legwork ack <job>` marks a terminal
   planner/reviewer/read-only job closed and stamps the retention anchor. `close`
   stays workspace-only because it also reclaims worktrees, branches, and refs.
+  Both `ack` and workspace `close` best-effort remove each closed job's per-job
+  temp/cache tree while preserving events, transcripts, and artifacts.
 - **Wake-on-event**: a configurable notifier command receives JSON payloads — point
   it at ntfy for your phone, or at whatever re-invokes your orchestrator.
 - **A presentation layer that finds the story**: `runs` rolls a whole pipeline up

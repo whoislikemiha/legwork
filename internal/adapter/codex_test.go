@@ -142,7 +142,7 @@ func TestCodexParserResultOnce(t *testing.T) {
 func TestCodexCommand(t *testing.T) {
 	// Fresh mutating turn.
 	cmd, err := (&Codex{}).Command(TurnRequest{
-		Task: "do it", SystemPrompt: "RULES", WorkDir: "/tmp/ws",
+		Task: "do it", SystemPrompt: "RULES", WorkDir: "/tmp/ws", TempDir: "/tmp/lw-job/tmp",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -150,7 +150,15 @@ func TestCodexCommand(t *testing.T) {
 	joined := strings.Join(cmd.Args, " ")
 	// Sandbox is a -c override (not -s), since exec resume rejects -s in
 	// codex-cli 0.118.0; same path on fresh and resume turns.
-	for _, want := range []string{"exec", "--json", "--skip-git-repo-check", `-c sandbox_mode="workspace-write"`} {
+	for _, want := range []string{
+		"exec",
+		"--json",
+		"--skip-git-repo-check",
+		`-c sandbox_mode="workspace-write"`,
+		`-c sandbox_workspace_write.writable_roots=["/tmp/lw-job/tmp"]`,
+		`-c sandbox_workspace_write.exclude_tmpdir_env_var=false`,
+		`-c sandbox_workspace_write.exclude_slash_tmp=true`,
+	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("fresh turn missing %q: %v", want, cmd.Args)
 		}
@@ -174,10 +182,13 @@ func TestCodexCommand(t *testing.T) {
 	}
 
 	// Read-only turn.
-	cmd, _ = (&Codex{}).Command(TurnRequest{Task: "plan it", ReadOnly: true})
+	cmd, _ = (&Codex{}).Command(TurnRequest{Task: "plan it", ReadOnly: true, TempDir: "/tmp/lw-job/tmp"})
 	joined = strings.Join(cmd.Args, " ")
 	if !strings.Contains(joined, `-c sandbox_mode="read-only"`) {
 		t.Fatalf("read-only turn must use read-only sandbox: %v", cmd.Args)
+	}
+	if strings.Contains(joined, "sandbox_workspace_write") {
+		t.Fatalf("read-only turn must not carry workspace-write-only writable roots: %v", cmd.Args)
 	}
 	if strings.Contains(joined, "workspace-write") {
 		t.Fatalf("read-only turn must not be writable: %v", cmd.Args)
@@ -194,7 +205,7 @@ func TestCodexCommand(t *testing.T) {
 	}
 
 	// Resume: subcommand + positional id before the stdin marker.
-	cmd, _ = (&Codex{}).Command(TurnRequest{Task: "more", SessionID: "th-42"})
+	cmd, _ = (&Codex{}).Command(TurnRequest{Task: "more", SessionID: "th-42", TempDir: "/tmp/lw-job/tmp"})
 	joined = strings.Join(cmd.Args, " ")
 	if !strings.Contains(joined, "exec resume") {
 		t.Fatalf("resume must use exec resume subcommand: %v", cmd.Args)
@@ -205,6 +216,9 @@ func TestCodexCommand(t *testing.T) {
 	// The -c sandbox override must ride on resume too (exec resume rejects -s).
 	if !strings.Contains(joined, `-c sandbox_mode="workspace-write"`) {
 		t.Fatalf("resume must carry the sandbox_mode override: %v", cmd.Args)
+	}
+	if !strings.Contains(joined, `-c sandbox_workspace_write.writable_roots=["/tmp/lw-job/tmp"]`) {
+		t.Fatalf("resume must carry the writable temp root: %v", cmd.Args)
 	}
 	if strings.Contains(joined, "--sandbox") || strings.Contains(joined, "-s ") {
 		t.Fatalf("resume must not use the -s/--sandbox flag: %v", cmd.Args)

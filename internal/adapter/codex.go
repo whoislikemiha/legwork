@@ -54,6 +54,13 @@ func (c *Codex) Command(req TurnRequest) (*exec.Cmd, error) {
 		sandbox = "read-only"
 	}
 	args = append(args, "-c", "sandbox_mode=\""+sandbox+"\"")
+	if req.TempDir != "" && !req.ReadOnly {
+		args = append(args,
+			"-c", "sandbox_workspace_write.writable_roots=["+tomlString(req.TempDir)+"]",
+			"-c", "sandbox_workspace_write.exclude_tmpdir_env_var=false",
+			"-c", "sandbox_workspace_write.exclude_slash_tmp=true",
+		)
+	}
 	if req.Model != "" {
 		args = append(args, "-m", req.Model)
 	}
@@ -90,6 +97,12 @@ func codexEffort(e string) string {
 		return "high"
 	}
 	return ""
+}
+
+func tomlString(s string) string {
+	s = strings.ReplaceAll(s, `\`, `\\`)
+	s = strings.ReplaceAll(s, `"`, `\"`)
+	return `"` + s + `"`
 }
 
 func (c *Codex) Parser() Parser { return &codexParser{} }
