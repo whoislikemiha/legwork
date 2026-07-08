@@ -60,3 +60,10 @@ quality-receipts task.
 ## Friction
 
 - Running Go verification used the default `GOCACHE` outside the writable workspace and failed on a read-only cache; worker instructions say to stop rather than set a writable cache ad hoc. A per-job writable Go cache/TMPDIR default would let workers verify without policy ambiguity.
+
+## Verdict
+
+Review job-124 (opus, high): **SHIP** first pass. Orchestrator verification: suite green in
+worktree and on main after merge (README/guide conflicts vs ws-58/ws-59 resolved by union;
+one pre-existing flake TestCodexPassthroughs teardown race, 5/5 green on retry). Landed on
+main 2026-07-08 via merge of legwork/ws-54.

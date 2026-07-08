@@ -27,9 +27,6 @@ sandbox verification (read-only `GOCACHE` — the *cannot-verify* case, itself o
 Awaiting independent review + orchestrator verification outside the sandbox + serial landing,
 most-isolated first.
 
-- [ ] [`ws review` verb](tasks/ws-review-verb.md) — **P1.** `ws-54` / `job-116`. First-class
-  independent reviewer over the workspace diff. The corpus's strongest quality signal: 3/8
-  first-pass SHIP; review caught real bugs on ~62% of first passes (AUDIT D1).
 - [ ] [Structured `blocked` reasons + `needs-provision`](tasks/structured-blocked-provision.md) —
   **P0/P1.** `ws-57` / `job-119`. `blocked: {kind: provision|verify|decision, detail}` so routing
   is scriptable; the "verify" case is the most common — 7/7 in wave 1 (AUDIT A3).
