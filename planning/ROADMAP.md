@@ -42,9 +42,6 @@ after wave 1 (doc files conflict; two tasks depend on wave-1 contract changes).
   contract verbatim. "Never paraphrase the contract" is unfollowable when the contract text
   lives only in Go source — even Opus-high restated contract territory in its append-prompt
   minutes after acknowledging the rule (field-notes 2026-07-08). After wave 1's contract changes.
-- [ ] [Version stamping](tasks/version-stamp.md) — **P2, small, promoted.** `legwork version` =
-  commit + dirty + date. CLAUDE.md already tells orchestrators to record it — dangling reference
-  — and "is my binary current?" burns a detour on every cold start.
 - [ ] [`--append-prompt-file`](tasks/append-prompt-file.md) — **P2, small, new.** Multi-line
   append-prompts from a file/stdin instead of shell quoting; the silent-degradation footgun
   (field-notes 2026-07-08).
