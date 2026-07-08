@@ -56,3 +56,10 @@ None.
   `gofmt -l .`, `GOCACHE=/tmp/lw-go-cache go vet ./...`,
   `GOCACHE=/tmp/lw-go-cache go build ./...`, and
   `GOCACHE=/tmp/lw-go-cache go test ./... -count=1`.
+
+## Verdict
+
+Review job-123 (opus, high): FIX round 1 (gz-transcript gap, hot-path parse, missing
+blocked-invariant/codex-parser tests, flaky timing, --turn 0); all addressed; job-130: **SHIP**
+round 2. Orchestrator verification: suite green in worktree and on main after merge.
+Landed on main 2026-07-08 via merge of legwork/ws-53 (b187c5a).

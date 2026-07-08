@@ -27,9 +27,6 @@ sandbox verification (read-only `GOCACHE` — the *cannot-verify* case, itself o
 Awaiting independent review + orchestrator verification outside the sandbox + serial landing,
 most-isolated first.
 
-- [ ] [`result` verb](tasks/result-verb.md) — **P1.** `ws-53` / `job-115`. `legwork result
-  <job|run>` prints the final report raw; kills the `status --json | python -c` pipeline (the
-  most-repeated command of the 2026-07-08 session). Pairs with `wait`.
 - [ ] [`ws review` verb](tasks/ws-review-verb.md) — **P1.** `ws-54` / `job-116`. First-class
   independent reviewer over the workspace diff. The corpus's strongest quality signal: 3/8
   first-pass SHIP; review caught real bugs on ~62% of first passes (AUDIT D1).
