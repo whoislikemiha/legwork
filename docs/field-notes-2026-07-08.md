@@ -118,6 +118,24 @@ identified as the one that costs quality). The cheapest capability uplift
 legwork can buy is not a verb — it's moving the campaign strategy from
 expensive model reasoning into the guide/skill, once, correctly.
 
+## Worker friction harvest (wave 1)
+
+Five of seven task files carried `## Friction`; deduped:
+
+- **Writable Go cache, unanimously.** Every note is a variation of "default
+  `GOCACHE` is read-only, verification dies before compiling" — the
+  writable-tmpdir task confirmed from the worker seat, five independent times.
+- **Real-agent smoke checks can't run from inside a worker sandbox** (ws-55,
+  ws-57): nested codex fails writing PATH aliases before producing a result,
+  and detached-runner waits outlive short wrapper commands. Consequence for
+  docs: the AGENTS.md real-agent verification is *orchestrator-side by
+  construction* — say so explicitly in the recipes, so workers stop attempting
+  it and orchestrators stop asking them to.
+- **Codex environment-setup failure is invisible in the state model** (ws-57):
+  the PATH-alias failure surfaced as a bare `interrupted`, indistinguishable
+  from an agent crash without reading runner output. Filed mentally against the
+  codex-observability remainder; promote if it recurs.
+
 ## Actions taken
 
 Promoted `orchestrator-recipes` (Later/P2 → Next/P1, scope expanded) and
