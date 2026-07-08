@@ -85,7 +85,9 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Run artifacts stay out of diffs**: `legwork artifact save/list/get --run <label>`
   stores plans, review notes, job maps, and process notes under the state dir's run
   record, not in repo worktrees. v1 accepts UTF-8 text/markdown artifacts; binary
-  blobs are rejected.
+  blobs are rejected. Long run-specific append prompts can be stored once as an
+  artifact and piped back into dispatch with `--append-prompt-file -`, avoiding
+  multi-line shell quoting.
 - **Context as the health metric**: `ls` shows each session's context footprint
   (`ctx:145k`) — the early-warning signal for a worker spinning in circles. Once a
   job crosses a threshold, `ls` marks it `ctx:180k!` and `status` prints a `hint:`
@@ -138,7 +140,9 @@ $ curl -fsSL https://raw.githubusercontent.com/whoislikemiha/legwork/main/skills
 
 One rule worth knowing before the guide: **your task prompt is only the task** —
 legwork injects the worker contract (status block, ask-early, no commit/push,
-sandbox anti-workaround guard) itself; don't repeat it in prompts.
+sandbox anti-workaround guard) itself; don't repeat it in prompts. Use
+`--append-prompt` for short task-specific additions, or
+`--append-prompt-file <path|->` for multi-line UTF-8 text from a file/stdin.
 
 ## Status
 

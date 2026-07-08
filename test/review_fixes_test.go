@@ -128,6 +128,101 @@ func TestResumePreservesDispatchOptions(t *testing.T) {
 	}
 }
 
+func TestAppendPromptFilePersistsText(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t, resultDone)
+	path := filepath.Join(t.TempDir(), "append-prompt.md")
+	want := "line one\nline two\n"
+	if err := os.WriteFile(path, []byte(want), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--append-prompt-file", path, "task"))
+	m := e.waitState(t, id, "done")
+	if m["append_prompt"] != want {
+		t.Fatalf("append prompt from file not persisted: %q", m["append_prompt"])
+	}
+}
+
+func TestAppendPromptFileReadsStdin(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t, resultDone)
+	want := "stdin line one\nstdin line two\n"
+
+	id := strings.TrimSpace(e.legworkInput(t, want, "run", "--agent", "fake", "--append-prompt-file", "-", "task"))
+	m := e.waitState(t, id, "done")
+	if m["append_prompt"] != want {
+		t.Fatalf("append prompt from stdin not persisted: %q", m["append_prompt"])
+	}
+}
+
+func TestAppendPromptFileRejectsInvalidInputsBeforeAllocatingJob(t *testing.T) {
+	e := newEnv(t)
+	dir := t.TempDir()
+	empty := filepath.Join(dir, "empty.md")
+	invalidUTF8 := filepath.Join(dir, "invalid.md")
+	binary := filepath.Join(dir, "binary.md")
+	if err := os.WriteFile(empty, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(invalidUTF8, []byte{0xff, 0xfe}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(binary, []byte("text\x00more"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name  string
+		input string
+		args  []string
+		want  string
+	}{
+		{
+			name: "mutual exclusion",
+			args: []string{"run", "--agent", "fake", "--append-prompt", "x",
+				"--append-prompt-file", empty, "task"},
+			want: "mutually exclusive",
+		},
+		{
+			name: "empty file",
+			args: []string{"run", "--agent", "fake", "--append-prompt-file", empty, "task"},
+			want: "empty append prompt",
+		},
+		{
+			name: "empty stdin",
+			args: []string{"run", "--agent", "fake", "--append-prompt-file", "-", "task"},
+			want: "empty append prompt",
+		},
+		{
+			name: "invalid utf8",
+			args: []string{"run", "--agent", "fake", "--append-prompt-file", invalidUTF8, "task"},
+			want: "UTF-8 text",
+		},
+		{
+			name: "nul binary",
+			args: []string{"run", "--agent", "fake", "--append-prompt-file", binary, "task"},
+			want: "UTF-8 text",
+		},
+	}
+	for _, tc := range cases {
+		out, err := e.legworkInputErr(tc.input, tc.args...)
+		if err == nil {
+			t.Fatalf("%s: accepted invalid input:\n%s", tc.name, out)
+		}
+		if !strings.Contains(out, tc.want) {
+			t.Fatalf("%s: error %q does not contain %q", tc.name, out, tc.want)
+		}
+	}
+
+	if _, err := os.Stat(filepath.Join(e.state, "jobs", "job-1")); !os.IsNotExist(err) {
+		t.Fatalf("invalid --append-prompt-file allocated job-1: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(e.state, "counters.json")); !os.IsNotExist(err) {
+		t.Fatalf("invalid --append-prompt-file advanced counters: %v", err)
+	}
+}
+
 // The claude-specific passthroughs (--effort, --fallback-model) persist in
 // meta.json and, like the other dispatch options, survive a resume so every
 // turn runs under the same contract.

@@ -61,7 +61,21 @@ func (e *env) legwork(t *testing.T, args ...string) string {
 }
 
 func (e *env) legworkErr(args ...string) (string, error) {
+	return e.legworkInputErr("", args...)
+}
+
+func (e *env) legworkInput(t *testing.T, input string, args ...string) string {
+	t.Helper()
+	out, err := e.legworkInputErr(input, args...)
+	if err != nil {
+		t.Fatalf("legwork %v: %v\n%s", args, err, out)
+	}
+	return out
+}
+
+func (e *env) legworkInputErr(input string, args ...string) (string, error) {
 	cmd := exec.Command(binPath, args...)
+	cmd.Stdin = strings.NewReader(input)
 	cmd.Env = append(os.Environ(),
 		"LEGWORK_STATE_DIR="+e.state,
 		"LEGWORK_FAKE_SCRIPT="+e.script,

@@ -31,3 +31,9 @@ file (or stdin with `-`), so multi-line append-prompts stop riding on shell quot
 None. Small; can ride along with any wave-2 workspace.
 
 ## Log
+
+- 2026-07-08: Implemented for `run` and `ws review`; added validation/tests and synced guide/skill/README.
+
+## Friction
+
+- Verification instructions said to use `GOCACHE=/tmp/lw-go-cache`, but that path was read-only in this worker. The worker-provided Go env already pointed at a writable per-job cache; it would help if the injected sandbox note named the actual writable cache path.

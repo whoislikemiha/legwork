@@ -154,13 +154,17 @@ func wsCmd() *cobra.Command {
 	}
 
 	var reviewAgent, reviewModel, reviewRun, reviewTimeout string
-	var reviewEffort, reviewFallbackModel, reviewAppendPrompt string
+	var reviewEffort, reviewFallbackModel, reviewAppendPrompt, reviewAppendPromptFile string
 	var reviewJSON bool
 	reviewCmd := &cobra.Command{
 		Use:   "review <workspace>",
 		Short: "Dispatch a read-only independent reviewer over the workspace diff",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			resolvedAppendPrompt, err := resolveAppendPrompt(reviewAppendPrompt, reviewAppendPromptFile, cmd.InOrStdin())
+			if err != nil {
+				return err
+			}
 			s, wss, err := openWorkspaces()
 			if err != nil {
 				return err
@@ -185,7 +189,7 @@ func wsCmd() *cobra.Command {
 				Agent: reviewAgent, Task: workspaceReviewPrompt(m.ID, diff),
 				Workspace: m.ID, RunLabel: reviewRun, Timeout: reviewTimeout,
 				Model: reviewModel, Effort: reviewEffort,
-				FallbackModel: reviewFallbackModel, AppendPrompt: reviewAppendPrompt,
+				FallbackModel: reviewFallbackModel, AppendPrompt: resolvedAppendPrompt,
 				ReadOnly: true,
 			})
 			if err != nil {
@@ -205,6 +209,7 @@ func wsCmd() *cobra.Command {
 	reviewCmd.Flags().StringVar(&reviewRun, "run", "", "group the reviewer job under a run label")
 	reviewCmd.Flags().StringVar(&reviewTimeout, "timeout", "", "wall-clock limit for the review turn (e.g. 30m); exceeded -> interrupted")
 	reviewCmd.Flags().StringVar(&reviewAppendPrompt, "append-prompt", "", "orchestrator additions to the injected worker rules")
+	reviewCmd.Flags().StringVar(&reviewAppendPromptFile, "append-prompt-file", "", "read orchestrator additions from a UTF-8 text file, or - for stdin")
 	reviewCmd.Flags().BoolVar(&reviewJSON, "json", false, "JSON output")
 
 	ws.AddCommand(newCmd, lsCmd, commitCmd, reviewCmd)

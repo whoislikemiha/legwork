@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/json"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/spf13/cobra"
 
@@ -169,6 +171,35 @@ func validEffort(e string) bool {
 	return false
 }
 
+func resolveAppendPrompt(appendPrompt, appendPromptFile string, stdin io.Reader) (string, error) {
+	if appendPrompt != "" && appendPromptFile != "" {
+		return "", fmt.Errorf("--append-prompt and --append-prompt-file are mutually exclusive")
+	}
+	if appendPromptFile == "" {
+		return appendPrompt, nil
+	}
+
+	var (
+		b   []byte
+		err error
+	)
+	if appendPromptFile == "-" {
+		b, err = io.ReadAll(stdin)
+	} else {
+		b, err = os.ReadFile(appendPromptFile)
+	}
+	if err != nil {
+		return "", fmt.Errorf("--append-prompt-file: %w", err)
+	}
+	if len(bytes.TrimSpace(b)) == 0 {
+		return "", fmt.Errorf("--append-prompt-file: empty append prompt")
+	}
+	if !utf8.Valid(b) || bytes.Contains(b, []byte{0}) {
+		return "", fmt.Errorf("--append-prompt-file: input must be UTF-8 text")
+	}
+	return string(b), nil
+}
+
 type dispatchOptions struct {
 	Agent         string
 	Task          string
@@ -276,7 +307,7 @@ func dispatchJob(o dispatchOptions) (*job.Meta, error) {
 }
 
 func runCmd() *cobra.Command {
-	var agent, dir, model, appendPrompt, wsID, runLabel, timeout string
+	var agent, dir, model, appendPrompt, appendPromptFile, wsID, runLabel, timeout string
 	var effort, fallbackModel string
 	var readOnly, asJSON bool
 	c := &cobra.Command{
@@ -284,10 +315,14 @@ func runCmd() *cobra.Command {
 		Short: "Start a job; prints the job ID immediately",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			resolvedAppendPrompt, err := resolveAppendPrompt(appendPrompt, appendPromptFile, cmd.InOrStdin())
+			if err != nil {
+				return err
+			}
 			m, err := dispatchJob(dispatchOptions{
 				Agent: agent, Task: args[0], Dir: dir, Workspace: wsID,
 				RunLabel: runLabel, Timeout: timeout, Model: model, Effort: effort,
-				FallbackModel: fallbackModel, AppendPrompt: appendPrompt,
+				FallbackModel: fallbackModel, AppendPrompt: resolvedAppendPrompt,
 				ReadOnly: readOnly,
 			})
 			if err != nil {
@@ -309,6 +344,7 @@ func runCmd() *cobra.Command {
 	c.Flags().StringVar(&effort, "effort", "", "reasoning effort (low|medium|high|xhigh|max); codex clamps xhigh/max to high")
 	c.Flags().StringVar(&fallbackModel, "fallback-model", "", "claude only: model to retry with when overloaded")
 	c.Flags().StringVar(&appendPrompt, "append-prompt", "", "orchestrator additions to the injected worker rules")
+	c.Flags().StringVar(&appendPromptFile, "append-prompt-file", "", "read orchestrator additions from a UTF-8 text file, or - for stdin")
 	c.Flags().BoolVar(&readOnly, "read-only", false, "read-only turn (plan/research)")
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
 	return c

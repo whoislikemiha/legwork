@@ -26,7 +26,8 @@ the status block contract (`state: done|needs-input|blocked`), ask-early behavio
 no-commit/no-push, and the sandbox anti-workaround guard — into every turn. Do not
 repeat or paraphrase any of that in your prompts; a slightly different paraphrase
 competes with the injected contract. Add task-specific guidance with
-`--append-prompt` instead.
+`--append-prompt` instead, or `--append-prompt-file <path|->` for multi-line
+guidance without shell quoting.
 
 ## The loop
 
@@ -45,11 +46,14 @@ legwork resume <job> "next instruction"  -> another turn in the same session
 legwork approve <job> [--timeout 30m]    -> run approved needs-provision command, then resume
 ```
 
-Dispatch options stick for the job's lifetime: `--read-only`, `--append-prompt`,
-`--timeout`, `--effort`, and the claude-only `--fallback-model` are recorded in
-the job and apply to every resumed turn too. The job record also keeps the
-original dispatch prompt (`initial_task` once resumed) and the model —
-`status --json` reconstructs any job cold. `--effort` (`low|medium|high|xhigh|max`)
+Dispatch options stick for the job's lifetime: `--read-only`, `--append-prompt`
+(or `--append-prompt-file`), `--timeout`, `--effort`, and the claude-only
+`--fallback-model` are recorded in the job and apply to every resumed turn too.
+`--append-prompt-file` reads UTF-8 text from a file, or stdin with `-`, rejects
+empty/binary input, and stores the text rather than the path. It is mutually
+exclusive with `--append-prompt`. The job record also keeps the original dispatch
+prompt (`initial_task` once resumed) and the model — `status --json`
+reconstructs any job cold. `--effort` (`low|medium|high|xhigh|max`)
 reaches both claude and codex, but codex's reasoning scale tops out at `high`, so
 `xhigh` and `max` clamp there. `--fallback-model` is claude-specific; passing it
 to `--agent codex` is rejected at dispatch.
@@ -264,6 +268,15 @@ an existing artifact deliberately. v1 accepts UTF-8 text/markdown artifacts and
 rejects binary data. `artifact save/list/get` support `--json`; `save` records an
 `artifact` event in the run log.
 
+For long run-specific append prompts, save the text once as a run artifact and
+reuse it at dispatch:
+
+```
+legwork artifact save --run auth-refactor --name append-prompt.md ./append-prompt.md
+legwork artifact get --run auth-refactor append-prompt.md |
+  legwork run --run auth-refactor --append-prompt-file - --agent claude "task"
+```
+
 ## Watching a pipeline
 
 Four read-only surfaces render the same event logs at different zoom levels.
@@ -335,7 +348,8 @@ Mutation-shaped controls are disabled; answer/resume/diff/close remain CLI actio
 ```
 doctor [--agent A] [--model M] [--dir R] [--no-probe]   (preflight before dispatch)
 run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
-    [--run L] [--append-prompt P] [--effort E] [--fallback-model M] <task>
+    [--run L] [--append-prompt P | --append-prompt-file PATH|-]
+    [--effort E] [--fallback-model M] <task>
 resume <job> <msg>   answer <job> <msg>   approve <job> [--timeout D]   cancel <job>
 status <job>         result <job|run> [--turn N]            ls   watch <job>
 events <job|run> [--run] [--since N]
@@ -343,6 +357,7 @@ ack <job> [--force] [--json]
 runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]
 dashboard            serve [--addr 127.0.0.1:0] [--allow-remote]
 ws new --repo R      ws ls               ws review <ws> [--model M] [--effort high]
+                                          [--append-prompt P | --append-prompt-file PATH|-]
 ws commit <ws> -m M  diff <ws> [--stat]
 close <ws> [--merge-into <branch> [-m <message>]|--merged [--into <ref>] [--force]|--discard|--keep-worktree|--preserve] [--json]
            [--reason TEXT] [--superseded-by ID] [--retention POLICY]

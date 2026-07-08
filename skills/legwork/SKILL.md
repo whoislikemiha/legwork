@@ -18,7 +18,8 @@ the fallback for ordinary local builds.
 
 - **Your task prompt is only the task.** legwork injects the worker contract itself
   (status block, ask-early, no commit/push, sandbox anti-workaround guard). Never
-  repeat or paraphrase it — use `--append-prompt` for task-specific guidance instead.
+  repeat or paraphrase it — use `--append-prompt` for task-specific guidance instead,
+  or `--append-prompt-file <path|->` for multi-line guidance.
 - **Never trust `done` blindly.** Verify: `legwork diff <ws>` non-empty, test runs
   visible in `legwork events <job>`.
 - **Mutating work goes in a workspace.** Plain `run` = scratch dir;
@@ -57,10 +58,11 @@ legwork result "$job"                             # raw final report once done
 
 Act on `state`:
 - `done` — verify, then next phase (`legwork resume "$job" "..."` continues the same
-  session; dispatch options — `--read-only`, `--append-prompt`, `--timeout`,
-  `--effort` (codex clamps xhigh/max to high), `--fallback-model` (claude only),
-  model — stick for every turn), `legwork ack "$job"` for reviewed workspace-less
-  jobs, or `legwork close <ws>` for workspace jobs.
+  session; dispatch options — `--read-only`, `--append-prompt` /
+  `--append-prompt-file`, `--timeout`, `--effort` (codex clamps xhigh/max to high),
+  `--fallback-model` (claude only), model — stick for every turn),
+  `legwork ack "$job"` for reviewed workspace-less jobs, or `legwork close <ws>` for
+  workspace jobs.
 - `needs-input` — `legwork answer "$job" "<decision>"`; escalate to the human only
   if it is genuinely their call.
 - `blocked` — read `legwork status "$job" --json` and inspect `blocked.kind`.
@@ -219,6 +221,15 @@ are not replaced unless `--overwrite` is explicit. v1 stores UTF-8 text/markdown
 artifacts and rejects binary data. `artifact save` records an `artifact` event in
 the run log, so `tail --run <label>` and `events <label> --run` show when the
 record changed.
+
+For long run-specific append prompts, save once as an artifact and reuse it without
+shell quoting:
+
+```bash
+legwork artifact save --run <label> --name append-prompt.md ./append-prompt.md
+legwork artifact get --run <label> append-prompt.md |
+  legwork run --run <label> --append-prompt-file - --agent claude "task"
+```
 
 ## Tips
 
