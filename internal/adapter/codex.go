@@ -190,8 +190,8 @@ func (p *codexParser) Line(raw []byte) ([]events.Event, *TurnResult, error) {
 			// Context footprint of the last call: fresh input + cache reads.
 			res.Context = l.Usage.InputTokens + l.Usage.CachedInputTokens
 		}
-		state, question, rest := ParseStatusBlock(p.lastAgentMsg)
-		res.State, res.Question, res.Result = state, question, rest
+		state, question, blocked, rest := ParseStatusBlock(p.lastAgentMsg)
+		res.State, res.Question, res.Blocked, res.Result = state, question, blocked, rest
 		p.done = true
 		return nil, res, nil
 

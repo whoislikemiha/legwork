@@ -10,7 +10,7 @@ import (
 
 // SchemaVersion stamps every event line; the event index is a stable public
 // interface and must survive format evolution.
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 // Event is one line of a job's or run's events.jsonl — the compact index.
 // Full payloads live in transcript.jsonl; Preview is truncated on purpose.
@@ -27,23 +27,25 @@ type Event struct {
 
 // Event types (families per DESIGN.md §3).
 const (
-	TypeQueued      = "queued"
-	TypeStarted     = "started"
-	TypeFinished    = "finished" // fields.state = done|needs-input|blocked|failed|auth-required
-	TypeInterrupted = "interrupted"
-	TypeClosed      = "closed"
-	TypeNeedsInput  = "needs-input"
-	TypeAnswer      = "answer"
-	TypeResume      = "resume"
-	TypeCancel      = "cancel"
-	TypeText        = "text"      // assistant text (preview)
-	TypeToolCall    = "tool-call" // fields: tool, target
-	TypeProgress    = "progress"
-	TypeUsage       = "usage"      // fields: cost_usd, tokens_in, tokens_out, context
-	TypeNote        = "note"       // orchestrator narration
-	TypeArtifact    = "artifact"   // fields: name, size_bytes
-	TypeCommit      = "commit"     // orchestrator-owned workspace commit
-	TypeCheckpoint  = "checkpoint" // fields: ref, oid
+	TypeQueued         = "queued"
+	TypeStarted        = "started"
+	TypeFinished       = "finished" // fields.state = done|needs-input|blocked|failed|auth-required; v2 may include fields.blocked
+	TypeInterrupted    = "interrupted"
+	TypeClosed         = "closed"
+	TypeNeedsInput     = "needs-input"
+	TypeNeedsProvision = "needs-provision"
+	TypeAnswer         = "answer"
+	TypeApprove        = "approve"
+	TypeResume         = "resume"
+	TypeCancel         = "cancel"
+	TypeText           = "text"      // assistant text (preview)
+	TypeToolCall       = "tool-call" // fields: tool, target
+	TypeProgress       = "progress"
+	TypeUsage          = "usage"      // fields: cost_usd, tokens_in, tokens_out, context
+	TypeNote           = "note"       // orchestrator narration
+	TypeArtifact       = "artifact"   // fields: name, size_bytes
+	TypeCommit         = "commit"     // orchestrator-owned workspace commit
+	TypeCheckpoint     = "checkpoint" // fields: ref, oid
 )
 
 const previewMax = 200

@@ -18,6 +18,7 @@ $ legwork watch job-7          # live events: tool calls, text, checkpoint, fini
 $ legwork result job-7         # raw final report
 $ legwork diff ws-1            # the reviewable diff (incl. untracked files)
 $ legwork answer job-7 "use the token-bucket approach"   # if it asked
+$ legwork approve job-7        # if it needs an explicit provisioning command
 $ legwork ws review ws-1 --model opus    # independent read-only review of the diff
 $ legwork ws commit ws-1 -m "add API rate limiting"
 $ legwork close ws-1 --merge-into main --reason "landed in main" # merges, records, reclaims
@@ -48,6 +49,10 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Every turn ends in a machine-parsed state**: `done`, `needs-input` (with the
   question), `blocked`, `failed`, `auth-required`. A worker asking a clarifying
   question is a normal turn boundary — `answer` continues the same session.
+  Blocked turns can carry `blocked.kind` (`provision`, `verify`, `decision`);
+  provision blocks include an exact command and require explicit
+  `legwork approve <job>` before legwork runs it outside the sandbox, bounded by
+  `--timeout`, and resumes.
 - **Workspaces are review gates**: one worktree + one branch + one diff + one close.
   Workers never commit; the orchestrator reviews the diff directly or dispatches
   `legwork ws review <ws>` for a high-effort read-only reviewer seeded with
@@ -138,9 +143,10 @@ sandbox anti-workaround guard) itself; don't repeat it in prompts.
 Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
 contract, workspaces/checkpoints/diff/review/commit/close, runs + narration/artifacts,
 the `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
-job `result`/`ack`, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next
-lives in [planning/ROADMAP.md](planning/ROADMAP.md) (the work board — one task per file,
-plus rejected ideas and why); the full design rationale in [DESIGN.md](DESIGN.md).
+structured blocked reasons, needs-provision approval, job `result`/`ack`, timeouts,
+`doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
+[planning/ROADMAP.md](planning/ROADMAP.md) (the work board — one task per file, plus rejected
+ideas and why); the full design rationale in [DESIGN.md](DESIGN.md).
 
 ## License
 

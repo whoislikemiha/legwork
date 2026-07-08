@@ -98,3 +98,46 @@ func TestNotifierUnsubscribedEventSilent(t *testing.T) {
 		t.Fatal("notifier fired for an unsubscribed event")
 	}
 }
+
+func TestNeedsProvisionNotifiesBlockedSubscribers(t *testing.T) {
+	e := newEnv(t)
+	sink := filepath.Join(t.TempDir(), "n.jsonl")
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("[notify]\ncommand = \"cat >> "+sink+"\"\nevents = [\"blocked\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.writeScript(t,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s-provision","result":"needs host command\n\nstate: blocked\nblocked: {\"kind\":\"provision\",\"command\":\"printf ok > provisioned.txt\"}"}`,
+	)
+	cmd := exec.Command(binPath, "run", "--agent", "fake", "provision")
+	cmd.Env = append(os.Environ(),
+		"LEGWORK_STATE_DIR="+e.state, "LEGWORK_FAKE_SCRIPT="+e.script, "LEGWORK_CONFIG="+cfgPath)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	id := strings.TrimSpace(string(out))
+	e.waitState(t, id, "blocked")
+
+	deadline := time.Now().Add(5 * time.Second)
+	var payload map[string]any
+	for time.Now().Before(deadline) {
+		if data, err := os.ReadFile(sink); err == nil && len(data) > 0 {
+			if err := json.Unmarshal(data, &payload); err != nil {
+				t.Fatalf("bad notification: %v\n%s", err, data)
+			}
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if payload == nil {
+		t.Fatal("blocked subscriber did not receive needs-provision")
+	}
+	if payload["event"] != "needs-provision" || payload["job"] != id {
+		t.Fatalf("payload = %v", payload)
+	}
+	blocked, ok := payload["blocked"].(map[string]any)
+	if !ok || blocked["kind"] != "provision" || blocked["command"] != "printf ok > provisioned.txt" {
+		t.Fatalf("blocked payload = %v", payload["blocked"])
+	}
+}

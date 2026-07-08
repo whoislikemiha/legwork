@@ -292,6 +292,90 @@ func TestResultRefusesActiveLatestTurn(t *testing.T) {
 	e.waitState(t, id, "done")
 }
 
+func TestNeedsProvisionApproveLoop(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	e.writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"s-provision"}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.01,"usage":{"input_tokens":1,"output_tokens":1},"session_id":"s-provision","result":"dependency install needs the host\n\nstate: blocked\nblocked: {\"kind\":\"provision\",\"command\":\"printf provisioned > provisioned.txt\",\"detail\":\"sandbox cannot provision dependencies\"}"}`,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "install dependency"))
+	m := e.waitState(t, id, "blocked")
+	blocked, ok := m["blocked"].(map[string]any)
+	if !ok || blocked["kind"] != "provision" || blocked["command"] != "printf provisioned > provisioned.txt" {
+		t.Fatalf("provision block not surfaced: %+v", m)
+	}
+
+	e.writeScript(t, resultDone)
+	e.legwork(t, "approve", id)
+	m = e.waitState(t, id, "done")
+	if _, ok := m["blocked"]; ok {
+		t.Fatalf("blocked reason should clear after approve/resume: %+v", m)
+	}
+	got, err := os.ReadFile(filepath.Join(tree, "provisioned.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != "provisioned" {
+		t.Fatalf("provision command wrote %q", got)
+	}
+	evs := e.legwork(t, "events", id)
+	for _, want := range []string{"needs-provision", "approve", "finished"} {
+		if !strings.Contains(evs, want) {
+			t.Fatalf("events missing %q:\n%s", want, evs)
+		}
+	}
+}
+
+func TestApproveProvisionCommandFailureStaysBlocked(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s-provision","result":"host command failed earlier\n\nstate: blocked\nblocked: {\"kind\":\"provision\",\"command\":\"printf failing && exit 7\"}"}`,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "install dependency"))
+	e.waitState(t, id, "blocked")
+
+	out, err := e.legworkErr("approve", id)
+	if err == nil {
+		t.Fatalf("approve must fail when provision command fails:\n%s", out)
+	}
+	if !strings.Contains(out, "provision command failed") {
+		t.Fatalf("approve failure should explain provision command failure:\n%s", out)
+	}
+	m := e.waitState(t, id, "blocked")
+	if blocked, ok := m["blocked"].(map[string]any); !ok || blocked["command"] != "printf failing && exit 7" {
+		t.Fatalf("failed approve should leave provision block intact: %+v", m)
+	}
+	evs := e.legwork(t, "events", id)
+	if !strings.Contains(evs, "approve") || !strings.Contains(evs, "provision command failed") {
+		t.Fatalf("failed approve event missing:\n%s", evs)
+	}
+}
+
+func TestApproveRejectsNonProvisionBlockedJob(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s-verify","result":"suite needs host tmp\n\nstate: blocked\nblocked: {\"kind\":\"verify\",\"detail\":\"go test needs writable cache\"}"}`,
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "verify"))
+	e.waitState(t, id, "blocked")
+
+	out, err := e.legworkErr("approve", id)
+	if err == nil {
+		t.Fatalf("approve must reject verify blocks:\n%s", out)
+	}
+	if !strings.Contains(out, "not needs-provision") {
+		t.Fatalf("approve rejection should explain state:\n%s", out)
+	}
+	m := e.waitState(t, id, "blocked")
+	if blocked, ok := m["blocked"].(map[string]any); !ok || blocked["kind"] != "verify" {
+		t.Fatalf("verify block should remain intact: %+v", m)
+	}
+}
+
 func TestAckWorkspaceLessTerminalJob(t *testing.T) {
 	e := newEnv(t)
 	e.writeScript(t, resultDone)

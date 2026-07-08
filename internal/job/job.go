@@ -60,6 +60,9 @@ type Meta struct {
 	Updated   time.Time `json:"updated"`
 	// Question set when State == needs-input.
 	Question string `json:"question,omitempty"`
+	// Blocked is set when State == blocked and the worker emitted a
+	// structured blocked reason.
+	Blocked *BlockedReason `json:"blocked,omitempty"`
 	// Result is the final status-block-stripped output of the last turn.
 	Result string `json:"result,omitempty"`
 	// Telemetry, cumulative across turns.
@@ -70,6 +73,13 @@ type Meta struct {
 	// Context is the session's footprint after the last turn (not
 	// cumulative): the health metric for spotting spinning workers.
 	Context int `json:"context,omitempty"`
+}
+
+// BlockedReason is the machine-readable reason for StateBlocked.
+type BlockedReason struct {
+	Kind    string `json:"kind,omitempty"` // provision | verify | decision
+	Detail  string `json:"detail,omitempty"`
+	Command string `json:"command,omitempty"` // required for provision
 }
 
 // ContextHigh reports whether the last turn's window crossed the health

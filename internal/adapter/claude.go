@@ -157,8 +157,8 @@ func (p *claudeParser) Line(raw []byte) ([]events.Event, *TurnResult, error) {
 			}
 			return nil, res, nil
 		}
-		state, question, rest := ParseStatusBlock(l.Result)
-		res.State, res.Question, res.Result = state, question, rest
+		state, question, blocked, rest := ParseStatusBlock(l.Result)
+		res.State, res.Question, res.Blocked, res.Result = state, question, blocked, rest
 		return nil, res, nil
 	}
 	return nil, nil, nil

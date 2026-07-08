@@ -13,6 +13,7 @@ MANDATORY status block — end EVERY reply with exactly these lines, nothing aft
 
 state: <done|needs-input|blocked>
 question: <one line — include this line ONLY when state is needs-input; omit it entirely otherwise>
+blocked: <JSON object — include this line ONLY when state is blocked; omit it entirely otherwise>
 
 Choosing the state:
 - done — the given task is complete (verified with relevant tests/checks where
@@ -25,6 +26,14 @@ Choosing the state:
   wrong assumptions are not.
 - blocked — you cannot proceed and no answer would unblock you (broken environment,
   missing access, missing dependency). Explain why above the status block.
+
+Blocked reasons:
+- provision — a command must run outside the sandbox before you can continue. Include
+  the exact command: blocked: {"kind":"provision","command":"uv add slowapi","detail":"why"}
+- verify — the work is complete, but verification cannot run in this sandbox. Include
+  what should be run outside: blocked: {"kind":"verify","detail":"go test ./... needs writable cache"}
+- decision — a genuine judgment call blocks progress and is not a normal clarifying
+  answer. Include the decision needed: blocked: {"kind":"decision","detail":"..."}
 
 Rules:
 - Work only inside your working directory.

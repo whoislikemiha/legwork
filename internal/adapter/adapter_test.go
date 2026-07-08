@@ -11,20 +11,57 @@ func TestParseStatusBlock(t *testing.T) {
 	cases := []struct {
 		in                 string
 		state, question    string
+		blockedKind        string
+		blockedCommand     string
 		restMustNotContain string
 	}{
-		{"all good\n\nstate: done", "done", "", "state:"},
-		{"which db?\n\nstate: needs-input\nquestion: postgres or sqlite?", "needs-input", "postgres or sqlite?", "question:"},
-		{"stuck on X\n\nstate: blocked", "blocked", "", "state:"},
+		{"all good\n\nstate: done", "done", "", "", "", "state:"},
+		{"which db?\n\nstate: needs-input\nquestion: postgres or sqlite?", "needs-input", "postgres or sqlite?", "", "", "question:"},
+		{"stuck on X\n\nstate: blocked", "blocked", "", "", "", "state:"},
+		{`stuck
+
+state: blocked
+blocked: {"kind":"provision","command":"uv add slowapi","detail":"no network"}`, "blocked", "", "provision", "uv add slowapi", "blocked:"},
+		{`verify outside
+
+state: blocked
+blocked: {"kind":"verify","detail":"go test needs writable cache"}`, "blocked", "", "verify", "", "blocked:"},
+		{`choose
+
+state: blocked
+blocked: {"kind":"decision","detail":"which API should be public?"}`, "blocked", "", "decision", "", "blocked:"},
+		{`pretty
+
+state: blocked
+blocked: {
+  "kind": "provision",
+  "command": "npm install",
+  "detail": "network blocked"
+}`, "blocked", "", "provision", "npm install", "blocked:"},
+		{`no command
+
+state: blocked
+blocked: {"kind":"provision","detail":"missing command"}`, "blocked", "", "", "", "blocked:"},
+		{`done?
+
+state: blocked
+blocked: {"kind":"nonsense","command":"rm -rf ."}`, "blocked", "", "", "", "blocked:"},
 		// Missing block: never assume done.
-		{"I finished everything!", "blocked", "", ""},
+		{"I finished everything!", "blocked", "", "", "", ""},
 		// Case-insensitive.
-		{"ok\n\nState: DONE", "done", "", "state:"},
+		{"ok\n\nState: DONE", "done", "", "", "", "state:"},
 	}
 	for _, c := range cases {
-		state, q, rest := ParseStatusBlock(c.in)
+		state, q, blocked, rest := ParseStatusBlock(c.in)
 		if state != c.state || q != c.question {
 			t.Errorf("ParseStatusBlock(%q) = (%s, %q), want (%s, %q)", c.in, state, q, c.state, c.question)
+		}
+		if c.blockedKind == "" {
+			if blocked != nil {
+				t.Errorf("ParseStatusBlock(%q) blocked = %+v, want nil", c.in, blocked)
+			}
+		} else if blocked == nil || blocked.Kind != c.blockedKind || blocked.Command != c.blockedCommand {
+			t.Errorf("ParseStatusBlock(%q) blocked = %+v, want kind=%q command=%q", c.in, blocked, c.blockedKind, c.blockedCommand)
 		}
 		if c.restMustNotContain != "" && strings.Contains(strings.ToLower(rest), c.restMustNotContain) {
 			t.Errorf("rest still contains %q: %q", c.restMustNotContain, rest)

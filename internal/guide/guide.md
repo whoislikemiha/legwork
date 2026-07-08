@@ -32,12 +32,13 @@ legwork run --agent claude "task"        -> prints job ID immediately
 legwork status <job> --json              -> state decides your next move:
   done         verify it (diff, tests in events), then next phase or close
   needs-input  legwork answer <job> "<decision>"   (same session continues)
-  blocked      read status/events; fix the blocker or escalate to the human
+  blocked      inspect status.blocked; approve provision, verify outside, or escalate
   failed       read events; retry as a fresh job or escalate
   auth-required tell the human: agent login needed on this machine (claude /login, codex login)
   interrupted  the turn died mid-flight (crash/cancel); session survives -> resume
 legwork result <job|run>                 -> print the final report, raw
 legwork resume <job> "next instruction"  -> another turn in the same session
+legwork approve <job> [--timeout 30m]    -> run approved needs-provision command, then resume
 ```
 
 Dispatch options stick for the job's lifetime: `--read-only`, `--append-prompt`,
@@ -52,6 +53,14 @@ to `--agent codex` is rejected at dispatch.
 Never trust `done` blindly: verify the diff is non-empty and tests ran (visible as
 tool-call events) before building on it. A missing/unparseable status block surfaces
 as `blocked` — treat it as needs-review, not failure.
+
+Blocked jobs carry `status --json.blocked` when the worker could classify the
+reason: `provision`, `verify`, or `decision`. `provision` includes an exact command
+the sandbox could not run; `legwork approve <job>` is the explicit gate that runs
+that command in the job worktree outside the sandbox, bounded by `--timeout`, and
+resumes the same session. No approval means no command runs. `verify` means the work may be complete but the
+suite needs an outside-sandbox verification run; attach the result with `resume` or
+your run notes. `decision` should be escalated like any other judgment call.
 
 ## Preflight: doctor before you dispatch
 
@@ -92,10 +101,10 @@ Configure the notifier in `~/.config/legwork/config.toml` (or `$LEGWORK_CONFIG`)
 ```toml
 [notify]
 command = "<any shell command>"   # receives a JSON payload on stdin
-events  = ["needs-input", "done", "blocked", "failed", "auth-required", "interrupted"]
+events  = ["needs-input", "needs-provision", "done", "blocked", "failed", "auth-required", "interrupted"]
 ```
 
-The payload: `{"event", "job", "run", "agent", "task", "question", "result",
+The payload: `{"event", "job", "run", "agent", "task", "question", "blocked", "result",
 "cost_usd", "context"}` — often enough to decide without another round-trip.
 
 - **Human notifications**: `command = "jq -r '\"legwork \" + .job + \": \" + .event' | xargs -I{} ntfy publish mytopic {}"`
@@ -323,7 +332,7 @@ Mutation-shaped controls are disabled; answer/resume/diff/close remain CLI actio
 doctor [--agent A] [--model M] [--dir R] [--no-probe]   (preflight before dispatch)
 run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P] [--effort E] [--fallback-model M] <task>
-resume <job> <msg>   answer <job> <msg>   cancel <job>
+resume <job> <msg>   answer <job> <msg>   approve <job> [--timeout D]   cancel <job>
 status <job>         result <job|run> [--turn N]            ls   watch <job>
 events <job|run> [--run] [--since N]
 ack <job> [--force] [--json]

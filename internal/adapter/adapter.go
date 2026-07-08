@@ -1,6 +1,7 @@
 package adapter
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
 	"regexp"
@@ -37,6 +38,7 @@ type TurnRequest struct {
 type TurnResult struct {
 	State     string // done | needs-input | blocked | failed | auth-required
 	Question  string // set when needs-input
+	Blocked   *BlockedReason
 	Result    string // final text with the status block stripped
 	SessionID string
 	CostUSD   float64
@@ -49,6 +51,13 @@ type TurnResult struct {
 	// stale diff = a spinning worker.
 	Context int
 	IsError bool
+}
+
+// BlockedReason is the structured reason emitted with state: blocked.
+type BlockedReason struct {
+	Kind    string `json:"kind,omitempty"` // provision | verify | decision
+	Detail  string `json:"detail,omitempty"`
+	Command string `json:"command,omitempty"` // required for provision
 }
 
 // Adapter normalizes one agent CLI to the legwork contract.
@@ -94,20 +103,22 @@ func New(name string) (Adapter, error) {
 //
 //	state: done | needs-input | blocked
 //	question: <one line, iff needs-input>
+//	blocked: {"kind":"provision|verify|decision",...} (iff blocked)
 //
 // parsed from the tail of the final message.
 var (
 	stateRe    = regexp.MustCompile(`(?mi)^state:\s*(done|needs-input|blocked)\s*$`)
 	questionRe = regexp.MustCompile(`(?mi)^question:\s*(.+)$`)
+	blockedRe  = regexp.MustCompile(`(?mis)^blocked:\s*(\{.*\})\s*$`)
 )
 
 // ParseStatusBlock extracts the status convention from a final message.
 // A missing/unparseable block yields state "blocked" (needs-review): never
 // assume done (DESIGN.md §3).
-func ParseStatusBlock(text string) (state, question, rest string) {
+func ParseStatusBlock(text string) (state, question string, blocked *BlockedReason, rest string) {
 	m := stateRe.FindStringSubmatch(text)
 	if m == nil {
-		return "blocked", "", strings.TrimSpace(text)
+		return "blocked", "", nil, strings.TrimSpace(text)
 	}
 	state = strings.ToLower(m[1])
 	// A question is only meaningful on needs-input; agents sometimes emit
@@ -117,7 +128,29 @@ func ParseStatusBlock(text string) (state, question, rest string) {
 			question = strings.TrimSpace(qm[1])
 		}
 	}
+	if state == "blocked" {
+		if bm := blockedRe.FindStringSubmatch(text); bm != nil {
+			var br BlockedReason
+			if err := json.Unmarshal([]byte(bm[1]), &br); err == nil && validBlockedReason(&br) {
+				br.Kind = strings.ToLower(strings.TrimSpace(br.Kind))
+				br.Detail = strings.TrimSpace(br.Detail)
+				br.Command = strings.TrimSpace(br.Command)
+				blocked = &br
+			}
+		}
+	}
 	rest = stateRe.ReplaceAllString(text, "")
 	rest = questionRe.ReplaceAllString(rest, "")
-	return state, question, strings.TrimSpace(rest)
+	rest = blockedRe.ReplaceAllString(rest, "")
+	return state, question, blocked, strings.TrimSpace(rest)
+}
+
+func validBlockedReason(br *BlockedReason) bool {
+	switch strings.ToLower(strings.TrimSpace(br.Kind)) {
+	case "provision":
+		return strings.TrimSpace(br.Command) != ""
+	case "verify", "decision":
+		return true
+	}
+	return false
 }

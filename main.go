@@ -3,11 +3,14 @@ package main
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -47,7 +50,7 @@ health, recipes).`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), statusCmd(), eventsCmd(),
+	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), approveCmd(), statusCmd(), eventsCmd(),
 		resultCmd(), lsCmd(), watchCmd(), cancelCmd(), ackCmd(), wsCmd(), diffCmd(), closeCmd(),
 		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd(),
 		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd())
@@ -314,6 +317,10 @@ func runCmd() *cobra.Command {
 // --- resume / answer ---
 
 func doResume(id, message, eventType string) (*job.Meta, error) {
+	return doResumeWithEvent(id, message, eventType, events.Truncate(message), nil)
+}
+
+func doResumeWithEvent(id, message, eventType, preview string, fields map[string]any) (*job.Meta, error) {
 	s, err := openStore()
 	if err != nil {
 		return nil, err
@@ -341,7 +348,7 @@ func doResume(id, message, eventType string) (*job.Meta, error) {
 		return nil, err
 	}
 	_, _ = log.Append(events.Event{Type: eventType, Actor: "orchestrator",
-		Preview: events.Truncate(message)})
+		Preview: events.Truncate(preview), Fields: fields})
 	// Task becomes the new turn's instruction; keep the dispatch prompt
 	// recoverable (a cold orchestrator reconstructs jobs from meta alone).
 	if m.InitialTask == "" {
@@ -349,6 +356,7 @@ func doResume(id, message, eventType string) (*job.Meta, error) {
 	}
 	m.Task = message
 	m.Question = ""
+	m.Blocked = nil
 	if err := s.SaveMeta(m); err != nil {
 		return nil, err
 	}
@@ -401,6 +409,124 @@ func answerCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
 	return c
+}
+
+func approveCmd() *cobra.Command {
+	var asJSON bool
+	var provisionTimeout string
+	c := &cobra.Command{
+		Use:   "approve <job>",
+		Short: "Approve a needs-provision command and continue the job",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			timeout, err := time.ParseDuration(provisionTimeout)
+			if err != nil || timeout <= 0 {
+				return fmt.Errorf("--timeout must be a positive duration: %q", provisionTimeout)
+			}
+			s, err := openStore()
+			if err != nil {
+				return err
+			}
+			m, err := s.LoadMeta(args[0])
+			if err != nil {
+				return err
+			}
+			s.Reconcile(m)
+			if m.State == job.StateActive {
+				return fmt.Errorf("%s is active; cancel it first or wait for the turn to end", m.ID)
+			}
+			if m.State == job.StateClosed {
+				return fmt.Errorf("%s is closed", m.ID)
+			}
+			if m.State != job.StateBlocked || m.Blocked == nil || m.Blocked.Kind != "provision" {
+				return fmt.Errorf("%s is %s, not needs-provision", m.ID, m.State)
+			}
+			if strings.TrimSpace(m.Blocked.Command) == "" {
+				return fmt.Errorf("%s needs-provision has no command", m.ID)
+			}
+			if m.Workspace != "" {
+				if active, err := activeJobIn(s, m.Workspace); err != nil {
+					return err
+				} else if active != "" && active != m.ID {
+					return fmt.Errorf("workspace %s has active job %s", m.Workspace, active)
+				}
+			}
+			workDir, err := jobWorkDir(s, m)
+			if err != nil {
+				return err
+			}
+			out, exitCode, runErr := runProvision(workDir, m.Blocked.Command, timeout)
+			fields := map[string]any{
+				"blocked":   m.Blocked,
+				"command":   m.Blocked.Command,
+				"exit_code": exitCode,
+				"output":    events.Truncate(strings.TrimSpace(out)),
+			}
+			if runErr != nil {
+				if log, lerr := events.Open(filepath.Join(s.JobDir(m.ID), "events.jsonl")); lerr == nil {
+					_, _ = log.Append(events.Event{Type: events.TypeApprove, Actor: "orchestrator",
+						Preview: "provision command failed: " + events.Truncate(m.Blocked.Command),
+						Fields:  fields})
+				}
+				return fmt.Errorf("provision command failed: %v\n%s", runErr, strings.TrimSpace(out))
+			}
+			message := "Provisioning command was approved and completed outside the sandbox. Continue the task.\n\nCommand: " + m.Blocked.Command
+			resumed, err := doResumeWithEvent(m.ID, message, events.TypeApprove,
+				"approved provision: "+m.Blocked.Command, fields)
+			if err != nil {
+				return err
+			}
+			if asJSON {
+				return printJSON(resumed)
+			}
+			fmt.Println(resumed.ID)
+			return nil
+		},
+	}
+	c.Flags().StringVar(&provisionTimeout, "timeout", "30m", "wall-clock limit for the provision command")
+	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
+	return c
+}
+
+func jobWorkDir(s *job.Store, m *job.Meta) (string, error) {
+	if m.Workspace != "" {
+		_, wss, err := openWorkspaces()
+		if err != nil {
+			return "", err
+		}
+		wm, err := wss.Load(m.Workspace)
+		if err != nil {
+			return "", err
+		}
+		return wm.Tree, nil
+	}
+	if m.Dir != "" {
+		return m.Dir, nil
+	}
+	dir := filepath.Join(s.JobDir(m.ID), "scratch")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", err
+	}
+	return dir, nil
+}
+
+func runProvision(workDir, command string, timeout time.Duration) (string, int, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	cmd.Dir = workDir
+	out, err := cmd.CombinedOutput()
+	if ctx.Err() == context.DeadlineExceeded {
+		return string(out), -1, fmt.Errorf("timed out after %s", timeout)
+	}
+	exitCode := 0
+	if err != nil {
+		exitCode = 1
+		if ee, ok := err.(*exec.ExitError); ok {
+			exitCode = ee.ExitCode()
+		}
+	}
+	return string(out), exitCode, err
 }
 
 // --- status / events / ls / watch / cancel ---
@@ -456,6 +582,16 @@ func statusCmd() *cobra.Command {
 			}
 			if m.Question != "" {
 				fmt.Printf("question: %s\n", m.Question)
+			}
+			if m.Blocked != nil {
+				fmt.Printf("blocked: %s", m.Blocked.Kind)
+				if m.Blocked.Command != "" {
+					fmt.Printf(" command=%q", m.Blocked.Command)
+				}
+				if m.Blocked.Detail != "" {
+					fmt.Printf(" detail=%q", m.Blocked.Detail)
+				}
+				fmt.Println()
 			}
 			if m.Result != "" {
 				fmt.Printf("result:\n%s\n", m.Result)
@@ -706,7 +842,7 @@ func fmtContext(tokens int) string {
 }
 
 func printEvent(e events.Event) {
-	fmt.Printf("%4d  %s  %-12s %s\n", e.Seq, e.Time.Format("15:04:05"), e.Type, e.Preview)
+	fmt.Printf("%4d  %s  %-16s %s\n", e.Seq, e.Time.Format("15:04:05"), e.Type, e.Preview)
 }
 
 func lsCmd() *cobra.Command {

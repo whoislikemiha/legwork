@@ -113,7 +113,7 @@ legwork ls        # all jobs/workspaces: state, age, health, disk, unclosed nags
 legwork watch     # human: live-rendered stream (index; --full taps transcript)
 legwork diff      # workspace diff; --since-last-review; --at <ckpt>
 legwork answer    # answer a needs-input / needs-decision by ID
-legwork approve   # approve/deny a needs-decision (approval fails closed)
+legwork approve   # approve a needs-provision command (future: needs-decision); fails closed
 legwork cancel    # SIGINT the turn; session survives, resumable
 legwork close     # acknowledge + reclaim (see §8); --merged | --discard | --keep-worktree
 legwork gc        # reclamation per policy; --dry-run; --close-merged (opt-in)
@@ -140,7 +140,7 @@ stable interface so third parties build viewers (waybar, Grafana, `tail -f | jq`
 without us shipping them. Event families:
 
 - Job lifecycle: `queued, started, finished, interrupted, closed` (+ disposition, actor)
-- Turn semantics: `needs-input, needs-decision, blocked, done, failed, auth-required`
+- Turn semantics: `needs-input, needs-provision, needs-decision, blocked, done, failed, auth-required`
 - Activity (from harness hooks, not transcript parsing): `tool-call` (name, target
   file), `file-edited`, `command-run`, `subagent-started/finished` (tagged)
 - Progress: `progress` (worker narration), `phase-complete`, `plan-ready`
@@ -170,7 +170,7 @@ Injected worker rules require every turn to end with a parseable block:
 ```
 state: done | needs-input | blocked
 question: <present iff needs-input>
-tests: <command + result | none>
+blocked: <JSON object iff blocked: kind provision|verify|decision, detail, command>
 ```
 
 Enforcement is per-adapter (**capability flag** `structured-status: enforced |
@@ -222,11 +222,21 @@ task" still gets parseable behavior. Composition per job:
   context) — or escalates to the human if it's genuinely their call. **Escalation chain:
   worker → orchestrator → human**; the human is in the loop *through* the orchestrator
   by default and *around* it (watch/diff/takeover) for independent verification.
+- **Provision-shaped blockers** are explicit gates, not prose: a worker that cannot
+  continue because the sandbox cannot run a required command ends with
+  `state: blocked` plus `blocked.kind=provision` and an exact command. legwork emits
+  `needs-provision`; `legwork approve` runs that command outside the sandbox in the
+  job worktree, then resumes the same session. No approval means no command runs, and
+  failed provision commands leave the job blocked.
+- **Decision-shaped blocked reasons** escalate to the orchestrator/human as judgment
+  calls; today the orchestrator answers with `resume`/`answer` after deciding. Future
+  `needs-decision` support will extend `legwork approve` for permission-shaped
+  judgments rather than conflicting with the provision gate.
 - **Permission-shaped decisions** don't round-trip as text: hooks answer policy
-  questions instantly (deny push, deny out-of-worktree writes);
-  `--permission-prompt-tool` routes genuine judgment calls out as `needs-decision`
-  events answered by `legwork approve` — **approval gates fail closed** (no
-  timeout-proceed).
+  questions instantly (deny push, deny out-of-worktree writes). Future
+  `--permission-prompt-tool` support can route genuine judgment calls out as
+  `needs-decision` events answered by `legwork approve` — **approval gates fail
+  closed** (no timeout-proceed).
 - **Steering**: between turns, `resume` *is* the steering. Mid-turn: `cancel` (SIGINT;
   session survives) + `resume` with correction — the headless Escape key.
 

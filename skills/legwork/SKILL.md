@@ -59,15 +59,22 @@ Act on `state`:
   jobs, or `legwork close <ws>` for workspace jobs.
 - `needs-input` — `legwork answer "$job" "<decision>"`; escalate to the human only
   if it is genuinely their call.
-- `blocked` / `failed` — read `legwork events "$job"`; fix and resume, or start a
-  fresh job.
+- `blocked` — read `legwork status "$job" --json` and inspect `blocked.kind`.
+  `provision` means the worker supplied an exact command; run `legwork approve
+  "$job"` only when you agree to execute it outside the sandbox; use `--timeout` to
+  bound long installs. `verify` means run verification outside the sandbox and attach
+  the result with `resume` or a run note. `decision` should be escalated like any
+  other judgment call.
+- `failed` — read `legwork events "$job"`; fix and resume, or start a fresh job.
 - `auth-required` — tell the human to log the agent in on that machine
   (`claude /login`, `codex login`).
 - `interrupted` — turn died (crash/cancel); session survives, `resume` continues.
 
 Wake-on-event instead of polling: set `[notify] command` in
 `~/.config/legwork/config.toml` to anything that re-invokes you; it receives a JSON
-payload (job, event, question, result, context) on stdin. See `legwork guide`.
+payload (job, event, question, blocked, result, context) on stdin. Subscribe to
+`needs-provision` when you want approval gates to wake the orchestrator. See
+`legwork guide`.
 
 ## Workspace flow (reviewable changes)
 

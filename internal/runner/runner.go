@@ -30,15 +30,19 @@ func finishJob(store *job.Store, m *job.Meta, state string, preview string) {
 			if rl, err := events.Open(path); err == nil {
 				_, _ = rl.Append(events.Event{Type: events.TypeFinished, Actor: "runner",
 					Preview: events.Truncate(preview),
-					Fields:  map[string]any{"job": m.ID, "state": state}})
+					Fields:  finishedFields(m.ID, state, m.Blocked)})
 			}
 		}
 	}
 	if cfg, err := notify.Load(); err == nil {
+		event := state
+		if m.Blocked != nil && m.Blocked.Kind == "provision" {
+			event = events.TypeNeedsProvision
+		}
 		_ = cfg.Send(notify.Payload{
-			Event: state, Job: m.ID, Run: m.Run, Agent: m.Agent,
+			Event: event, Job: m.ID, Run: m.Run, Agent: m.Agent,
 			Task: m.Task, Question: m.Question, Result: events.Truncate(m.Result),
-			CostUSD: m.CostUSD, Context: m.Context,
+			Blocked: m.Blocked, CostUSD: m.CostUSD, Context: m.Context,
 		})
 	}
 }
@@ -217,6 +221,7 @@ func Run(store *job.Store, id string) error {
 	}
 	m.Result = result.Result
 	m.Question = result.Question
+	m.Blocked = toJobBlocked(result.Blocked)
 	m.CostUSD += result.CostUSD
 	m.Turns += result.Turns
 	m.TokensIn += result.TokensIn
@@ -244,11 +249,34 @@ func Run(store *job.Store, id string) error {
 		_, _ = log.Append(events.Event{Type: events.TypeNeedsInput, Actor: "main",
 			Preview: events.Truncate(result.Question)})
 	}
+	if m.Blocked != nil && m.Blocked.Kind == "provision" {
+		_, _ = log.Append(events.Event{Type: events.TypeNeedsProvision, Actor: "main",
+			Preview: events.Truncate(firstNonEmpty(m.Blocked.Command, m.Blocked.Detail)),
+			Fields:  map[string]any{"blocked": m.Blocked}})
+	}
 	_, _ = log.Append(events.Event{Type: events.TypeFinished, Actor: "runner",
 		Preview: events.Truncate(result.Result),
-		Fields:  map[string]any{"state": result.State}})
+		Fields:  finishedFields("", result.State, m.Blocked)})
 	finishJob(store, m, result.State, firstNonEmpty(result.Question, result.Result))
 	return nil
+}
+
+func toJobBlocked(br *adapter.BlockedReason) *job.BlockedReason {
+	if br == nil {
+		return nil
+	}
+	return &job.BlockedReason{Kind: br.Kind, Detail: br.Detail, Command: br.Command}
+}
+
+func finishedFields(id, state string, br *job.BlockedReason) map[string]any {
+	fields := map[string]any{"state": state}
+	if id != "" {
+		fields["job"] = id
+	}
+	if br != nil {
+		fields["blocked"] = br
+	}
+	return fields
 }
 
 func firstNonEmpty(a, b string) string {

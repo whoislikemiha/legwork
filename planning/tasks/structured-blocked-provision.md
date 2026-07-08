@@ -48,3 +48,15 @@ Sequencing: land the `blocked.kind` classification first (read-side, cheap), the
 `worktree.toml` verify-hook idea — coordinate so "verify" blocks shrink from both sides.
 
 ## Log
+
+- Implemented event schema v2 structured blocked reasons and `needs-provision` events; added `legwork approve <job>` to run approved provision commands in the job workdir and resume the same session. Touched `internal/events`, `internal/adapter`, `internal/rules`, `internal/runner`, `internal/job`, `internal/notify`, `main.go`, docs, and e2e tests.
+- Added parser coverage for `blocked: {...}` and an e2e fake-agent approve loop that verifies `status --json.blocked`, `needs-provision`/`approve` events, outside-sandbox command execution in a workspace, and blocked reason clearing after resume.
+- Verification: `GOCACHE=/tmp/legwork-go-build go vet ./...`, `GOCACHE=/tmp/legwork-go-build go build ./...`, and `GOCACHE=/tmp/legwork-go-build go test ./... -count=1` passed. Plain `go test ...` initially failed because `/home/miha/.cache/go-build` is read-only in this sandbox.
+- Real codex plumbing check did not complete in this sandbox: codex exited without a result after `WARNING: proceeding, even though we could not create PATH aliases: Read-only file system (os error 30)`.
+- Review fix pass: addressed findings by parsing multi-line `blocked:` JSON, requiring non-empty commands for actionable `provision`, notifying `blocked` subscribers for `needs-provision`, adding `approve --timeout`, updating DESIGN.md approve/decision semantics, and expanding parser/e2e notifier/approve rejection tests.
+- Verification after review fixes: `gofmt -l .`, `GOCACHE=/tmp/lw-go-cache go vet ./...`, `GOCACHE=/tmp/lw-go-cache go build ./...`, and `GOCACHE=/tmp/lw-go-cache go test ./... -count=1` passed. Per orchestrator instruction, real-agent smoke checks were skipped.
+
+## Friction
+
+- Worker verification hit a read-only default Go build cache; using `/tmp` for `GOCACHE` worked, but the required command shape fails as written in this sandbox.
+- The real codex plumbing check is blocked by codex trying to create PATH aliases on a read-only filesystem before producing a result; legwork surfaces it as `interrupted`, but the worker cannot distinguish this environment setup failure from an agent crash without reading runner output.
