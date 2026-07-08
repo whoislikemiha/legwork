@@ -122,8 +122,8 @@ Early. Implemented: jobs, detached runner, claude + codex + fake adapters, statu
 contract, workspaces/checkpoints/diff/commit/close, runs + narration/artifacts, the
 `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
 job `ack`, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
-[ROADMAP.md](ROADMAP.md) (including rejected ideas and why); the full design
-rationale in [DESIGN.md](DESIGN.md).
+[planning/ROADMAP.md](planning/ROADMAP.md) (the work board — one task per file, plus rejected
+ideas and why); the full design rationale in [DESIGN.md](DESIGN.md).
 
 ## License
 

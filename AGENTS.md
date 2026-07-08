@@ -2,8 +2,42 @@
 
 legwork is a job-control substrate for headless coding agents. Read
 [DESIGN.md](DESIGN.md) before changing architecture — most "why is it like this"
-questions are answered there, and [ROADMAP.md](ROADMAP.md) lists what's next plus
-**rejected ideas with reasons** (don't re-propose those without new arguments).
+questions are answered there, and [planning/ROADMAP.md](planning/ROADMAP.md) is the
+live work board — what's next (one task per file in [planning/tasks/](planning/tasks/))
+plus **rejected ideas with reasons** (don't re-propose those without new arguments). The
+2026-07-08 dogfood review that seeded the current open items is frozen in
+[planning/AUDIT.md](planning/AUDIT.md).
+
+## Dogfooding — you are the user
+
+legwork is developed by running legwork on itself: agents reading this file are the
+target users of the surface they're changing. Every rough edge you hit while doing
+your job is product signal — the current roadmap was largely seeded this way (see
+[planning/AUDIT.md](planning/AUDIT.md)). The two roles touch different surfaces:
+**orchestrators use the CLI; workers never do** — a worker lives inside the contract
+legwork wraps around it (the sandbox, the injected rules, the status protocol, how
+its final report is treated), and that surface is just as much the product.
+
+So while you work, notice friction. Orchestrator-side: a verb you wished existed, a
+status that lied to you, output you had to parse by hand, a wait you had to hand-roll.
+Worker-side: a sandbox limit that blocked legitimate work, a rule that pushed you
+toward a workaround, no way to signal the state you were actually in. Don't silently
+absorb it, and don't fix it mid-task (scope stays with your task) — capture it:
+
+- **Workers**: append a short `## Friction` section to your own task file (the one
+  file in `planning/` you may write) and/or put it in your final report. One or two
+  lines per item: what you were doing, what got in the way, what you wished the tool
+  did instead.
+- **Orchestrators**: harvest `## Friction` sections when landing each task (you're
+  reading the task file to append the verdict anyway — don't let friction get archived
+  unread in `done/`), fold it plus your own into dated field notes
+  (`docs/field-notes-YYYY-MM-DD.md` — the 2026-07-07 one shows the shape), then turn
+  durable items into `planning/tasks/` entries via the ROADMAP. Note the `legwork
+  version` output in the field notes — the tool changes in parallel with use, so
+  friction is only triageable against the build that produced it.
+
+Before proposing, check ROADMAP's rejected ideas — don't re-file those without a new
+argument. "Nothing to report" is a fine outcome; invented feedback is worse than none.
 
 ## Layout
 
@@ -18,6 +52,9 @@ questions are answered there, and [ROADMAP.md](ROADMAP.md) lists what's next plu
 - `test/` — e2e contract suite: builds the real binary, drives it like an
   orchestrator would, fake agent behind it
 - `skills/legwork/SKILL.md` — loadable skill for agent harnesses
+- `planning/` — the work board: `ROADMAP.md` (source of truth; orchestrator is its only
+  writer), one task per file in `tasks/` (goal/design/constraints/blockers — dispatch a
+  worker with "read the task file"), landed tasks move to `done/`, frozen origin in `AUDIT.md`
 
 ## Verify before claiming done
 
