@@ -51,3 +51,12 @@ on it — first pass reviews the whole diff. Structured verdict shape should be 
 quality-receipts task.
 
 ## Log
+
+- Implemented `legwork ws review <ws>` as a read-only workspace-attached job seeded with the current workspace diff, defaulting reviewer effort to `high` and returning normal job output/`--json`.
+- Refactored run dispatch into shared command-layer plumbing so `run` and `ws review` use the same validation, workspace lock, run-event, spawn, and gc path.
+- Added e2e coverage for review job metadata/prompt/run events and for active-workspace lock refusal; updated `internal/guide/guide.md`, `skills/legwork/SKILL.md`, and `README.md`.
+- Verification blocked by sandbox read-only Go cache on exact command: `go test ./test -run 'TestWorkspaceReviewDispatchesReadOnlyDiffJob|TestWorkspaceLock' -count=1` failed with `open /home/miha/.cache/go-build/ee/ee923af65ddaac673e591eb0a4c329a85ea5e98d5c02ff7525461c5ec9371366-d: read-only file system`.
+
+## Friction
+
+- Running Go verification used the default `GOCACHE` outside the writable workspace and failed on a read-only cache; worker instructions say to stop rather than set a writable cache ad hoc. A per-job writable Go cache/TMPDIR default would let workers verify without policy ambiguity.

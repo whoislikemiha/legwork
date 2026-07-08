@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -152,8 +153,82 @@ func wsCmd() *cobra.Command {
 		panic(err)
 	}
 
-	ws.AddCommand(newCmd, lsCmd, commitCmd)
+	var reviewAgent, reviewModel, reviewRun, reviewTimeout string
+	var reviewEffort, reviewFallbackModel, reviewAppendPrompt string
+	var reviewJSON bool
+	reviewCmd := &cobra.Command{
+		Use:   "review <workspace>",
+		Short: "Dispatch a read-only independent reviewer over the workspace diff",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, wss, err := openWorkspaces()
+			if err != nil {
+				return err
+			}
+			m, err := wss.Load(args[0])
+			if err != nil {
+				return err
+			}
+			if m.State == "closed" {
+				return fmt.Errorf("%s is closed", m.ID)
+			}
+			if active, err := activeJobIn(s, m.ID); err != nil {
+				return err
+			} else if active != "" {
+				return fmt.Errorf("%s already has active job %s (one active job per workspace)", m.ID, active)
+			}
+			diff, err := wss.Diff(m, false)
+			if err != nil {
+				return err
+			}
+			jm, err := dispatchJob(dispatchOptions{
+				Agent: reviewAgent, Task: workspaceReviewPrompt(m.ID, diff),
+				Workspace: m.ID, RunLabel: reviewRun, Timeout: reviewTimeout,
+				Model: reviewModel, Effort: reviewEffort,
+				FallbackModel: reviewFallbackModel, AppendPrompt: reviewAppendPrompt,
+				ReadOnly: true,
+			})
+			if err != nil {
+				return err
+			}
+			if reviewJSON {
+				return printJSON(jm)
+			}
+			fmt.Println(jm.ID)
+			return nil
+		},
+	}
+	reviewCmd.Flags().StringVar(&reviewAgent, "agent", "claude", "reviewer agent adapter (claude, codex, fake)")
+	reviewCmd.Flags().StringVar(&reviewModel, "model", "", "reviewer model override (default: agent default)")
+	reviewCmd.Flags().StringVar(&reviewEffort, "effort", "high", "reviewer reasoning effort (low|medium|high|xhigh|max); codex clamps xhigh/max to high")
+	reviewCmd.Flags().StringVar(&reviewFallbackModel, "fallback-model", "", "claude only: reviewer model to retry with when overloaded")
+	reviewCmd.Flags().StringVar(&reviewRun, "run", "", "group the reviewer job under a run label")
+	reviewCmd.Flags().StringVar(&reviewTimeout, "timeout", "", "wall-clock limit for the review turn (e.g. 30m); exceeded -> interrupted")
+	reviewCmd.Flags().StringVar(&reviewAppendPrompt, "append-prompt", "", "orchestrator additions to the injected worker rules")
+	reviewCmd.Flags().BoolVar(&reviewJSON, "json", false, "JSON output")
+
+	ws.AddCommand(newCmd, lsCmd, commitCmd, reviewCmd)
 	return ws
+}
+
+func workspaceReviewPrompt(wsID, diff string) string {
+	if strings.TrimSpace(diff) == "" {
+		diff = "(empty diff)"
+	}
+	return fmt.Sprintf(`You are an independent reviewer for workspace %s.
+
+Review only the workspace diff below. Do not review unrelated tree state unless a finding is directly evidenced by the diff. Look for correctness, security, data loss, concurrency, compatibility, and missing tests. Do not modify files.
+
+Return a structured verdict before the required legwork status block, using exactly this JSON shape:
+{"verdict":"SHIP|FIX","findings":[{"file":"path","line":123,"severity":"critical|high|medium|low","detail":"..."}]}
+
+Use "SHIP" only when there are no findings that should block landing. Use "FIX" when the orchestrator should send the work back for changes. For line, use the nearest changed line; use 0 only when no line applies. Keep findings concise and actionable.
+
+Workspace diff from legwork diff %s:
+`+"```diff"+`
+%s
+`+"```"+`
+`, wsID, wsID, diff)
 }
 
 type workspaceCommitOutput struct {

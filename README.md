@@ -18,6 +18,7 @@ $ legwork watch job-7          # live events: tool calls, text, checkpoint, fini
 $ legwork result job-7         # raw final report
 $ legwork diff ws-1            # the reviewable diff (incl. untracked files)
 $ legwork answer job-7 "use the token-bucket approach"   # if it asked
+$ legwork ws review ws-1 --model opus    # independent read-only review of the diff
 $ legwork ws commit ws-1 -m "add API rate limiting"
 $ legwork close ws-1 --merge-into main --reason "landed in main" # merges, records, reclaims
 ```
@@ -48,14 +49,16 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   question), `blocked`, `failed`, `auth-required`. A worker asking a clarifying
   question is a normal turn boundary — `answer` continues the same session.
 - **Workspaces are review gates**: one worktree + one branch + one diff + one close.
-  Workers never commit; the orchestrator reviews the diff, runs
-  `legwork ws commit <ws> -m <message>` to make an attributed non-empty commit, then
-  lands and closes it. `legwork close <ws> --merge-into main` performs the local
-  `--no-ff` merge and closes in one guarded step: conflicts abort cleanly, dirty
-  target checkouts and self-merges are refused, and `--json` distinguishes
-  `conflict` from `guard-refused`. The workspace `meta.json` records the final
-  commit and close disposition fields (`closed_at`, `reason`, `superseded_by`,
-  `merged_into`, `retention`) for later audit. Bootstrap uses the
+  Workers never commit; the orchestrator reviews the diff directly or dispatches
+  `legwork ws review <ws>` for a high-effort read-only reviewer seeded with
+  `legwork diff <ws>` output and asked for a structured `SHIP|FIX` verdict. Then
+  the orchestrator runs `legwork ws commit <ws> -m <message>` to make an attributed
+  non-empty commit and lands it — `legwork close <ws> --merge-into main` performs
+  the local `--no-ff` merge and closes in one guarded step: conflicts abort
+  cleanly, dirty target checkouts and self-merges are refused, and `--json`
+  distinguishes `conflict` from `guard-refused`. The workspace `meta.json` records
+  the final commit and close disposition fields (`closed_at`, `reason`,
+  `superseded_by`, `merged_into`, `retention`) for later audit. Bootstrap uses the
   [workstree](https://github.com/whoislikemiha/workstree) convention when the repo
   declares it.
 - **Workspace-less jobs can be acknowledged**: `legwork ack <job>` marks a terminal
@@ -133,11 +136,11 @@ sandbox anti-workaround guard) itself; don't repeat it in prompts.
 ## Status
 
 Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
-contract, workspaces/checkpoints/diff/commit/close, runs + narration/artifacts, the
-`runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
-job `result`/`ack`, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
-[planning/ROADMAP.md](planning/ROADMAP.md) (the work board — one task per file, plus rejected
-ideas and why); the full design rationale in [DESIGN.md](DESIGN.md).
+contract, workspaces/checkpoints/diff/review/commit/close, runs + narration/artifacts,
+the `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
+job `result`/`ack`, timeouts, `doctor` preflight, `gc` reclamation, `guide` + skill. What's next
+lives in [planning/ROADMAP.md](planning/ROADMAP.md) (the work board — one task per file,
+plus rejected ideas and why); the full design rationale in [DESIGN.md](DESIGN.md).
 
 ## License
 

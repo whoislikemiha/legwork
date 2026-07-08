@@ -203,6 +203,50 @@ func TestWorkspaceCommitJSON(t *testing.T) {
 	}
 }
 
+func TestWorkspaceReviewDispatchesReadOnlyDiffJob(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+
+	if err := os.WriteFile(filepath.Join(tree, "README.md"), []byte("changed for review\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tree, "review.txt"), []byte("new review target\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.writeScript(t, resultDone)
+
+	out := e.legwork(t, "ws", "review", wsID, "--agent", "fake", "--run", "pipe", "--json")
+	var m map[string]any
+	if err := json.Unmarshal([]byte(out), &m); err != nil {
+		t.Fatalf("bad review json: %v\n%s", err, out)
+	}
+	id := m["id"].(string)
+	if m["workspace"] != wsID || m["run"] != "pipe" || m["agent"] != "fake" {
+		t.Fatalf("review job not attached correctly: %+v", m)
+	}
+	if m["read_only"] != true || m["effort"] != "high" {
+		t.Fatalf("review defaults not persisted: %+v", m)
+	}
+	task := m["task"].(string)
+	for _, want := range []string{
+		"independent reviewer",
+		`"verdict":"SHIP|FIX"`,
+		"changed for review",
+		"review.txt",
+	} {
+		if !strings.Contains(task, want) {
+			t.Fatalf("review prompt missing %q:\n%s", want, task)
+		}
+	}
+	e.waitState(t, id, "done")
+	if evs := e.legwork(t, "events", "pipe", "--run", "--json"); !strings.Contains(evs, id) || !strings.Contains(evs, "queued") {
+		t.Fatalf("run events missing review job:\n%s", evs)
+	}
+}
+
 func TestWorkspaceCommitReportsEventAppendFailure(t *testing.T) {
 	e := newEnv(t)
 	repo := initRepo(t)
@@ -679,6 +723,9 @@ func TestWorkspaceLock(t *testing.T) {
 	// Second concurrent job in the same workspace must be refused.
 	if out, err := e.legworkErr("run", "--agent", "fake", "--workspace", wsID, "second job"); err == nil {
 		t.Fatalf("workspace lock not enforced:\n%s", out)
+	}
+	if out, err := e.legworkErr("ws", "review", wsID, "--agent", "fake"); err == nil {
+		t.Fatalf("workspace review must respect active-job lock:\n%s", out)
 	}
 	// Closing while a job runs must be refused too.
 	if out, err := e.legworkErr("close", wsID, "--discard"); err == nil {

@@ -166,6 +166,112 @@ func validEffort(e string) bool {
 	return false
 }
 
+type dispatchOptions struct {
+	Agent         string
+	Task          string
+	Dir           string
+	Workspace     string
+	RunLabel      string
+	Timeout       string
+	Model         string
+	Effort        string
+	FallbackModel string
+	AppendPrompt  string
+	ReadOnly      bool
+}
+
+func dispatchJob(o dispatchOptions) (*job.Meta, error) {
+	if o.RunLabel != "" {
+		if err := job.ValidateRunLabel(o.RunLabel); err != nil {
+			return nil, err
+		}
+	}
+	if o.Timeout != "" {
+		if _, err := time.ParseDuration(o.Timeout); err != nil {
+			return nil, fmt.Errorf("--timeout: %w", err)
+		}
+	}
+	// --effort reaches both claude and codex (codex clamps xhigh/max to its
+	// "high" ceiling). --fallback-model is claude-specific — codex has no
+	// such flag — so reject it loudly rather than silently dropping it.
+	if o.Agent == "codex" && o.FallbackModel != "" {
+		return nil, fmt.Errorf("--fallback-model is claude-specific; not supported by --agent codex")
+	}
+	if o.Effort != "" && !validEffort(o.Effort) {
+		return nil, fmt.Errorf("--effort: %q not in low|medium|high|xhigh|max", o.Effort)
+	}
+	if o.Dir != "" && o.Workspace != "" {
+		return nil, fmt.Errorf("--dir and --workspace are mutually exclusive")
+	}
+	if _, err := adapter.New(o.Agent); err != nil {
+		return nil, err
+	}
+
+	s, err := openStore()
+	if err != nil {
+		return nil, err
+	}
+	m := &job.Meta{Agent: o.Agent, Task: o.Task, Model: o.Model, Run: o.RunLabel,
+		AppendPrompt: o.AppendPrompt, ReadOnly: o.ReadOnly, Timeout: o.Timeout,
+		Effort: o.Effort, FallbackModel: o.FallbackModel,
+		State: job.StateQueued}
+	if o.Workspace != "" {
+		_, wss, err := openWorkspaces()
+		if err != nil {
+			return nil, err
+		}
+		wm, err := wss.Load(o.Workspace)
+		if err != nil {
+			return nil, err
+		}
+		if wm.State == "closed" {
+			return nil, fmt.Errorf("%s is closed", o.Workspace)
+		}
+		if active, err := activeJobIn(s, o.Workspace); err != nil {
+			return nil, err
+		} else if active != "" {
+			return nil, fmt.Errorf("%s already has active job %s (one active job per workspace)", o.Workspace, active)
+		}
+		m.Workspace = o.Workspace
+	}
+	if o.Dir != "" {
+		abs, err := filepath.Abs(o.Dir)
+		if err != nil {
+			return nil, err
+		}
+		m.Dir = abs
+	}
+
+	id, err := s.NewID()
+	if err != nil {
+		return nil, err
+	}
+	m.ID = id
+	if err := s.Create(m); err != nil {
+		return nil, err
+	}
+	log, err := events.Open(filepath.Join(s.JobDir(id), "events.jsonl"))
+	if err != nil {
+		return nil, err
+	}
+	_, _ = log.Append(events.Event{Type: events.TypeQueued, Actor: "orchestrator",
+		Preview: events.Truncate(m.Task)})
+	if o.RunLabel != "" {
+		if path, err := s.RunEventsPath(o.RunLabel); err == nil {
+			if rl, err := events.Open(path); err == nil {
+				_, _ = rl.Append(events.Event{Type: events.TypeQueued, Actor: "orchestrator",
+					Preview: events.Truncate(m.Task), Fields: map[string]any{"job": id}})
+			}
+		}
+	}
+
+	if err := runner.Spawn(s, m); err != nil {
+		return nil, err
+	}
+	gc.MaybeAuto(s)
+	return m, nil
+}
+
 func runCmd() *cobra.Command {
 	var agent, dir, model, appendPrompt, wsID, runLabel, timeout string
 	var effort, fallbackModel string
@@ -175,96 +281,19 @@ func runCmd() *cobra.Command {
 		Short: "Start a job; prints the job ID immediately",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if runLabel != "" {
-				if err := job.ValidateRunLabel(runLabel); err != nil {
-					return err
-				}
-			}
-			s, err := openStore()
+			m, err := dispatchJob(dispatchOptions{
+				Agent: agent, Task: args[0], Dir: dir, Workspace: wsID,
+				RunLabel: runLabel, Timeout: timeout, Model: model, Effort: effort,
+				FallbackModel: fallbackModel, AppendPrompt: appendPrompt,
+				ReadOnly: readOnly,
+			})
 			if err != nil {
 				return err
 			}
-			id, err := s.NewID()
-			if err != nil {
-				return err
-			}
-			if timeout != "" {
-				if _, err := time.ParseDuration(timeout); err != nil {
-					return fmt.Errorf("--timeout: %w", err)
-				}
-			}
-			// --effort reaches both claude and codex (codex clamps xhigh/max
-			// to its "high" ceiling). --fallback-model is claude-specific —
-			// codex has no such flag — so reject it loudly rather than
-			// silently dropping it.
-			if agent == "codex" && fallbackModel != "" {
-				return fmt.Errorf("--fallback-model is claude-specific; not supported by --agent codex")
-			}
-			if effort != "" && !validEffort(effort) {
-				return fmt.Errorf("--effort: %q not in low|medium|high|xhigh|max", effort)
-			}
-			m := &job.Meta{ID: id, Agent: agent, Task: args[0], Model: model, Run: runLabel,
-				AppendPrompt: appendPrompt, ReadOnly: readOnly, Timeout: timeout,
-				Effort: effort, FallbackModel: fallbackModel,
-				State: job.StateQueued}
-			if dir != "" && wsID != "" {
-				return fmt.Errorf("--dir and --workspace are mutually exclusive")
-			}
-			if wsID != "" {
-				_, wss, err := openWorkspaces()
-				if err != nil {
-					return err
-				}
-				wm, err := wss.Load(wsID)
-				if err != nil {
-					return err
-				}
-				if wm.State == "closed" {
-					return fmt.Errorf("%s is closed", wsID)
-				}
-				if active, err := activeJobIn(s, wsID); err != nil {
-					return err
-				} else if active != "" {
-					return fmt.Errorf("%s already has active job %s (one active job per workspace)", wsID, active)
-				}
-				m.Workspace = wsID
-			}
-			if dir != "" {
-				abs, err := filepath.Abs(dir)
-				if err != nil {
-					return err
-				}
-				m.Dir = abs
-			}
-			if _, err := adapter.New(agent); err != nil {
-				return err
-			}
-			if err := s.Create(m); err != nil {
-				return err
-			}
-			log, err := events.Open(filepath.Join(s.JobDir(id), "events.jsonl"))
-			if err != nil {
-				return err
-			}
-			_, _ = log.Append(events.Event{Type: events.TypeQueued, Actor: "orchestrator",
-				Preview: events.Truncate(m.Task)})
-			if runLabel != "" {
-				if path, err := s.RunEventsPath(runLabel); err == nil {
-					if rl, err := events.Open(path); err == nil {
-						_, _ = rl.Append(events.Event{Type: events.TypeQueued, Actor: "orchestrator",
-							Preview: events.Truncate(m.Task), Fields: map[string]any{"job": id}})
-					}
-				}
-			}
-
-			if err := runner.Spawn(s, m); err != nil {
-				return err
-			}
-			gc.MaybeAuto(s)
 			if asJSON {
 				return printJSON(m)
 			}
-			fmt.Println(id)
+			fmt.Println(m.ID)
 			return nil
 		},
 	}

@@ -76,6 +76,7 @@ ws=$(legwork ws new --repo ~/code/app --json | jq -r .id)   # worktree + branch;
                                                             # runs workstree init if configured
 legwork run --workspace "$ws" --agent claude "implement X"
 legwork diff "$ws"                     # changes vs base, incl. untracked
+legwork ws review "$ws" --model opus    # independent read-only review of that diff
 legwork resume <job> "fix review finding Y"                 # same lineage
 legwork ws commit "$ws" -m "message" --json   # records final_commit; refuses empty
 legwork close "$ws" --merge-into main  # no-ff merge locally, records closed_at/merged_into
@@ -85,6 +86,13 @@ legwork close "$ws" --merge-into main  # no-ff merge locally, records closed_at/
 One active job per workspace; parallelism = multiple workspaces. `close` refuses
 unreviewed changes without an explicit disposition — that's the review gate, don't
 bypass it reflexively.
+
+Use `legwork ws review <ws>` before landing implementer output. It dispatches a
+read-only reviewer job attached to the workspace and seeded with `legwork diff <ws>`
+(including untracked files), defaults to `--effort high`, and asks for a structured
+`SHIP|FIX` verdict with findings. Pass `--model` for the configured big reviewer
+model; the agent default is used when `--model` is omitted. The verb does not
+auto-fix or auto-merge — you route the verdict.
 
 You own git history — workers never commit (the injected contract forbids it;
 don't override with "commit when done"). Review the diff, then use

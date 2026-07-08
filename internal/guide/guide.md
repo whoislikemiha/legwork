@@ -117,6 +117,7 @@ legwork ws new --repo <path>             -> ws-N (runs workstree init if the rep
                                             has worktree.toml; setup failure aborts)
 legwork run --workspace ws-N --agent claude "implement X per plan.md"
 legwork diff ws-N [--stat]               -> changes vs base, incl. untracked files
+legwork ws review ws-N [--model M]       -> read-only independent review over that diff
 legwork resume <job> "review feedback: fix Y"
 legwork ws commit ws-N -m "message" --json -> orchestrator commit, recorded as final_commit
 legwork close ws-N --merge-into main     -> no-ff merge locally, then close as merged
@@ -159,6 +160,15 @@ branch and checkpoint refs should remain available for analysis. Closed branches
 are kept by default; the checkout is disposable cache and is removed unless
 `--keep-worktree` is explicit, which also keeps checkpoint refs for inspection.
 Non-preserved `--discard` is the destructive path that deletes the branch.
+
+Independent review is first-class: `legwork ws review <ws>` dispatches a
+read-only workspace job seeded with `legwork diff <ws>` output, so the reviewer
+starts from the change under review instead of rediscovering it. It defaults to
+`--effort high` and the selected agent's default model; pass `--model` for your
+configured big reviewer model. The reviewer prompt asks for a structured
+`{"verdict":"SHIP|FIX","findings":[...]}` report before the normal status block.
+It does not auto-fix, auto-merge, or own the landing decision — route `FIX` with
+`resume`/a fresh fix job, and land only after your judgment says the diff is ready.
 Scratch/research jobs need no workspace: plain `run` gets a scratch dir;
 `run --dir <path>` works in-place — combine with `--read-only` for plan/research
 turns (harness-enforced: the agent cannot edit).
@@ -319,7 +329,8 @@ events <job|run> [--run] [--since N]
 ack <job> [--force] [--json]
 runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]
 dashboard            serve [--addr 127.0.0.1:0] [--allow-remote]
-ws new --repo R      ws ls               ws commit <ws> -m M      diff <ws> [--stat]
+ws new --repo R      ws ls               ws review <ws> [--model M] [--effort high]
+ws commit <ws> -m M  diff <ws> [--stat]
 close <ws> [--merge-into <branch> [-m <message>]|--merged [--into <ref>] [--force]|--discard|--keep-worktree|--preserve] [--json]
            [--reason TEXT] [--superseded-by ID] [--retention POLICY]
 gc [--dry-run] [--close-merged [--close-merged-into <ref>]] [--json]
