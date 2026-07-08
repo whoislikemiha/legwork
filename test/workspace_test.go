@@ -316,8 +316,10 @@ func TestCloseMergeIntoLandsAndCloses(t *testing.T) {
 	if content, err := os.ReadFile(filepath.Join(repo, "landed.txt")); err != nil || string(content) != "content\n" {
 		t.Fatalf("target branch missing workspace file, content=%q err=%v", content, err)
 	}
-	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out != "" {
-		t.Fatalf("workspace branch not reclaimed: %s", out)
+	// Branch-durable close policy: a merged close keeps the branch and drops
+	// only the local checkout cache.
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out == "" {
+		t.Fatalf("workspace branch must survive a merged close")
 	}
 }
 
