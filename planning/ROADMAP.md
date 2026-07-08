@@ -38,13 +38,6 @@ after wave 1 (doc files conflict; two tasks depend on wave-1 contract changes).
   concurrency), plus the original F1–F3/E2 recipes. The cheapest capability uplift on the board:
   moves strategy from per-run frontier-model reasoning into the guide, once (AUDIT E2, F1–F3;
   field-notes 2026-07-08).
-- [ ] [`legwork rules` verb](tasks/rules-verb.md) — **P1, new.** Print the injected worker
-  contract verbatim. "Never paraphrase the contract" is unfollowable when the contract text
-  lives only in Go source — even Opus-high restated contract territory in its append-prompt
-  minutes after acknowledging the rule (field-notes 2026-07-08). After wave 1's contract changes.
-- [ ] [`--append-prompt-file`](tasks/append-prompt-file.md) — **P2, small, new.** Multi-line
-  append-prompts from a file/stdin instead of shell quoting; the silent-degradation footgun
-  (field-notes 2026-07-08).
 
 ## Later
 
@@ -83,6 +76,10 @@ after wave 1 (doc files conflict; two tasks depend on wave-1 contract changes).
   - **`worktree.toml` verify hook** (P1) — `verify = "…"` run OUTSIDE the sandbox after each turn,
     result attached to job status, so workers/reviewers never run the suite in a sandbox that
     can't (pairs with the "verify" blocked kind and writable-tmpdir).
+  - **`TestCodexPassthroughs` teardown flake** (P2, small) — recurring `TempDir RemoveAll:
+    directory not empty` race between the detached runner's writes and test cleanup (bit 3×
+    on 2026-07-08, in worker sandboxes and on the host; auto-gc already suppressed). Make the
+    test wait for runner exit or retire the job dir teardown-safe.
   - **Codex quota/limit observability** (P2) — classify usage-limit failures (`job-33`/`job-48`)
     distinctly from real failures; support configured reset windows.
   - **Closed-job visibility in `ls`** (P2) — decide whether `ack`'d jobs hide by default with

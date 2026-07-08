@@ -51,3 +51,10 @@ so the verb ships printing the new contract, not a text that changes a day later
 - `go test ./...` repeatedly hit an existing `TestCodexPassthroughs` tempdir cleanup
   race after dispatching a codex job; an isolated rerun split pass/fail without code
   changes, so the full-suite result is noisy.
+
+## Verdict
+
+Review job-138 (ws review, opus): **SHIP** first pass (3 low/optional findings noted, none
+blocking). Suite green on main; claude real-agent smoke green. close --merge-into's conflict
+path dogfooded here: aborted cleanly and restored HEAD; landed by manual merge + close
+--merged --into. Landed 2026-07-08 (merge of legwork/ws-61).

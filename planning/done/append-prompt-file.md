@@ -37,3 +37,9 @@ None. Small; can ride along with any wave-2 workspace.
 ## Friction
 
 - Verification instructions said to use `GOCACHE=/tmp/lw-go-cache`, but that path was read-only in this worker. The worker-provided Go env already pointed at a writable per-job cache; it would help if the injected sandbox note named the actual writable cache path.
+
+## Verdict
+
+Review job-140 (ws review, opus): **SHIP** first pass (one low finding: no ws review
+--append-prompt-file smoke test; shared helper is covered). Suite green on main. Landed
+2026-07-08 via close --merge-into main (659e1b3).
