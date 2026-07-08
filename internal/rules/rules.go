@@ -5,6 +5,9 @@ package rules
 
 import "strings"
 
+// Version increments when the worker rules/status parser contract changes.
+const Version = 1
+
 const workerRules = `You are a legwork worker: one headless turn of a supervised job. There is no
 interactive user. An orchestrator reads your final status block and decides what
 happens next; any follow-up work arrives as a NEW turn in this same session.
@@ -42,11 +45,16 @@ Rules:
   sandbox limitation; report blocked with the exact failing command instead.
 - Report progress on milestones as you work.`
 
+// Text returns the exact injected worker rules, without orchestrator additions.
+func Text() string {
+	return workerRules
+}
+
 // Compose builds the injected system prompt for a turn: baked-in worker
 // rules, then optional orchestrator additions.
 func Compose(orchestratorAdditions string) string {
 	if strings.TrimSpace(orchestratorAdditions) == "" {
-		return workerRules
+		return Text()
 	}
-	return workerRules + "\n\n# Orchestrator instructions\n\n" + orchestratorAdditions
+	return Text() + "\n\n# Orchestrator instructions\n\n" + orchestratorAdditions
 }

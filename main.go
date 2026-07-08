@@ -55,7 +55,7 @@ health, recipes).`,
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), approveCmd(), statusCmd(), eventsCmd(),
 		resultCmd(), lsCmd(), watchCmd(), cancelCmd(), ackCmd(), wsCmd(), diffCmd(), closeCmd(),
 		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd(),
-		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd(), versionCmd())
+		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd(), versionCmd(), rulesCmd())
 	return root
 }
 

@@ -42,3 +42,12 @@ Land after the wave-1 contract changes (anti-workaround rule, structured blocked
 so the verb ships printing the new contract, not a text that changes a day later.
 
 ## Log
+
+## Friction
+
+- The worker instructions said to use `GOCACHE=/tmp/lw-go-cache`, but that path was
+  read-only in this sandbox; a writable per-job `GOCACHE` plus the shared module cache
+  was needed to run Go commands.
+- `go test ./...` repeatedly hit an existing `TestCodexPassthroughs` tempdir cleanup
+  race after dispatching a codex job; an isolated rerun split pass/fail without code
+  changes, so the full-suite result is noisy.

@@ -27,7 +27,8 @@ no-commit/no-push, and the sandbox anti-workaround guard — into every turn. Do
 repeat or paraphrase any of that in your prompts; a slightly different paraphrase
 competes with the injected contract. Add task-specific guidance with
 `--append-prompt` instead, or `--append-prompt-file <path|->` for multi-line
-guidance without shell quoting.
+guidance without shell quoting. Run `legwork rules` to inspect the exact
+contract before writing append-prompt text.
 
 ## The loop
 
@@ -347,6 +348,7 @@ Mutation-shaped controls are disabled; answer/resume/diff/close remain CLI actio
 
 ```
 doctor [--agent A] [--model M] [--dir R] [--no-probe]   (preflight before dispatch)
+rules [--agent A] [--read-only] [--workspace W | --dir D] [--json]
 run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P | --append-prompt-file PATH|-]
     [--effort E] [--fallback-model M] <task>

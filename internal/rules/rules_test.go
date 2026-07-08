@@ -7,6 +7,9 @@ import (
 
 func TestComposeIncludesSandboxAntiWorkaroundRule(t *testing.T) {
 	prompt := Compose("")
+	if prompt != Text() {
+		t.Fatalf("Compose without additions must return the exact rules text")
+	}
 
 	for _, want := range []string{
 		"Do not modify the test harness, build config, or dependencies",
@@ -33,5 +36,11 @@ func TestComposeKeepsOrchestratorAdditionsAfterWorkerRules(t *testing.T) {
 	}
 	if additionIndex < ruleIndex {
 		t.Fatalf("orchestrator addition must follow worker rules:\n%s", prompt)
+	}
+}
+
+func TestRulesVersionIsPositive(t *testing.T) {
+	if Version <= 0 {
+		t.Fatalf("Version = %d, want positive", Version)
 	}
 }

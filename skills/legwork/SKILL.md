@@ -18,8 +18,9 @@ the fallback for ordinary local builds.
 
 - **Your task prompt is only the task.** legwork injects the worker contract itself
   (status block, ask-early, no commit/push, sandbox anti-workaround guard). Never
-  repeat or paraphrase it — use `--append-prompt` for task-specific guidance instead,
-  or `--append-prompt-file <path|->` for multi-line guidance.
+  repeat or paraphrase it — run `legwork rules` to inspect it, then use
+  `--append-prompt` for task-specific guidance only (`--append-prompt-file
+  <path|->` for multi-line guidance).
 - **Never trust `done` blindly.** Verify: `legwork diff <ws>` non-empty, test runs
   visible in `legwork events <job>`.
 - **Mutating work goes in a workspace.** Plain `run` = scratch dir;

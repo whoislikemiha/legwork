@@ -140,9 +140,10 @@ $ curl -fsSL https://raw.githubusercontent.com/whoislikemiha/legwork/main/skills
 
 One rule worth knowing before the guide: **your task prompt is only the task** —
 legwork injects the worker contract (status block, ask-early, no commit/push,
-sandbox anti-workaround guard) itself; don't repeat it in prompts. Use
-`--append-prompt` for short task-specific additions, or
-`--append-prompt-file <path|->` for multi-line UTF-8 text from a file/stdin.
+sandbox anti-workaround guard) itself; don't repeat it in prompts. Run
+`legwork rules` to inspect the exact contract, then use `--append-prompt` for
+short task-specific additions, or `--append-prompt-file <path|->` for
+multi-line UTF-8 text from a file/stdin.
 
 ## Status
 
@@ -150,7 +151,7 @@ Early. Implemented: jobs, detached runner, claude + codex + fake adapters, statu
 contract, workspaces/checkpoints/diff/review/commit/close, runs + narration/artifacts,
 the `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
 structured blocked reasons, needs-provision approval, job `result`/`ack`, timeouts,
-`doctor` preflight, `gc` reclamation, `guide` + skill. What's next lives in
+`doctor` preflight, `rules`, `gc` reclamation, `guide` + skill. What's next lives in
 [planning/ROADMAP.md](planning/ROADMAP.md) (the work board — one task per file, plus rejected
 ideas and why); the full design rationale in [DESIGN.md](DESIGN.md).
 
