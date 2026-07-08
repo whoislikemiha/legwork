@@ -113,8 +113,8 @@ $ curl -fsSL https://raw.githubusercontent.com/whoislikemiha/legwork/main/skills
 ```
 
 One rule worth knowing before the guide: **your task prompt is only the task** —
-legwork injects the worker contract (status block, ask-early, no commit/push)
-itself; don't repeat it in prompts.
+legwork injects the worker contract (status block, ask-early, no commit/push,
+sandbox anti-workaround guard) itself; don't repeat it in prompts.
 
 ## Status
 

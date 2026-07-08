@@ -40,3 +40,14 @@ None. Ships independently; strongest when combined with structured-blocked-provi
 worker a clean place to escalate instead of working around).
 
 ## Log
+
+- Added the sandbox anti-workaround line to `internal/rules/rules.go`: workers must not edit test harness, build config, or dependencies to dodge sandbox limits, and must report `blocked` with the exact failing command instead.
+- Added `internal/rules/rules_test.go` covering the injected wording and its ordering before orchestrator additions.
+- Updated contract summaries in `internal/guide/guide.md`, `skills/legwork/SKILL.md`, and `README.md`.
+- Verification passed with a writable Go cache: `gofmt -l .`; `GOCACHE=/tmp/legwork-go-cache go vet ./...`; `GOCACHE=/tmp/legwork-go-cache go build ./...`; `GOCACHE=/tmp/legwork-go-cache go test ./internal/rules ./internal/adapter`; `GOCACHE=/tmp/legwork-go-cache go test ./... -count=1`.
+- Sandbox-limited checks: default `go test ./internal/rules ./internal/adapter` failed because `/home/miha/.cache/go-build` is read-only; reran with `GOCACHE=/tmp/legwork-go-cache` rather than changing build config. Real-agent verification did not complete in this sandbox: `timeout 90s bash -lc 'tmp=$(mktemp -d); export LEGWORK_STATE_DIR="$tmp"; GOCACHE=/tmp/legwork-go-cache go build -o /tmp/lw . && /tmp/lw doctor --agent codex && /tmp/lw run --agent codex "Reply with exactly the word PLUMBING-OK. No tools."; sleep 20; /tmp/lw status job-1'` failed at the codex doctor probe with `Read-only file system`; `timeout 120s bash -lc 'tmp=$(mktemp -d); export LEGWORK_STATE_DIR="$tmp"; GOCACHE=/tmp/legwork-go-cache go build -o /tmp/lw . && /tmp/lw run --agent claude --model haiku "Reply with exactly the word PLUMBING-OK. No tools."; sleep 60; /tmp/lw status job-1; if /tmp/lw status job-1 | grep -q "state:  active"; then /tmp/lw cancel job-1; fi; /tmp/lw events job-1 --json'` remained active with 0 tokens after 60s and was canceled.
+
+## Friction
+
+- The default Go cache points outside the writable sandbox, so ordinary `go test` fails before tests run; a worker-safe default `GOCACHE` would make verification less noisy without touching repo config.
+- Real-agent plumbing is awkward from inside a worker sandbox: codex tries to write PATH aliases outside the writable roots, and detached runner checks can outlive short wrapper commands unless the worker hand-rolls wait/cancel logic.

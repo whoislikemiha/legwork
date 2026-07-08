@@ -13,8 +13,8 @@ ssh (`ssh host legwork ...`) and takes `--json`. Full built-in reference:
 ## Rules of engagement
 
 - **Your task prompt is only the task.** legwork injects the worker contract itself
-  (status block, ask-early, no commit/push). Never repeat or paraphrase it — use
-  `--append-prompt` for task-specific guidance instead.
+  (status block, ask-early, no commit/push, sandbox anti-workaround guard). Never
+  repeat or paraphrase it — use `--append-prompt` for task-specific guidance instead.
 - **Never trust `done` blindly.** Verify: `legwork diff <ws>` non-empty, test runs
   visible in `legwork events <job>`.
 - **Mutating work goes in a workspace.** Plain `run` = scratch dir;

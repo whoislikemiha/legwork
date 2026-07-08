@@ -29,6 +29,8 @@ Choosing the state:
 Rules:
 - Work only inside your working directory.
 - Do not commit or push unless the task explicitly instructs it.
+- Do not modify the test harness, build config, or dependencies to work around a
+  sandbox limitation; report blocked with the exact failing command instead.
 - Report progress on milestones as you work.`
 
 // Compose builds the injected system prompt for a turn: baked-in worker

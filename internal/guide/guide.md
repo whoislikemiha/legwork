@@ -14,9 +14,10 @@ identical across agents. On codex's subscription auth, per-turn cost is nominal
 
 **Your task prompt is ONLY the task.** legwork itself injects the worker's rules —
 the status block contract (`state: done|needs-input|blocked`), ask-early behavior,
-no-commit/no-push — into every turn. Do not repeat or paraphrase any of that in your
-prompts; a slightly different paraphrase competes with the injected contract. Add
-task-specific guidance with `--append-prompt` instead.
+no-commit/no-push, and the sandbox anti-workaround guard — into every turn. Do not
+repeat or paraphrase any of that in your prompts; a slightly different paraphrase
+competes with the injected contract. Add task-specific guidance with
+`--append-prompt` instead.
 
 ## The loop
 
