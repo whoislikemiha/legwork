@@ -21,15 +21,9 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-Wave 1 (`--run next-roadmap`, dispatched 2026-07-08 by the Opus 4.8 orchestrator, taken over by
-Fable 5 the same day): all seven implemented in one turn each; all seven ended `blocked` on
-sandbox verification (read-only `GOCACHE` — the *cannot-verify* case, itself on this board).
-Awaiting independent review + orchestrator verification outside the sandbox + serial landing,
-most-isolated first.
-
-- [ ] [Structured `blocked` reasons + `needs-provision`](tasks/structured-blocked-provision.md) —
-  **P0/P1.** `ws-57` / `job-119`. `blocked: {kind: provision|verify|decision, detail}` so routing
-  is scriptable; the "verify" case is the most common — 7/7 in wave 1 (AUDIT A3).
+*(nothing — wave 1, all seven `next-roadmap` tasks, landed on main 2026-07-08; see
+[done/](done/) for verdicts and the [field notes](../docs/field-notes-2026-07-08.md) for the
+run retrospective)*
 
 ## Next
 
@@ -83,8 +77,10 @@ after wave 1 (doc files conflict; two tasks depend on wave-1 contract changes).
   - **Command grammar + self-describing JSON** (P2) — wrapped/documented `--json` envelopes,
     examples in help (AUDIT E3). Run-selector consistency promoted to
     [unified-addressing.md](tasks/unified-addressing.md).
-  - **`approve` / `needs-decision`** (P2) — route permission judgment calls via
-    `--permission-prompt-tool`; gates fail closed; hooks handle policy denies.
+  - **`needs-decision` via `approve`** (P2) — route permission judgment calls via
+    `--permission-prompt-tool`; gates fail closed; hooks handle policy denies. `legwork
+    approve` shipped 2026-07-08 gating `needs-provision`; this item extends the same verb
+    to permission-shaped decisions (DESIGN §5 updated accordingly).
   - **Codex sandbox validation ergonomics** (P2) — inject `GOCACHE`/`GOMODCACHE`/`TMPDIR`
     defaults so Go build/test works in codex sandboxes (overlaps writable-tmpdir).
   - **`worktree.toml` verify hook** (P1) — `verify = "…"` run OUTSIDE the sandbox after each turn,

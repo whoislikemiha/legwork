@@ -136,6 +136,37 @@ Five of seven task files carried `## Friction`; deduped:
   from an agent crash without reading runner output. Filed mentally against the
   codex-observability remainder; promote if it recurs.
 
+## Landing retrospective (added after wave 1 landed)
+
+All seven landed on main the same day. Shape of the run: 2/7 SHIP on first
+review (matching the corpus's ~3/8 rate), 5 FIX rounds — every one resolved in
+a single resume, every re-review SHIP. The reviewers again earned their tokens:
+the gc orphan-tree race (a live `ws new` could be swept) and `--merge-into`
+leaving the operator's checkout switched on failure paths were both
+first-review catches on never-executed code paths.
+
+Orchestrator-side landing notes:
+
+- **Serial landing worked as planned**; conflicts appeared exactly where the
+  conflict graph predicted (docs trio, `main.go` verb registration, the ws-58 ×
+  ws-59 close path) and were all resolvable as unions. One conflict was
+  *semantic* and invisible to git: ws-59's test asserted branch deletion on
+  merged close, ws-58's landed policy is branch-durable — caught by running the
+  full suite on main after every merge, which is the argument for that
+  discipline.
+- **The `close --merged` tripwire fired correctly** on the first landing
+  (local main unpushed → not an ancestor of origin/HEAD → refused with the
+  exact `--into` fix). The right kind of paranoid, confirmed in anger.
+- **The AGENTS.md codex smoke was lying to us.** "Reply with exactly the word
+  PLUMBING-OK" contradicts the injected status-block contract; codex often
+  obeys the task literally, omits the block, and the parser correctly reports
+  `blocked`. Measured: old rules 1/2 blocked, new rules 4/4 blocked on that
+  prompt — but 2/2 `done` on tiny real tasks. Not a rules regression; a bad
+  smoke prompt. AGENTS.md snippet fixed to use a real micro-task.
+- **Pre-existing flake**: `TestCodexPassthroughs` can fail teardown
+  (`TempDir RemoveAll: directory not empty`) when the detached runner writes
+  during cleanup. 5/5 green on retry; worth a small fix someday.
+
 ## Actions taken
 
 Promoted `orchestrator-recipes` (Later/P2 → Next/P1, scope expanded) and

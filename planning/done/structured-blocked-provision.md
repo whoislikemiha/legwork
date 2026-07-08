@@ -60,3 +60,15 @@ Sequencing: land the `blocked.kind` classification first (read-side, cheap), the
 
 - Worker verification hit a read-only default Go build cache; using `/tmp` for `GOCACHE` worked, but the required command shape fails as written in this sandbox.
 - The real codex plumbing check is blocked by codex trying to create PATH aliases on a read-only filesystem before producing a result; legwork surfaces it as `interrupted`, but the worker cannot distinguish this environment setup failure from an agent crash without reading runner output.
+
+## Verdict
+
+Review job-127 (opus, high): FIX round 1 (needs-provision notify regression for blocked-only
+subscribers, provision-without-command ambiguity, untested fail-closed paths, DESIGN.md approve
+verb collision, unbounded provision command); orchestrator decision: approve gates
+needs-provision, needs-decision extends it later; job-132: **SHIP** round 2. Orchestrator
+verification: suite green on main after merge (main.go/e2e union conflicts vs ws-53/54 resolved);
+claude real-agent smoke green; codex smoke investigated — the CLAUDE.md "reply exactly
+PLUMBING-OK" prompt contradicts the status-block contract and flips to blocked on old and new
+rules alike (old 1/2, new 4/4 blocked; normal task prompts 2/2 done) — parser safety direction
+correct, smoke recipe fixed instead. Landed 2026-07-08 via merge of legwork/ws-57 (821be85).

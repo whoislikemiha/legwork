@@ -77,14 +77,18 @@ real agent (cheap, ~$0.02):
 )
 ```
 
-For codex (needs `codex login`; cost is 0 on subscription → check `context`):
+For codex (needs `codex login`; cost is 0 on subscription → check `context`).
+Do NOT use the "reply with exactly ..." prompt here: it contradicts the injected
+status-block contract, and codex often obeys the task literally → spurious
+`blocked` (measured 2026-07-08 on old and new rules alike; the parser's
+missing-block→blocked direction is correct). Give it a tiny real task instead:
 
 ```bash
 (
   export LEGWORK_STATE_DIR=$(mktemp -d)
   go build -o /tmp/lw . && /tmp/lw doctor --agent codex   # auth guard for codex
-  /tmp/lw run --agent codex "Reply with exactly the word PLUMBING-OK. No tools."
-  sleep 20 && /tmp/lw status job-1        # expect: state done, PLUMBING-OK, context>0
+  /tmp/lw run --agent codex "Create a file named smoke.txt containing the single word ok."
+  sleep 25 && /tmp/lw status job-1        # expect: state done, context>0
 )
 ```
 
