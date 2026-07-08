@@ -30,9 +30,6 @@ most-isolated first.
 - [ ] [`ws review` verb](tasks/ws-review-verb.md) — **P1.** `ws-54` / `job-116`. First-class
   independent reviewer over the workspace diff. The corpus's strongest quality signal: 3/8
   first-pass SHIP; review caught real bugs on ~62% of first passes (AUDIT D1).
-- [ ] [Writable per-job `$TMPDIR` in every sandbox profile](tasks/writable-tmpdir.md) — **P0.**
-  `ws-56` / `job-118`. Read-only must mean repo-read-only, not no-tmp; plus codex Go cache env.
-  Wave-1 evidence: all seven jobs blocked on read-only `GOCACHE` (AUDIT A2).
 - [ ] [Structured `blocked` reasons + `needs-provision`](tasks/structured-blocked-provision.md) —
   **P0/P1.** `ws-57` / `job-119`. `blocked: {kind: provision|verify|decision, detail}` so routing
   is scriptable; the "verify" case is the most common — 7/7 in wave 1 (AUDIT A3).

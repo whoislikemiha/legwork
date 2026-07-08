@@ -47,3 +47,11 @@ None. Mechanical for the tmp part; the hang diagnosis may need a live repro.
 - Review fix 1/3/4: verified against local Codex 0.142.5 help/binary strings that writable roots are a workspace-write facility and no read-only writable-root exception is exposed. Stopped emitting inert `sandbox_workspace_write.*` keys on codex read-only turns, changed the read-only unit test to assert those keys are absent, and documented the codex read-only asymmetry in the guide, README, and skill.
 - Review fix 2: per orchestrator instruction for this follow-up, skipped real codex/claude smoke checks; orchestrator will run them outside this sandbox.
 - Review fix 5: made job temp cleanup best-effort after close metadata/event recording so `ack`/workspace close cannot be wedged by a transient `RemoveAll` failure.
+
+## Verdict
+
+Review job-126 (opus, high): FIX round 1 (inert read-only writable_roots, skipped smoke,
+presence-not-effect test, overclaiming docs, close-wedging cleanup); honest-asymmetry route
+taken per orchestrator guidance; job-131: **SHIP** round 2. Orchestrator verification: suite
+green on main; claude + codex real-agent smokes green (PLUMBING-OK both). Landed on main
+2026-07-08 via merge of legwork/ws-56 (ad189f9).
