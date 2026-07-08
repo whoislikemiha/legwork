@@ -80,7 +80,7 @@ legwork resume <job> "fix review finding Y"                 # same lineage
 legwork ws commit "$ws" -m "message" --json   # records final_commit; refuses empty
 legwork close "$ws" --merged --reason "landed" # verified; records closed_at/merged_into
                                        # against the default branch (--into <ref>
-                                       # to override); --discard to throw away
+                                       # to override); drops the local checkout
 ```
 
 One active job per workspace; parallelism = multiple workspaces. `close` refuses
@@ -103,6 +103,10 @@ legwork close "$ws" --discard \
   --preserve
 ```
 
+Closed workspace branches are kept locally by default because the branch/commit is
+the durable artifact and the checkout is cache. Non-preserved `--discard` deletes
+the branch; `--preserve` keeps branch/checkpoint refs for later analysis without
+pinning the worktree; `--keep-worktree` keeps the checkout and checkpoint refs.
 Push/archive workspace branches only when the orchestrator explicitly decides to
 publish them; do not ask worker agents to `git commit` or `git push` directly.
 
@@ -114,9 +118,10 @@ wander toward irrelevant systems.
 ## Cleanup: ack, close + gc
 
 `ack` acknowledges **one terminal workspace-less job** (planner, reviewer,
-read-only check) and stamps the retention anchor. `close` acknowledges + reclaims
-**one** workspace (you own it, after the diff lands). `gc` reclaims opportunistically
-— closed/orphaned things only, **never unclosed work**:
+read-only check) and stamps the retention anchor. `close` acknowledges **one**
+workspace and drops its local worktree cache (you own it, after the diff lands).
+`gc` reclaims opportunistically — closed/orphaned things only, **never unclosed
+work**:
 
 ```bash
 legwork ack job-14             # mark reviewed terminal workspace-less job closed
@@ -130,7 +135,7 @@ legwork gc --close-merged      # also close open workspaces whose branch landed 
 ```
 
 gc also auto-runs cheaply on `run`/`resume`/`answer` (git-style, gated ~24h). Its blast
-radius is only what legwork created; repo branches/refs/worktrees are never touched.
+radius is only what legwork created; non-legwork repo branches/refs/worktrees are never touched.
 Config: `[gc]` in `config.toml` (`auto`, `auto_interval`, `transcript_retain`, …).
 `ack` and `close` remove each closed job's per-job temp/cache tree while keeping
 events, transcripts, and artifacts on the normal retention path.

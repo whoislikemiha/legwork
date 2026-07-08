@@ -319,21 +319,25 @@ confirmation); human closes only abnormal leftovers. Sequence:
    destructive intent). Closing can never lose the only copy.
 2. Record: state → closed, timestamp, actor, disposition (merged/discarded/abandoned) —
    in the event log.
-3. Reclaim immediately unless preserved: `git worktree remove`, delete tool-created
-   branch, delete `refs/legwork/<ws>/*`. (Secrets note: worktree deletion is also
-   secret cleanup — the workstree copy list put credentials there.)
+3. Reclaim local cache immediately: `git worktree remove` and delete
+   `refs/legwork/<ws>/*` checkpoint refs. Keep the tool-created branch by default
+   because it is the durable artifact; only non-preserved `--discard` deletes it.
+   (Secrets note: worktree deletion is also secret cleanup — the workstree copy list
+   put credentials there.)
 4. Start clocks: transcript retention counts from close. Index + artifacts keep a long
-   horizon (KBs; the audit trail). `--keep-worktree` defers step 3.
-5. Touch nothing else: agent session files aren't ours; branches/refs we didn't create
-   are radioactive.
+   horizon (KBs; the audit trail). `--keep-worktree` keeps the checkout and its
+   checkpoint refs; `--preserve` keeps branch/checkpoint refs without pinning the
+   checkout.
+5. Touch nothing else: agent session files aren't ours; branches/refs/worktrees we
+   didn't create are radioactive.
 
 **`gc`** = reclamation, runs **opportunistically** (git-style auto on any invocation,
 no daemon, no cron required; manual `gc` + documented cron line for control freaks;
 **auto-delete-by-timer stays off by default**). Jurisdiction: closed jobs only, plus
-orphan sweeps (worktrees with no job dir, refs with no owning workspace/archive
-record, runners that died → `interrupted`, marked never deleted). `--dry-run` prints
-reclaimable disk. **gc's blast radius is provably limited to things the tool
-created.**
+orphan sweeps (stale legwork worktree registrations, orphaned legwork tree cache past
+the grace window, refs with no owning workspace/archive record, runners that died →
+`interrupted`, marked never deleted). `--dry-run` prints reclaimable disk. **gc's
+blast radius is provably limited to things the tool created.**
 
 **Forgotten close fails safe and loud**: nothing is ever lost (cost of forgetting =
 disk, bounded, enumerable); `ls` shows unclosed-finished jobs with age + footprint;

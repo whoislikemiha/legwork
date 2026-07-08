@@ -279,8 +279,8 @@ func TestGCDryRunMutatesNothing(t *testing.T) {
 }
 
 // TestGCCloseMerged: an open workspace whose committed branch has landed in the
-// default branch is closed (merged) and fully reclaimed; a workspace with
-// uncommitted changes is left for human review.
+// default branch is closed (merged) and its worktree cache is reclaimed; a
+// workspace with uncommitted changes is left for human review.
 func TestGCCloseMerged(t *testing.T) {
 	e := newEnv(t)
 	repo := initRepo(t)
@@ -313,7 +313,8 @@ func TestGCCloseMerged(t *testing.T) {
 		t.Fatalf("expected the dirty workspace skipped, report: %v", rep)
 	}
 
-	// Merged workspace fully reclaimed.
+	// Merged workspace is closed; the cache worktree is dropped and the branch
+	// remains as the durable artifact.
 	if m := e.wsStatus(t, wsID); m["state"] != "closed" || m["disposition"] != "merged" {
 		t.Fatalf("ws not closed merged: %v", m)
 	} else if m["closed_at"] == "" || m["merged_into"] == "" {
@@ -322,8 +323,8 @@ func TestGCCloseMerged(t *testing.T) {
 	if _, err := os.Stat(tree); !os.IsNotExist(err) {
 		t.Fatalf("worktree should be removed: %v", err)
 	}
-	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out != "" {
-		t.Fatalf("branch %s should be deleted, tip: %s", branch, out)
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out == "" {
+		t.Fatalf("branch %s should be kept", branch)
 	}
 	if out, _ := gitInErr(repo, "for-each-ref", "refs/legwork/"+wsID); out != "" {
 		t.Fatalf("checkpoint refs should be gone: %s", out)
@@ -405,6 +406,8 @@ func TestGCPreservesClosedPreserveCheckpointRefs(t *testing.T) {
 	repo := initRepo(t)
 	ws := e.wsNew(t, repo)
 	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	branch := ws["branch"].(string)
 
 	e.writeScript(t, "#write archived.txt keep this snapshot", resultDone)
 	jid := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "archive work"))
@@ -418,6 +421,12 @@ func TestGCPreservesClosedPreserveCheckpointRefs(t *testing.T) {
 	e.legwork(t, "close", wsID, "--discard", "--preserve")
 	e.gcJSON(t, gcConfig(t, ""))
 
+	if _, err := os.Stat(tree); !os.IsNotExist(err) {
+		t.Fatalf("--preserve should not keep worktree cache: %v", err)
+	}
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out == "" {
+		t.Fatalf("--preserve should keep branch %s", branch)
+	}
 	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", ref); out == "" {
 		t.Fatalf("plain gc deleted preserved checkpoint ref %s", ref)
 	}
@@ -494,6 +503,50 @@ func TestGCWorktreePruneScoped(t *testing.T) {
 	// The surviving workspace's registration is intact.
 	if !strings.Contains(list, ws["tree"].(string)) {
 		t.Fatalf("live workspace worktree deregistered:\n%s", list)
+	}
+}
+
+func TestGCReclaimsOrphanTreeWithUnusableMeta(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+
+	// A surviving real workspace so gc knows which repo to scan.
+	_ = e.wsNew(t, repo)
+
+	orphanDir := filepath.Join(e.state, "workspaces", "ws-404")
+	orphanTree := filepath.Join(orphanDir, "tree")
+	if err := os.MkdirAll(orphanTree, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(orphanDir, "meta.json"), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(orphanTree, "node_modules.bin"), []byte("cache"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg := gcConfig(t, "orphan_grace = \"1h\"\n")
+	rep := e.gcJSON(t, cfg)
+	if kinds(rep)["orphan-tree"] != 0 {
+		t.Fatalf("fresh orphan tree should stay inside grace window, report: %v", rep)
+	}
+	if _, err := os.Stat(orphanTree); err != nil {
+		t.Fatalf("fresh orphan tree should not be removed: %v", err)
+	}
+
+	past := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(orphanDir, past, past); err != nil {
+		t.Fatal(err)
+	}
+	rep = e.gcJSON(t, cfg)
+	if kinds(rep)["orphan-tree"] != 1 {
+		t.Fatalf("expected orphan-tree reclaim, report: %v", rep)
+	}
+	if _, err := os.Stat(orphanTree); !os.IsNotExist(err) {
+		t.Fatalf("orphan tree should be removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(orphanDir, "meta.json")); err != nil {
+		t.Fatalf("gc should leave surrounding metadata for review: %v", err)
 	}
 }
 

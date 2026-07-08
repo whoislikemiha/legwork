@@ -260,7 +260,7 @@ func closeCmd() *cobra.Command {
 	var mergedInto, reason, supersededBy, retention string
 	c := &cobra.Command{
 		Use:   "close <workspace>",
-		Short: "Acknowledge a workspace and reclaim worktree, branch, checkpoint refs",
+		Short: "Acknowledge a workspace and reclaim its local worktree cache",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, wss, err := openWorkspaces()
@@ -289,12 +289,11 @@ func closeCmd() *cobra.Command {
 				if retention != "" && retention != "preserve" {
 					return fmt.Errorf("--preserve requires --retention preserve, got %q", retention)
 				}
-				keepWorktree = true
 				if retention == "" {
 					retention = "preserve"
 				}
 			}
-			// --merged is a claim; verify it before destroying the branch.
+			// --merged is a claim; verify it before closing the review gate.
 			// (A merge mistakenly run inside the worktree is a no-op — closing
 			// on top of that leaves the work dangling.)
 			verifiedTarget := ""
@@ -348,7 +347,7 @@ func closeCmd() *cobra.Command {
 	c.Flags().BoolVar(&merged, "merged", false, "changes landed elsewhere (verified via merge-base against --into or the default branch)")
 	c.Flags().BoolVar(&discard, "discard", false, "throw the changes away")
 	c.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "acknowledge but keep the worktree on disk")
-	c.Flags().BoolVar(&preserve, "preserve", false, "record retention=preserve and keep worktree/branch/checkpoint refs")
+	c.Flags().BoolVar(&preserve, "preserve", false, "record retention=preserve and keep branch/checkpoint refs")
 	c.Flags().StringVar(&mergedInto, "into", "", "target ref --merged is verified against (default: detected default branch)")
 	c.Flags().StringVar(&reason, "reason", "", "human-readable close/archive reason recorded in workspace metadata")
 	c.Flags().StringVar(&supersededBy, "superseded-by", "", "workspace/run/branch that supersedes this workspace")

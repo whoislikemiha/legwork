@@ -154,6 +154,12 @@ func TestWorkspaceCommit(t *testing.T) {
 	} else if m["closed_at"] == "" || m["merged_into"] == "" {
 		t.Fatalf("merged close metadata missing: %v", m)
 	}
+	if _, err := os.Stat(tree); !os.IsNotExist(err) {
+		t.Fatalf("merged close should drop worktree cache: %v", err)
+	}
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out == "" {
+		t.Fatalf("merged close should keep branch %s", branch)
+	}
 }
 
 func TestWorkspaceCommitRefusesEmpty(t *testing.T) {
@@ -260,6 +266,9 @@ func TestCloseMergedVerifies(t *testing.T) {
 	e.legwork(t, "close", wsID, "--merged")
 	if m := e.wsStatus(t, wsID); m["state"] != "closed" || m["disposition"] != "merged" {
 		t.Fatalf("ws not closed merged: %v", m)
+	}
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out == "" {
+		t.Fatalf("merged close should keep branch %s", branch)
 	}
 }
 
@@ -375,11 +384,41 @@ func TestCloseRecordsArchiveMetadata(t *testing.T) {
 	if m["closed_at"] == "" {
 		t.Fatalf("closed_at missing: %v", m)
 	}
-	if _, err := os.Stat(tree); err != nil {
-		t.Fatalf("--preserve should keep worktree: %v", err)
+	if _, err := os.Stat(tree); !os.IsNotExist(err) {
+		t.Fatalf("--preserve should drop worktree cache: %v", err)
 	}
 	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out == "" {
 		t.Fatalf("--preserve should keep branch %s", branch)
+	}
+}
+
+func TestCloseKeepWorktreeKeepsCheckpointRefs(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	branch := ws["branch"].(string)
+
+	e.writeScript(t, "#write keep.txt inspect later", resultDone)
+	jid := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "archive worktree"))
+	e.waitState(t, jid, "done")
+
+	ref := "refs/legwork/" + wsID + "/ckpt-1"
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", ref); out == "" {
+		t.Fatalf("checkpoint ref missing before close: %s", ref)
+	}
+
+	e.legwork(t, "close", wsID, "--discard", "--keep-worktree")
+	e.gcJSON(t, gcConfig(t, ""))
+	if _, err := os.Stat(tree); err != nil {
+		t.Fatalf("--keep-worktree should keep worktree: %v", err)
+	}
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); out == "" {
+		t.Fatalf("--keep-worktree should keep checked-out branch %s", branch)
+	}
+	if out, _ := gitInErr(repo, "rev-parse", "--verify", "--quiet", ref); out == "" {
+		t.Fatalf("--keep-worktree should keep checkpoint ref %s", ref)
 	}
 }
 

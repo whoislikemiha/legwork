@@ -120,7 +120,8 @@ legwork diff ws-N [--stat]               -> changes vs base, incl. untracked fil
 legwork resume <job> "review feedback: fix Y"
 legwork ws commit ws-N -m "message" --json -> orchestrator commit, recorded as final_commit
 legwork close ws-N --merged|--discard [--reason TEXT] [--retention POLICY]
-                                         -> records disposition metadata, then reclaims
+                                         -> records disposition metadata, then drops
+                                            the local worktree cache
 ```
 
 **You own git history; workers never commit.** The injected contract forbids
@@ -139,11 +140,14 @@ gate. You (or the human) land the diff (PR, merge), then close `--merged`.
 `--merged` is verified, not trusted: the branch must actually be an ancestor of
 the default branch (or `--into <ref>`), else close refuses — this catches the
 classic mistake of running the merge inside the worktree (a no-op) and then
-destroying the branch. Merge from the main checkout. The verified target is
+closing the review gate. Merge from the main checkout. The verified target is
 recorded as `merged_into`. `--force` skips the check for work that landed somewhere
 legwork can't see (cherry-pick, another remote). For superseded/dead work, add
 `--reason`, `--superseded-by`, and `--retention`; use `--preserve` when the
-branch/worktree/checkpoint refs should remain available for analysis.
+branch and checkpoint refs should remain available for analysis. Closed branches
+are kept by default; the checkout is disposable cache and is removed unless
+`--keep-worktree` is explicit, which also keeps checkpoint refs for inspection.
+Non-preserved `--discard` is the destructive path that deletes the branch.
 Scratch/research jobs need no workspace: plain `run` gets a scratch dir;
 `run --dir <path>` works in-place — combine with `--read-only` for plan/research
 turns (harness-enforced: the agent cannot edit).
@@ -154,8 +158,10 @@ Three separate acts. `ack` **acknowledges** one terminal workspace-less job
 (planner, reviewer, read-only check) and stamps its retention anchor. It is job-level
 only: workspace jobs are acknowledged by closing their workspace. `close`
 **acknowledges** one workspace with a disposition, records archive metadata in
-`workspaces/<ws>/meta.json`, and reclaims its worktree/branch/refs immediately
-unless `--preserve` or `--keep-worktree` is set — you own that call. `gc`
+`workspaces/<ws>/meta.json`, and drops its local worktree cache immediately
+unless `--keep-worktree` is set. Branches are durable and kept by default;
+checkpoint refs are dropped unless `--preserve` or `--keep-worktree` keeps them
+for archive analysis. `gc`
 **reclaims opportunistically**: closed and provably-orphaned things only,
 **never unclosed work**.
 `ack` and `close` also remove each closed job's per-job temp/cache tree; events,
@@ -179,8 +185,9 @@ Open workspaces and closed `retention=preserve` archive workspaces own their
 checkpoint refs. `--close-merged` (opt-in) closes an open workspace only when its
 committed branch is an ancestor of the default branch (`git merge-base
 --is-ancestor`) and the tree has no uncommitted changes — dirty or unmerged
-workspaces are always left for human judgment. gc's blast radius is strictly what
-legwork created; repo branches/refs/worktrees are untouchable.
+workspaces are always left for human judgment. Closing this way drops the local
+worktree and leaves the branch reachable. gc's blast radius is strictly what
+legwork created; non-legwork repo branches/refs/worktrees are untouchable.
 
 gc also runs **automatically** and cheaply on dispatch (`run`/`resume`/`answer`),
 git-style, gated to at most once per `auto_interval` (default 24h). Configure under

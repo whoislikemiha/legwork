@@ -57,7 +57,8 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   declares it.
 - **Workspace-less jobs can be acknowledged**: `legwork ack <job>` marks a terminal
   planner/reviewer/read-only job closed and stamps the retention anchor. `close`
-  stays workspace-only because it also reclaims worktrees, branches, and refs.
+  stays workspace-only because it also records the disposition and reclaims local
+  workspace cache.
   Both `ack` and workspace `close` best-effort remove each closed job's per-job
   temp/cache tree while preserving events, transcripts, and artifacts.
 - **Wake-on-event**: a configurable notifier command receives JSON payloads — point
@@ -81,11 +82,13 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   Tune it with `[health] context_threshold` in `config.toml` (default 150000; `0`
   disables).
 - **Reclamation without a daemon**: `close` records disposition/retention metadata
-  and reclaims one workspace; `--preserve` records `retention=preserve` and keeps
-  the worktree/branch/checkpoint refs for analysis. `gc` compresses/retires
-  transcripts and sweeps orphans (dead runners, stale worktrees, refs with no
-  workspace); opt-in `--close-merged` auto-closes landed work. Runs
-  opportunistically on dispatch; unclosed work is never touched.
+  and drops the local worktree cache; branches are kept by default as the durable
+  artifact. `--preserve` records `retention=preserve` and keeps branch/checkpoint
+  refs for analysis; `--keep-worktree` keeps the checkout and checkpoint refs.
+  `gc` compresses/retires transcripts and sweeps orphans (dead runners, stale
+  worktrees, refs with no workspace); opt-in `--close-merged` auto-closes landed
+  work without deleting its branch. Runs opportunistically on dispatch; unclosed
+  work is never touched.
 
 ## Install
 

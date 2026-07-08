@@ -62,6 +62,12 @@ type CloseOptions struct {
 	Retention    string
 }
 
+type reclaimOptions struct {
+	KeepWorktree bool
+	KeepBranch   bool
+	KeepRefs     bool
+}
+
 func Open(root string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(root, "workspaces"), 0o700); err != nil {
 		return nil, err
@@ -358,8 +364,8 @@ func commitEnv(tree string) []string {
 	return env
 }
 
-// Close acknowledges the workspace and reclaims worktree, branch, and
-// checkpoint refs. Unreviewed changes require an explicit disposition.
+// Close acknowledges the workspace and reclaims disposable local cache.
+// Unreviewed changes require an explicit disposition.
 func (s *Store) Close(m *Meta, opts CloseOptions) error {
 	if m.State == "closed" {
 		return fmt.Errorf("%s is already closed", m.ID)
@@ -376,10 +382,13 @@ func (s *Store) Close(m *Meta, opts CloseOptions) error {
 		disposition = "clean"
 	}
 
-	if !opts.KeepWorktree {
-		if err := s.reclaim(m); err != nil {
-			return err
-		}
+	retention := strings.TrimSpace(opts.Retention)
+	if err := s.reclaim(m, reclaimOptions{
+		KeepWorktree: opts.KeepWorktree,
+		KeepBranch:   keepBranch(disposition, opts.KeepWorktree, retention),
+		KeepRefs:     opts.KeepWorktree || retention == "preserve",
+	}); err != nil {
+		return err
 	}
 	m.State = "closed"
 	m.Disposition = disposition
@@ -388,39 +397,53 @@ func (s *Store) Close(m *Meta, opts CloseOptions) error {
 	m.Reason = strings.TrimSpace(opts.Reason)
 	m.SupersededBy = strings.TrimSpace(opts.SupersededBy)
 	m.MergedInto = strings.TrimSpace(opts.MergedInto)
-	m.Retention = strings.TrimSpace(opts.Retention)
+	m.Retention = retention
 	return s.save(m)
 }
 
-// reclaim performs the blast-radius-limited reclamation of a workspace's
-// tool-created resources: checkpoint refs, worktree, branch. It is the single
-// place these git commands live, so both Close and gc's --close-merged inherit
-// the exact same "only touch what legwork created" guarantee.
-func (s *Store) reclaim(m *Meta) error {
-	// Delete checkpoint refs first: they pin objects.
-	if refs, err := git(m.Repo, "for-each-ref", "--format=%(refname)", "refs/legwork/"+m.ID); err == nil {
-		for _, ref := range strings.Fields(refs) {
-			_, _ = git(m.Repo, "update-ref", "-d", ref)
+// reclaim performs blast-radius-limited reclamation of a workspace's
+// tool-created local cache. Branches are durable by default; only explicit
+// discard paths delete the legwork/* branch.
+func (s *Store) reclaim(m *Meta, opts reclaimOptions) error {
+	if !opts.KeepRefs {
+		// Delete checkpoint refs first: they pin objects.
+		if refs, err := git(m.Repo, "for-each-ref", "--format=%(refname)", "refs/legwork/"+m.ID); err == nil {
+			for _, ref := range strings.Fields(refs) {
+				_, _ = git(m.Repo, "update-ref", "-d", ref)
+			}
 		}
 	}
-	if _, err := git(m.Repo, "worktree", "remove", "--force", m.Tree); err != nil {
-		return err
+	if !opts.KeepWorktree {
+		if _, err := git(m.Repo, "worktree", "remove", "--force", m.Tree); err != nil {
+			return err
+		}
 	}
-	if _, err := git(m.Repo, "branch", "-D", m.Branch); err != nil {
-		return err
+	if !opts.KeepBranch {
+		if _, err := git(m.Repo, "branch", "-D", m.Branch); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
+func keepBranch(disposition string, keepWorktree bool, retention string) bool {
+	if keepWorktree || retention == "preserve" {
+		return true
+	}
+	return disposition != "discard"
+}
+
 // CloseMerged closes an open workspace whose work is machine-verified as
 // landed (disposition "merged") or never-started (disposition "clean"),
-// reclaiming its worktree/branch/refs. It is gc's entry to the same
-// reclamation path Close uses; callers verify merged-ness first.
+// reclaiming its local worktree cache and checkpoint refs. It is gc's entry to
+// the same reclamation policy Close uses; callers verify merged-ness first.
 func (s *Store) CloseMerged(m *Meta, disposition, mergedInto string) error {
 	if m.State == "closed" {
 		return fmt.Errorf("%s is already closed", m.ID)
 	}
-	if err := s.reclaim(m); err != nil {
+	if err := s.reclaim(m, reclaimOptions{
+		KeepBranch: true,
+	}); err != nil {
 		return err
 	}
 	m.State = "closed"

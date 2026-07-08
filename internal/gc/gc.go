@@ -114,7 +114,7 @@ const (
 	KindHalfCreated        = "half-created"
 	KindWorktreePrune      = "worktree-prune"
 	KindOrphanRef          = "orphan-ref"
-	KindOrphanTree         = "orphan-tree"   // report-only
+	KindOrphanTree         = "orphan-tree"
 	KindOrphanBranch       = "orphan-branch" // report-only
 	KindCloseMerged        = "close-merged"
 	KindCloseClean         = "close-clean"
@@ -287,8 +287,8 @@ func (e *engine) transcripts(jobs []*job.Meta) {
 
 func (e *engine) worktreesAndRefs(wss []*workspace.Meta) {
 	// Distinct repos referenced by surviving metas, and the set of workspace IDs
-	// that still own refs. Open workspaces own their checkpoint refs; closed
-	// preserve/archive workspaces intentionally keep them for later analysis.
+	// that still own checkpoint refs. Open workspaces own their checkpoint refs;
+	// closed preserve/archive workspaces intentionally keep them for later analysis.
 	repos := map[string]bool{}
 	refOwners := map[string]bool{}
 	for _, m := range wss {
@@ -315,23 +315,18 @@ func (e *engine) worktreesAndRefs(wss []*workspace.Meta) {
 		}
 	}
 
-	// Orphan trees under <root>/workspaces with no owning meta are reported,
-	// not force-removed (pass 2 handles the truly meta-less; a repo we can't
-	// identify safely is a human decision).
+	// Orphan trees under <root>/workspaces with no loadable owning meta are
+	// legwork-owned cache once they are past the same grace window as
+	// half-created dirs. The grace window protects workspace.Create through
+	// worktree add/bootstrap/first meta save; the alloc lock matches the
+	// existing half-created sweep discipline while scanning workspace dirs.
 	knownWS := map[string]bool{}
 	for _, m := range wss {
 		knownWS[m.ID] = true
 	}
-	if entries, err := os.ReadDir(filepath.Join(e.js.Root, "workspaces")); err == nil {
-		for _, ent := range entries {
-			if !ent.IsDir() || knownWS[ent.Name()] {
-				continue
-			}
-			tree := filepath.Join(e.js.Root, "workspaces", ent.Name(), "tree")
-			if _, err := os.Stat(tree); err == nil {
-				e.add(Action{Kind: KindOrphanTree, Target: tree, Note: "tree with no meta (report-only)"})
-			}
-		}
+	if unlock, err := job.LockAlloc(e.js.Root); err == nil {
+		e.orphanTrees(knownWS)
+		unlock()
 	}
 
 	// Pass 6: delete refs/legwork/ws-N owned by no workspace. Closed
@@ -351,6 +346,32 @@ func (e *engine) worktreesAndRefs(wss []*workspace.Meta) {
 			ref, repo := ref, repo
 			e.do(Action{Kind: KindOrphanRef, Target: ref, Note: "no owning workspace"},
 				func() error { _, err := gitOut(repo, "update-ref", "-d", ref); return err })
+		}
+	}
+}
+
+func (e *engine) orphanTrees(knownWS map[string]bool) {
+	entries, err := os.ReadDir(filepath.Join(e.js.Root, "workspaces"))
+	if err != nil {
+		return
+	}
+	for _, ent := range entries {
+		if !ent.IsDir() || knownWS[ent.Name()] {
+			continue
+		}
+		dir := filepath.Join(e.js.Root, "workspaces", ent.Name())
+		info, err := ent.Info()
+		if err != nil || e.now.Sub(info.ModTime()) < e.cfg.OrphanGrace {
+			continue
+		}
+		tree := filepath.Join(dir, "tree")
+		if info, err := os.Stat(tree); err == nil && info.IsDir() {
+			tree := tree
+			// With no loadable repo metadata, reclaim the disk cache now. Any
+			// stale git worktree registration is pruned later when a surviving
+			// workspace gives gc the repo to scan.
+			e.do(Action{Kind: KindOrphanTree, Target: tree, Bytes: dirSize(tree), Note: "tree with no loadable meta past grace"},
+				func() error { return os.RemoveAll(tree) })
 		}
 	}
 }
@@ -390,7 +411,7 @@ func (e *engine) orphanBranches(wss []*workspace.Meta) {
 		if m.Repo != "" {
 			repos[m.Repo] = true
 		}
-		if workspaceOwnsRefs(m) {
+		if workspaceOwnsBranch(m) {
 			knownBranch[m.Repo+"\x00"+m.Branch] = true
 		}
 	}
@@ -621,7 +642,34 @@ func refWorkspaceID(ref string) string {
 }
 
 func workspaceOwnsRefs(m *workspace.Meta) bool {
-	return m.State == "open" || (m.State == "closed" && m.Retention == "preserve")
+	if m.State == "open" {
+		return true
+	}
+	if m.State != "closed" {
+		return false
+	}
+	if m.Retention == "preserve" {
+		return true
+	}
+	return worktreeExists(m)
+}
+
+func workspaceOwnsBranch(m *workspace.Meta) bool {
+	if m.State == "open" {
+		return true
+	}
+	if m.State != "closed" {
+		return false
+	}
+	return m.Disposition != "discard" || m.Retention == "preserve" || worktreeExists(m)
+}
+
+func worktreeExists(m *workspace.Meta) bool {
+	if m.Tree == "" {
+		return false
+	}
+	info, err := os.Stat(m.Tree)
+	return err == nil && info.IsDir()
 }
 
 func gitOut(dir string, args ...string) (string, error) {

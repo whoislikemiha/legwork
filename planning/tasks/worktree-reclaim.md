@@ -73,3 +73,30 @@ manual removal for orphan + closed-but-kept trees); this task makes reclamation 
 total. Coordinate the "caches outside the tree" sub-item with writable-tmpdir.md.
 
 ## Log
+
+- Implemented the reclamation split: normal close / `gc --close-merged` drop worktree cache and
+  checkpoint refs while keeping branches; non-preserved `--discard` deletes the branch; `--preserve`
+  keeps branch/checkpoint refs without pinning the checkout. Touched `internal/workspace`,
+  `internal/gc`, `workspace_cmds.go`, e2e workspace/gc tests, `internal/guide/guide.md`,
+  `skills/legwork/SKILL.md`, and `README.md`.
+- Added/updated tests for branch retention on merged close/gc, discard branch deletion, preserve
+  without checkout retention, and orphan tree cache reclamation. `gofmt` ran. Targeted `go test`
+  could not start because the sandbox read-only Go build cache blocked package setup:
+  `go test ./internal/workspace ./internal/gc ./test -run 'TestWorkspaceLifecycle|TestWorkspaceCommit|TestCloseMergedVerifies|TestCloseMergedDetectsUnpushed|TestCloseMergedForceSkipsVerification|TestClosePreserveRejectsContradictoryRetention|TestCloseRecordsArchiveMetadata|TestWorkspaceCleanCloseNeedsNoFlag|TestGCCloseMerged|TestGCPreservesClosedPreserveCheckpointRefs|TestGCWorktreePruneScoped|TestGCReclaimsOrphanTreeWithUnusableMeta|TestGCNeverTouchesUnclosed' -count=1`.
+- Review FIX pass:
+  finding 1 gated orphan-tree deletion behind the alloc lock and `OrphanGrace`, and extended
+  `TestGCReclaimsOrphanTreeWithUnusableMeta` to prove fresh trees are spared before old trees are
+  removed; finding 2 updated DESIGN.md §8 to the branch-durable close/gc policy; finding 3 made
+  `--keep-worktree` keep checkpoint refs and added `TestCloseKeepWorktreeKeepsCheckpointRefs`;
+  finding 4 documented orphan-tree as a destructive gc-json action in code/DESIGN and noted stale
+  worktree registrations are pruned later when a repo is known; finding 5 was fixed by treating
+  existing closed checkouts as owners of their branches/checkpoint refs during gc. Verification passed:
+  `GOCACHE=/tmp/lw-go-cache go test ./internal/workspace ./internal/gc ./test -run 'TestWorkspaceLifecycle|TestWorkspaceCommit|TestCloseMergedVerifies|TestCloseMergedDetectsUnpushed|TestCloseMergedForceSkipsVerification|TestClosePreserveRejectsContradictoryRetention|TestCloseRecordsArchiveMetadata|TestCloseKeepWorktreeKeepsCheckpointRefs|TestWorkspaceCleanCloseNeedsNoFlag|TestGCCloseMerged|TestGCPreservesClosedPreserveCheckpointRefs|TestGCWorktreePruneScoped|TestGCReclaimsOrphanTreeWithUnusableMeta|TestGCNeverTouchesUnclosed' -count=1`,
+  `gofmt -l .`, `GOCACHE=/tmp/lw-go-cache go vet ./...`, `GOCACHE=/tmp/lw-go-cache go build ./...`,
+  and `GOCACHE=/tmp/lw-go-cache go test ./... -count=1`.
+
+## Friction
+
+- Verification hit a read-only default Go build cache (`/home/miha/.cache/go-build`) before tests
+  started; the worker sandbox should provide writable Go cache env defaults so package setup can run
+  without harness edits.
