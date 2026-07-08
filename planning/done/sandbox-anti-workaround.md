@@ -51,3 +51,10 @@ worker a clean place to escalate instead of working around).
 
 - The default Go cache points outside the writable sandbox, so ordinary `go test` fails before tests run; a worker-safe default `GOCACHE` would make verification less noisy without touching repo config.
 - Real-agent plumbing is awkward from inside a worker sandbox: codex tries to write PATH aliases outside the writable roots, and detached runner checks can outlive short wrapper commands unless the worker hand-rolls wait/cancel logic.
+
+## Verdict
+
+Review job-125 (opus, high): **SHIP** first pass. Orchestrator verification: full suite green
+on merge (gofmt/vet/test), real-agent claude smoke green (PLUMBING-OK, done, ctx 28k).
+Landed on main 2026-07-08 via merge of legwork/ws-55 (17a1f58). Wave-1 evidence the rule
+works: 7/7 sibling workers blocked honestly rather than bending the harness.

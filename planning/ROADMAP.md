@@ -33,10 +33,6 @@ most-isolated first.
 - [ ] [`ws review` verb](tasks/ws-review-verb.md) — **P1.** `ws-54` / `job-116`. First-class
   independent reviewer over the workspace diff. The corpus's strongest quality signal: 3/8
   first-pass SHIP; review caught real bugs on ~62% of first passes (AUDIT D1).
-- [ ] [Sandbox anti-workaround rule](tasks/sandbox-anti-workaround.md) — **P0.** `ws-55` /
-  `job-117`. Injected worker rule: never modify test harness/build/deps to fit the sandbox;
-  report `blocked` with the exact failing command instead (AUDIT A1). Wave-1 evidence it works
-  as prompt text: 7/7 workers blocked honestly, zero harness edits.
 - [ ] [Writable per-job `$TMPDIR` in every sandbox profile](tasks/writable-tmpdir.md) — **P0.**
   `ws-56` / `job-118`. Read-only must mean repo-read-only, not no-tmp; plus codex Go cache env.
   Wave-1 evidence: all seven jobs blocked on read-only `GOCACHE` (AUDIT A2).
