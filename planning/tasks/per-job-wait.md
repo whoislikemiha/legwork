@@ -62,3 +62,39 @@ different outcomes for the same transition.
 - Waiting for workspace lifecycle milestones such as merge or close.
 
 ## Log
+
+- 2026-07-10: Implemented in `ws-75` by Terra/high (`job-170`). Host verification
+  passed the full Go gate before and after review fixes. Opus/xhigh (`job-171`)
+  reproduced a critical default-timeout hang/hot-loop, returned `FIX`, then directly
+  reproduced the correction and returned `SHIP` on the focused re-review. The sole
+  non-blocking re-review nit (deadline-guard the explicit-state timeout test too) was
+  applied as landing hardening.
+
+## Friction
+
+- 2026-07-10: The Terra workspace-write job's isolated Go cache was empty and could
+  not reach `proxy.golang.org`, so the orchestrator ran the full gate successfully on
+  the host. The later Claude read-only review had access to a populated host cache;
+  these were different sandbox/cache conditions, not contradictory verification.
+
+## Review 1 — FIX
+
+Opus/xhigh reproduced one critical bounded-wait failure: `wait <job> --timeout D`
+without `--until` never checked the deadline and then busy-spun after it. Required
+corrections:
+
+1. Evaluate the deadline for default and explicit-state waits; a supplied timeout must
+   always bound the command.
+2. Keep a positive sleep/backoff even if a deadline has just passed so no future logic
+   error can create a hot polling loop.
+3. Add a default-form timeout regression protected by a test-level deadline.
+4. Emit an empty `waited_for` array for the default “leave queued/active” form rather
+   than listing the states being left.
+5. Make explicit empty `--until` return the intended “requires at least one state”
+   usage error; remove the unreachable parser branch.
+
+## Review 2 — SHIP
+
+Opus/xhigh reproduced the original invocation against old and corrected binaries:
+the old binary required `SIGKILL`; the corrected command returned timeout at the
+deadline with exit 1, no CPU spin, and `waited_for: []`. Full verification passed.

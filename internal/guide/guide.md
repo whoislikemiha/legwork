@@ -387,6 +387,25 @@ exits 0 once no job in scope is active or queued (after draining events), so an
 orchestrator can replace a polling loop with `legwork tail L --until-idle`.
 `--json` emits the merged events as JSONL (raw event + `job`/`run` provenance).
 
+For one exact job, use `wait` instead of building a polling loop or relying on
+run selection:
+
+```
+legwork wait job-149
+legwork wait job-149 --until needs-input,blocked,done --timeout 20m --json
+```
+
+Without `--until`, it returns once that job leaves `queued|active`. With
+`--until`, it returns when one of the named existing job states is reached.
+`wait` reloads metadata and reconciles a dead runner to `interrupted`, so it
+does not hang on stale liveness. JSON is one object with the final persisted
+`job` metadata plus `outcome` (`reached`, `timeout`, or `terminal-mismatch`),
+the actual `reached` state, `waited_for` (empty when `--until` is omitted), and
+`elapsed_ms`; human output is one concise line. Reached outcomes exit 0; timeout
+and a settled non-requested state exit 1; invalid state/duration syntax and an
+unknown job exit 2. The positional
+argument is always an exact job ID — runs remain the scope of `tail --until-idle`.
+
 `dashboard` is htop-for-jobs: an attention banner, a prioritized runs/jobs
 rollup, a detail pane for the selected job (status, task, recent events — `f`
 toggles the firehose), and the curated timeline. Keys: in overview, `j/k` (or
@@ -602,6 +621,7 @@ run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
 resume <job> <msg>   answer <job> <msg>   approve <job> [--timeout D]   cancel <job>
 status [selector] [--job ID | --run L]
 result [selector] [--job ID | --run L] [--turn N]
+wait <job> [--until state[,state...]] [--timeout D] [--json]
 ls [--all] [--workspace W] [--run L] [--state S[,S...]] [--limit N] [--json]
 watch <job>
 events [selector] [--job ID | --run] [--since N]

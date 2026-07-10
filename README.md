@@ -89,6 +89,12 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   read-only TUI; `serve` is the local live browser console for human operators
   during multi-agent runs. Every surface is a renderer over the same JSONL, so
   they can never disagree.
+- **Exact-job waits without polling**: `legwork wait job-7` blocks until that job
+  leaves `queued|active`; `--until needs-input,blocked,done` waits for named job
+  states, and `--timeout 20m` bounds it. It reloads persisted metadata and
+  reconciles dead runners to `interrupted`, returns a concise human line or a
+  JSON envelope with final metadata/outcome/elapsed time, and never treats a run
+  label as a job ID. Use `tail --until-idle` for a run or pipeline instead.
 - **Run artifacts stay out of diffs**: `legwork artifact save/list/get --run <label>`
   stores plans, review notes, job maps, and process notes under the state dir's run
   record, not in repo worktrees. v1 accepts UTF-8 text/markdown artifacts; binary
@@ -180,7 +186,7 @@ multi-line UTF-8 text from a file/stdin.
 Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
 contract, workspaces/checkpoints/diff/review/commit/close, runs + narration/artifacts,
 the `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
-structured blocked reasons, needs-provision approval, job `result`/`ack`, timeouts,
+structured blocked reasons, needs-provision approval, job `result`/`wait`/`ack`, timeouts,
 `doctor` preflight, `rules`, `gc` reclamation, `guide` + `skill install`. What's next lives in
 [planning/ROADMAP.md](planning/ROADMAP.md) (the work board — one task per file, plus rejected
 ideas and why); the full design rationale in [DESIGN.md](DESIGN.md).

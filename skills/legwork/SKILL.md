@@ -220,6 +220,7 @@ legwork tail                       # tail -f across all jobs + run logs, notes
                                    # interleaved; --run/--job scope, --full firehose
 legwork tail L --until-idle        # blocks, exits 0 when no job in scope is
                                    # active/queued — the scriptable "wait for my pipeline"
+legwork wait job-14                # exact-job wait; returns when it leaves queued/active
 legwork dashboard                  # interactive TUI (needs a TTY): attention banner,
                                    # prioritized runs/jobs, detail focus + event scroll
 legwork serve                      # local browser console: prints a localhost URL,
@@ -236,8 +237,11 @@ with only notes/artifacts is valid for `events` and `tail`.
 
 Prefer `result` over `status --json` surgery when you need the worker's final
 report; use `--turn N` for an earlier retained turn. Prefer `runs` over `ls` for
-the pipeline view; `tail --until-idle` replaces a status-polling loop; both take
-`--json`. Prefer `serve` when a human needs a run-centered browser view during
+the pipeline view; `tail --until-idle` replaces a run-level polling loop. For one
+exact job, use `wait <job> [--until needs-input,blocked,done] [--timeout 20m]`:
+it reloads metadata, reconciles dead runners, and exits 1 on timeout or a settled
+non-requested state (`--json` includes final metadata plus outcome and elapsed time).
+Both wait surfaces take `--json`. Prefer `serve` when a human needs a run-centered browser view during
 live multi-agent work. It binds
 `127.0.0.1:0` by default; non-loopback `--addr` values require the explicit
 `--allow-remote` opt-in because the page exposes local job paths, tasks, events,
