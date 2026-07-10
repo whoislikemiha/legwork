@@ -123,3 +123,28 @@ One new low-severity edge from re-review was added to the roadmap: when reconcil
 cannot persist metadata, `tail --until-idle` can keep waiting even though stale-meta
 clobber is prevented. Worker verification limitations continue to support the existing
 external-verification-receipts task; no duplicate task was filed.
+
+## Per-job wait dogfood run
+
+The next bounded task used the same installed Legwork build (`dev`, commit
+`49e024612dec`) and a fresh workspace, `ws-75`. Terra/high (`job-170`) implemented
+the exact-job `wait` verb, stable reached/timeout/terminal-mismatch outcomes, JSON
+metadata, documentation, and focused lifecycle tests. The host full gate passed
+before review because the Terra workspace-write sandbox again lacked the populated
+Go module cache available to the orchestrator.
+
+Opus/xhigh (`job-171`) returned **FIX** after directly reproducing a critical contract
+failure that the initial tests missed: `wait <job> --timeout 1s` without `--until`
+never checked its deadline and then busy-spun at roughly 77% of one core. The review
+also identified the missing deadline-guarded regression and two low-cost JSON/parser
+cleanups. Terra corrected the bounded set. Focused re-review compared the old and new
+binaries: the old invocation required `SIGKILL`, while the corrected command returned
+at the deadline with exit 1, `outcome: timeout`, `waited_for: []`, and no measurable
+spin. Verdict: **SHIP**. The review's sole non-blocking test-hardening nit was applied
+before landing.
+
+The full repository gate passed in the workspace and again after merge `48128f4`.
+`legwork wait` now replaces per-job supervisor loops; `tail --until-idle` remains the
+run-level primitive. The worker/host cache difference is further evidence for the
+existing external-verification-receipts task, not a new duplicate. No additional
+roadmap item emerged from this run.

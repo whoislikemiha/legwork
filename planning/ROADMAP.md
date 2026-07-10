@@ -21,8 +21,7 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-- [ ] [Per-job blocking wait](tasks/per-job-wait.md) — **P1.** `ws-75`. Exact-job
-  blocking with explicit reached, timeout, and terminal-mismatch outcomes.
+*(nothing)*
 
 ## Next
 

@@ -1,6 +1,6 @@
 # Per-job blocking wait
 
-Status: in flight · Priority: P1 · Origin: AUDIT E1 + 2026-07-10 dogfood · Depends: — · Workspace: ws-75
+Status: done · Priority: P1 · Origin: AUDIT E1 + 2026-07-10 dogfood · Depends: — · Workspace: ws-75
 
 ## Goal
 
