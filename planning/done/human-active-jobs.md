@@ -84,3 +84,11 @@ Independent review:
 ## Friction
 
 - Verification in this worker sandbox had no cached third-party Go modules, and network DNS to `proxy.golang.org` is blocked. A worker-facing preflight that reports "module cache incomplete for this repo" before the test run would make the failure mode quicker to classify.
+
+## Verdict
+
+Implemented in `ws-67` by jobs `job-146` and `job-147`. Independent review `job-148`
+returned **FIX** for five correctness and consistency issues; the orchestrator corrected
+them and added regression coverage. Re-review `job-149` returned **SHIP** with no landing
+blockers. Focused tests and the full repository gate passed before merge and again on
+`main`. Landed 2026-07-10 via `close --merge-into main`.
