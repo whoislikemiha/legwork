@@ -1,6 +1,6 @@
 # External verification receipts
 
-Status: next · Priority: P1 · Origin: job-146/job-150/job-152 `blocked.kind=verify` dogfood · Depends: quality-receipts, close-commit-receipts · Workspace: —
+Status: in flight · Priority: P1 · Origin: job-146/job-150/job-152 `blocked.kind=verify` dogfood · Depends: quality-receipts, close-commit-receipts · Workspace: ws-81
 
 ## Goal
 

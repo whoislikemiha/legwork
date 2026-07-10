@@ -21,12 +21,12 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-None.
+- [ ] [External verification receipts](tasks/external-verification-receipts.md) — **P1.** `ws-81`.
+  Run explicit host checks for verify-blocked jobs and persist an auditable receipt
+  without rewriting the worker outcome.
 
 ## Next
 
-- [ ] [External verification receipts](tasks/external-verification-receipts.md) — **P1.** Run and
-  record explicit host-side checks for `blocked.kind=verify` without rewriting worker history.
 - [ ] [Actionable workspace and job status](tasks/actionable-workspace-status.md) — **P1.** Add
   `ws status` with truthful attention and copyable next actions across the landing lifecycle.
 - [ ] [Transient provider failure recovery](tasks/transient-provider-recovery.md) — **P1.** Classify
