@@ -21,12 +21,12 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-*(nothing)*
+- [ ] [Durable quality and lifecycle receipts](tasks/quality-receipts.md) — **P1.** `ws-76`.
+  Preserve last-turn outcomes and structured `ws review` verdicts only; close/commit
+  receipts are the next phase.
 
 ## Next
 
-- [ ] [Durable quality and lifecycle receipts](tasks/quality-receipts.md) — **P1.** Preserve worker
-  outcome, review verdict, commit identity, and close disposition as structured facts.
 - [ ] [Close and commit receipts](tasks/close-commit-receipts.md) — **P1.** Version the workspace
   rollup and persist one close/commit identity across merge, discard, clean, and gc paths.
 - [ ] [External verification receipts](tasks/external-verification-receipts.md) — **P1.** Run and
