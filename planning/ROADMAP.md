@@ -64,8 +64,6 @@ standing P1s.)*
     `--permission-prompt-tool`; gates fail closed; hooks handle policy denies. `legwork
     approve` shipped 2026-07-08 gating `needs-provision`; this item extends the same verb
     to permission-shaped decisions (DESIGN §5 updated accordingly).
-  - **Codex sandbox validation ergonomics** (P2) — inject `GOCACHE`/`GOMODCACHE`/`TMPDIR`
-    defaults so Go build/test works in codex sandboxes (overlaps writable-tmpdir).
   - **`worktree.toml` verify hook** (P1) — `verify = "…"` run OUTSIDE the sandbox after each turn,
     result attached to job status, so workers/reviewers never run the suite in a sandbox that
     can't (pairs with the "verify" blocked kind and writable-tmpdir).

@@ -9,6 +9,46 @@ Record `legwork version --json` in field notes and handoffs when build identity
 matters. It reports the release version (or `dev`), commit, dirty flag, and date;
 ordinary `go build`/`go install` builds fall back to Go's embedded VCS metadata.
 
+## Installing the loadable skill
+
+The repository's single maintained skill source is `skills/legwork/SKILL.md`, and
+release binaries embed that exact file. Install or update it for any supported
+agent harness with:
+
+```
+legwork skill install --target hermes   # ~/.hermes/skills/legwork/SKILL.md
+legwork skill install --target claude   # ~/.claude/skills/legwork/SKILL.md
+legwork skill install --target codex    # ~/.codex/skills/legwork/SKILL.md
+legwork skill install --target all --json
+```
+
+The command is noninteractive. Identical installed content is a no-op; differing
+content is a stable `skill-conflict` error and is not overwritten unless you pass
+`--force`. Forced replacements save the previous file under
+`~/.local/share/legwork/skill-backups/<target>/`, outside harness-scanned skill
+directories, so backup copies do not appear as duplicate skills. Keep manual
+backups there too, not beside `SKILL.md`.
+
+`install.sh` installs the binary first, then best-effort installs the skill for
+detected harnesses on `PATH` (`hermes`, `claude`, `codex`). A skill conflict prints
+a note but never turns a successful binary install into a failed install.
+
+Hermes users who normally manage skills with `skills.sh` can use
+`legwork skill install --target hermes` as the update step; it writes the standard
+Hermes user skill path without adding another maintained copy. For local repo
+development, symlink the skill directory instead of copying it, and keep only one
+legwork skill visible to the harness:
+
+```
+ln -sfn "$PWD/skills/legwork" ~/.hermes/skills/legwork
+ln -sfn "$PWD/skills/legwork" ~/.claude/skills/legwork
+ln -sfn "$PWD/skills/legwork" ~/.codex/skills/legwork
+```
+
+After installing or updating a skill, start a new agent session or use the
+harness's skill reload/rescan command. Running sessions may keep the skill text
+they loaded at startup.
+
 Agents differ; legwork normalizes them, it doesn't pretend they're identical.
 `--agent claude` uses a permission mode; `--agent codex` runs in a kernel sandbox
 (`--read-only` → codex's read-only sandbox, otherwise workspace-write) and both
@@ -445,6 +485,13 @@ as a run artifact (see "Grouping and narration").
 - **Model names:** omit `--model` to use the agent's configured default; `doctor`'s
   probe confirms whatever that resolves to. You do not need to discover the exact
   model string before dispatching.
+- **Build identity:** verify the binary with `legwork version --json` before filing
+  field notes or diagnosing skew; do not infer from a checkout path.
+- **Smoke in a subshell:** isolate plumbing tests so state-dir overrides do not leak:
+  `( export LEGWORK_STATE_DIR=$(mktemp -d); legwork run --agent fake "test" )`.
+- **Model/effort receipt:** when a run depends on a specific model or effort, verify
+  the persisted dispatch metadata, not just the command you typed:
+  `legwork status <job> --json` includes `model` and `effort`.
 - **`ws new` concurrency:** back-to-back and concurrent `ws new` calls are safe.
   ID allocation is serialized internally by an exclusive lock, so there is no
   duplicate-ID or lost-update risk — no need to serialize creation yourself.
@@ -452,6 +499,8 @@ as a run artifact (see "Grouping and narration").
   per-job writable `TMPDIR`, `GOCACHE`, `GOMODCACHE`, and `GOTMPDIR` automatically.
   Do not inject a `GOCACHE=/tmp/...` override in an append-prompt — it is
   unnecessary and can point at a read-only path.
+- **Duplicate skills:** each harness should see only one legwork skill directory.
+  Remove old copied installs before adding a symlink or another target path.
 - **The ws↔task map is `runs`/`ls` plus an artifact**, not a table you maintain by
   hand — `legwork runs` already rolls the wave up per label.
 
@@ -513,6 +562,7 @@ orchestrator (often future-you) at trivial cost.
 ```
 doctor [--agent A] [--model M] [--dir R] [--no-probe]   (preflight before dispatch)
 rules [--agent A] [--read-only] [--workspace W | --dir D] [--json]
+skill install [--target hermes|claude|codex|all] [--force] [--json]
 run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P | --append-prompt-file PATH|-]
     [--effort E] [--fallback-model M] <task>

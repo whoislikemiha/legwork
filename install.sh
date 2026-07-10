@@ -42,3 +42,26 @@ case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *) echo "NOTE: $INSTALL_DIR is not on your PATH" >&2 ;;
 esac
+
+skill_targets=""
+if command -v hermes >/dev/null 2>&1; then
+  skill_targets="$skill_targets hermes"
+fi
+if command -v claude >/dev/null 2>&1; then
+  skill_targets="$skill_targets claude"
+fi
+if command -v codex >/dev/null 2>&1; then
+  skill_targets="$skill_targets codex"
+fi
+
+if [ -n "$skill_targets" ]; then
+  for target in $skill_targets; do
+    if "$INSTALL_DIR/legwork" skill install --target "$target" >/dev/null; then
+      echo "Installed legwork skill for $target"
+    else
+      echo "NOTE: legwork skill for $target was not installed; run 'legwork skill install --target $target --json' for details" >&2
+    fi
+  done
+else
+  echo "No supported agent harness found on PATH; run 'legwork skill install --target <hermes|claude|codex|all>' later if needed"
+fi

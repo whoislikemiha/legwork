@@ -108,8 +108,14 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 $ go install github.com/whoislikemiha/legwork@latest
 ```
 
-Binary releases (curl installer) coming with v0.1. Only the machine *running jobs*
-needs legwork — from anywhere else, `ssh host legwork ...`.
+Binary releases use `install.sh` and install to `~/.local/bin` by default:
+
+```console
+$ curl -fsSL https://raw.githubusercontent.com/whoislikemiha/legwork/main/install.sh | sh
+```
+
+Only the machine *running jobs* needs legwork — from anywhere else,
+`ssh host legwork ...`.
 
 ## For orchestrators (agents)
 
@@ -127,17 +133,31 @@ competition/design-only patterns. Preflight a machine before dispatching with
 `legwork doctor` (agent binary, auth, model, state dir, notifier — machine-readable,
 stable exit codes). Record `legwork version --json` in field notes when build
 identity matters; it prints version (or `dev`), commit, dirty flag, and date.
-Smoke-test any setup without API spend:
-`legwork run --agent fake "test"`.
+Smoke-test any setup without API spend in a subshell so state-dir overrides do not leak:
+`( export LEGWORK_STATE_DIR=$(mktemp -d); legwork run --agent fake "test" )`.
+When model or effort matters, verify the receipt with
+`legwork status <job> --json` and check `model`/`effort`.
 
 A loadable skill for agent harnesses ships at
-[`skills/legwork/SKILL.md`](skills/legwork/SKILL.md) — for Claude Code:
+[`skills/legwork/SKILL.md`](skills/legwork/SKILL.md), and release binaries embed
+that exact file. Install or update it noninteractively:
 
 ```console
-$ mkdir -p ~/.claude/skills/legwork
-$ curl -fsSL https://raw.githubusercontent.com/whoislikemiha/legwork/main/skills/legwork/SKILL.md \
-    -o ~/.claude/skills/legwork/SKILL.md
+$ legwork skill install --target hermes   # ~/.hermes/skills/legwork/SKILL.md
+$ legwork skill install --target claude   # ~/.claude/skills/legwork/SKILL.md
+$ legwork skill install --target codex    # ~/.codex/skills/legwork/SKILL.md
+$ legwork skill install --target all --json
 ```
+
+`install.sh` best-effort installs the skill for detected harnesses on `PATH`
+without clobbering modified skills or failing the binary install on a skill
+conflict. Identical content is a no-op; differing content requires `--force`,
+which writes backups under `~/.local/share/legwork/skill-backups/<target>/`
+outside harness-scanned paths. Hermes users who normally use `skills.sh` can use
+`legwork skill install --target hermes` as the update step. For local repo
+development, symlink the harness skill directory to `skills/legwork`, keep only
+one legwork skill visible to each harness, and restart/reload sessions after
+updates.
 
 One rule worth knowing before the guide: **your task prompt is only the task** —
 legwork injects the worker contract (status block, ask-early, no commit/push,
@@ -152,7 +172,7 @@ Early. Implemented: jobs, detached runner, claude + codex + fake adapters, statu
 contract, workspaces/checkpoints/diff/review/commit/close, runs + narration/artifacts,
 the `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
 structured blocked reasons, needs-provision approval, job `result`/`ack`, timeouts,
-`doctor` preflight, `rules`, `gc` reclamation, `guide` + skill. What's next lives in
+`doctor` preflight, `rules`, `gc` reclamation, `guide` + `skill install`. What's next lives in
 [planning/ROADMAP.md](planning/ROADMAP.md) (the work board — one task per file, plus rejected
 ideas and why); the full design rationale in [DESIGN.md](DESIGN.md).
 

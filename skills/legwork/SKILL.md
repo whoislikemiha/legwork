@@ -14,6 +14,30 @@ When recording field notes or diagnosing version skew, run `legwork version --js
 It reports version (or `dev`), commit, dirty flag, and date, with Go VCS metadata as
 the fallback for ordinary local builds.
 
+## Installation and updates
+
+The canonical skill source is the repo file `skills/legwork/SKILL.md`; release
+binaries embed that exact file. Install or update it noninteractively:
+
+```bash
+legwork skill install --target hermes   # ~/.hermes/skills/legwork/SKILL.md
+legwork skill install --target claude   # ~/.claude/skills/legwork/SKILL.md
+legwork skill install --target codex    # ~/.codex/skills/legwork/SKILL.md
+legwork skill install --target all --json
+```
+
+Identical content is a no-op. Differing content returns stable
+`skill-conflict` JSON and is not overwritten unless `--force` is explicit; forced
+replacements save backups under `~/.local/share/legwork/skill-backups/<target>/`,
+outside harness-scanned skill paths. Keep only one legwork skill visible to a
+harness to avoid duplicate-skill ambiguity. For local repo development, symlink
+the harness skill directory to `$PWD/skills/legwork` instead of copying it.
+Hermes users who normally install skills through `skills.sh` can use
+`legwork skill install --target hermes` as the update step.
+
+After installing or updating, start a new agent session or use the harness's
+skill reload/rescan command; running sessions may keep the old skill text.
+
 ## Rules of engagement
 
 - **Your task prompt is only the task.** legwork injects the worker contract itself
@@ -257,11 +281,15 @@ values, blocked reporting), delete those lines; a paraphrase competes with the
 injected contract. A good ~5-line append-prompt names how to verify and the repo's
 doc/invariant rules and says nothing about commits or status blocks.
 
-**Preflight facts:** omit `--model` to take the agent default (the probe confirms
-it); `ws new` is safe to call back-to-back (ID allocation is internally
-serialized); codex workspace-write turns get writable `TMPDIR`/`GOCACHE` per job —
-never inject a `GOCACHE=/tmp` override; the ws↔task map is `runs`/`ls` + an
-artifact, not a hand-built table.
+**Preflight facts:** verify build identity with `legwork version --json`; smoke
+plumbing in a subshell so state-dir overrides do not leak:
+`( export LEGWORK_STATE_DIR=$(mktemp -d); legwork run --agent fake "test" )`;
+omit `--model` to take the agent default (the probe confirms it); when model or
+effort matters, verify `legwork status <job> --json` includes the persisted
+`model`/`effort`; `ws new` is safe to call back-to-back (ID allocation is
+internally serialized); codex workspace-write turns get writable
+`TMPDIR`/`GOCACHE` per job — never inject a `GOCACHE=/tmp` override; the ws↔task
+map is `runs`/`ls` + an artifact, not a hand-built table.
 
 **Other plays:** *competition* — two implementers on one task in separate
 workspaces, review both, keep the winner, `--discard` the loser (optionally graft

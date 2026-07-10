@@ -33,8 +33,14 @@ var version = "dev"
 
 func main() {
 	if err := rootCmd().Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "legwork: %v\n", err)
-		os.Exit(2)
+		code := 2
+		if e, ok := err.(interface{ ExitCode() int }); ok {
+			code = e.ExitCode()
+		}
+		if e, ok := err.(interface{ Silent() bool }); !ok || !e.Silent() {
+			fmt.Fprintf(os.Stderr, "legwork: %v\n", err)
+		}
+		os.Exit(code)
 	}
 }
 
@@ -55,9 +61,20 @@ health, recipes).`,
 	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), approveCmd(), statusCmd(), eventsCmd(),
 		resultCmd(), lsCmd(), watchCmd(), cancelCmd(), ackCmd(), wsCmd(), diffCmd(), closeCmd(),
 		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd(),
-		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd(), versionCmd(), rulesCmd())
+		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd(), versionCmd(), rulesCmd(),
+		skillCmd())
 	return root
 }
+
+type commandError struct {
+	code    int
+	message string
+	silent  bool
+}
+
+func (e commandError) Error() string { return e.message }
+func (e commandError) ExitCode() int { return e.code }
+func (e commandError) Silent() bool  { return e.silent }
 
 // doctorCmd is preflight: validate the exact agent/model a run would use, plus
 // the state dir, git, workstree pairing, and notifier — before dispatching.
