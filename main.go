@@ -28,6 +28,7 @@ import (
 	"github.com/whoislikemiha/legwork/internal/guide"
 	"github.com/whoislikemiha/legwork/internal/job"
 	"github.com/whoislikemiha/legwork/internal/runner"
+	"github.com/whoislikemiha/legwork/internal/workspace"
 )
 
 var version = "dev"
@@ -1000,11 +1001,11 @@ func exitNoResult(format string, args ...any) {
 
 func eventsCmd() *cobra.Command {
 	var since int
-	var asJSON, isRun bool
+	var asJSON, isRun, isWorkspace bool
 	var jobID string
 	c := &cobra.Command{
-		Use:   "events [selector] [--job <id> | --run]",
-		Short: "Read a job or run event index (cursor with --since)",
+		Use:   "events [selector] [--job <id> | --run | --workspace]",
+		Short: "Read a job, run, or workspace event index (cursor with --since)",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
@@ -1014,6 +1015,22 @@ func eventsCmd() *cobra.Command {
 			positional := ""
 			if len(args) == 1 {
 				positional = args[0]
+			}
+			if isWorkspace {
+				if jobID != "" || isRun {
+					return fmt.Errorf("--workspace cannot be combined with --job or --run")
+				}
+				if positional == "" {
+					return fmt.Errorf("workspace selector is required")
+				}
+				_, wss, err := openWorkspaces()
+				if err != nil {
+					return err
+				}
+				if _, err := wss.Load(positional); err != nil {
+					return err
+				}
+				return printWorkspaceEvents(wss, positional, since, asJSON)
 			}
 			// events <label> --run is the existing boolean namespace override.
 			// Keep it directly rather than encoding it as a string sentinel.
@@ -1041,7 +1058,25 @@ func eventsCmd() *cobra.Command {
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
 	c.Flags().StringVar(&jobID, "job", "", "force an exact job ID selector")
 	c.Flags().BoolVar(&isRun, "run", false, "the selector is a run label, not a job ID")
+	c.Flags().BoolVar(&isWorkspace, "workspace", false, "the selector is a workspace ID")
 	return c
+}
+
+// printWorkspaceEvents is intentionally separate from job/run selector logic:
+// workspace history has its own event index and cursor, and --workspace keeps
+// every pre-existing selector meaning unchanged.
+func printWorkspaceEvents(ws *workspace.Store, id string, since int, asJSON bool) error {
+	evs, err := events.Read(ws.EventsPath(id), since)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if asJSON {
+		return printJSON(evs)
+	}
+	for _, e := range evs {
+		printEvent(e)
+	}
+	return nil
 }
 
 // printEvents preserves the stable per-log event API. Run logs are a distinct

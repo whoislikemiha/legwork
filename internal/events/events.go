@@ -41,10 +41,11 @@ const (
 	TypeText           = "text"      // assistant text (preview)
 	TypeToolCall       = "tool-call" // fields: tool, target
 	TypeProgress       = "progress"
-	TypeUsage          = "usage"      // fields: cost_usd, tokens_in, tokens_out, context
-	TypeNote           = "note"       // orchestrator narration
-	TypeArtifact       = "artifact"   // fields: name, size_bytes
-	TypeCommit         = "commit"     // orchestrator-owned workspace commit
+	TypeUsage          = "usage"    // fields: cost_usd, tokens_in, tokens_out, context
+	TypeNote           = "note"     // orchestrator narration
+	TypeArtifact       = "artifact" // fields: name, size_bytes
+	TypeCommit         = "commit"   // orchestrator-owned workspace commit
+	TypeWorkspaceClose = "workspace-close"
 	TypeCheckpoint     = "checkpoint" // fields: ref, oid
 	TypeReviewVerdict  = "review-verdict"
 )

@@ -494,12 +494,15 @@ func (e *engine) closeOne(m *workspace.Meta, disposition, mergedInto, kind, note
 		e.add(Action{Kind: kind, Target: m.ID, Note: note})
 		return
 	}
-	if err := e.ws.CloseMerged(m, disposition, mergedInto); err != nil {
+	if err := e.ws.CloseMerged(m, disposition, mergedInto, "gc"); err != nil {
 		e.rep.Failed++
 		e.add(Action{Kind: kind, Target: m.ID, Note: note + " (failed: " + err.Error() + ")"})
 		return
 	}
 	_ = e.js.CloseJobsForWorkspace(m.ID)
+	if m.CloseReceipt != nil && m.CloseReceipt.HistoryError != "" {
+		note += " (history warning: " + m.CloseReceipt.HistoryError + ")"
+	}
 	e.add(Action{Kind: kind, Target: m.ID, Note: note})
 }
 

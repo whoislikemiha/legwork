@@ -16,17 +16,22 @@ import (
 	"strings"
 	"time"
 
+	"github.com/whoislikemiha/legwork/internal/events"
 	"github.com/whoislikemiha/legwork/internal/job"
 )
 
+const MetaSchemaVersion = 1
+
 // Meta is the persisted workspace record.
 type Meta struct {
-	ID      string `json:"id"`
-	Repo    string `json:"repo"`   // source checkout root
-	Tree    string `json:"tree"`   // worktree path (outside the repo)
-	Branch  string `json:"branch"` // legwork/<id>, tool-created and tool-deleted only
-	BaseOID string `json:"base_oid"`
-	State   string `json:"state"` // open | closed
+	// SchemaVersion is additive. Zero is the legacy unversioned format.
+	SchemaVersion int    `json:"schema_version,omitempty"`
+	ID            string `json:"id"`
+	Repo          string `json:"repo"`   // source checkout root
+	Tree          string `json:"tree"`   // worktree path (outside the repo)
+	Branch        string `json:"branch"` // legwork/<id>, tool-created and tool-deleted only
+	BaseOID       string `json:"base_oid"`
+	State         string `json:"state"` // open | closed
 	// Disposition records why it closed: merged | discard | (empty while open).
 	Disposition  string      `json:"disposition,omitempty"`
 	Checkpoints  int         `json:"checkpoints"`
@@ -36,8 +41,11 @@ type Meta struct {
 	Reason       string      `json:"reason,omitempty"`
 	SupersededBy string      `json:"superseded_by,omitempty"`
 	FinalCommit  *CommitInfo `json:"final_commit,omitempty"`
-	MergedInto   string      `json:"merged_into,omitempty"`
-	Retention    string      `json:"retention,omitempty"`
+	// CloseReceipt is the authoritative explanation of a completed workspace.
+	// The lifecycle fields above remain compatibility mirrors for older clients.
+	CloseReceipt *CloseReceipt `json:"close_receipt,omitempty"`
+	MergedInto   string        `json:"merged_into,omitempty"`
+	Retention    string        `json:"retention,omitempty"`
 	// LatestReview is a current rollup. The reviewer job and its event log
 	// remain the historical source of every individual review turn.
 	LatestReview *ReviewReceipt `json:"latest_review,omitempty"`
@@ -88,11 +96,33 @@ type Store struct{ Root string }
 type CommitResult struct {
 	OID     string
 	Summary string
+	Receipt *CommitInfo
 }
 
 type CommitInfo struct {
-	OID     string `json:"oid"`
-	Summary string `json:"summary,omitempty"`
+	ReceiptID    string     `json:"receipt_id,omitempty"`
+	OID          string     `json:"oid"`
+	Summary      string     `json:"summary,omitempty"`
+	Actor        string     `json:"actor,omitempty"`
+	Message      string     `json:"message,omitempty"`
+	CommittedAt  *time.Time `json:"committed_at,omitempty"`
+	HistoryError string     `json:"history_error,omitempty"`
+}
+
+// CloseReceipt records the single durable close decision for a workspace.
+// Its fields duplicate no authority: lifecycle fields on Meta are compatibility
+// mirrors for callers that predate receipts.
+type CloseReceipt struct {
+	ReceiptID    string      `json:"receipt_id"`
+	Disposition  string      `json:"disposition"`
+	Reason       string      `json:"reason,omitempty"`
+	Target       string      `json:"target,omitempty"`
+	Actor        string      `json:"actor,omitempty"`
+	ClosedAt     *time.Time  `json:"closed_at,omitempty"`
+	Retention    string      `json:"retention,omitempty"`
+	SupersededBy string      `json:"superseded_by,omitempty"`
+	FinalCommit  *CommitInfo `json:"final_commit,omitempty"`
+	HistoryError string      `json:"history_error,omitempty"`
 }
 
 type CloseOptions struct {
@@ -102,6 +132,7 @@ type CloseOptions struct {
 	SupersededBy string
 	MergedInto   string
 	Retention    string
+	Actor        string
 }
 
 type reclaimOptions struct {
@@ -163,6 +194,9 @@ func (s *Store) newID() (string, error) {
 }
 
 func (s *Store) save(m *Meta) error {
+	if m.SchemaVersion == 0 {
+		m.SchemaVersion = MetaSchemaVersion
+	}
 	m.Updated = time.Now().UTC()
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -185,8 +219,56 @@ func (s *Store) Load(id string) (*Meta, error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, err
 	}
+	if m.SchemaVersion > MetaSchemaVersion {
+		return nil, &UnsupportedSchemaError{Found: m.SchemaVersion, Supported: MetaSchemaVersion}
+	}
+	m.backfillLegacyReceipt()
 	return &m, nil
 }
+
+// UnsupportedSchemaError prevents an older binary from rewriting workspace
+// metadata it cannot faithfully understand.
+type UnsupportedSchemaError struct {
+	Found     int
+	Supported int
+}
+
+func (e *UnsupportedSchemaError) Error() string {
+	return fmt.Sprintf("workspace metadata schema version %d is newer than supported version %d", e.Found, e.Supported)
+}
+
+// backfillLegacyReceipt provides an in-memory, read-only view for old closed
+// records. It intentionally leaves unknown provenance absent and never calls
+// save, so listing a legacy workspace cannot migrate it on disk.
+func (m *Meta) backfillLegacyReceipt() {
+	if m.SchemaVersion != 0 || m.State != "closed" || m.CloseReceipt != nil {
+		return
+	}
+	m.CloseReceipt = &CloseReceipt{
+		ReceiptID:    "legacy:" + m.ID + ":close",
+		Disposition:  m.Disposition,
+		Reason:       m.Reason,
+		Target:       m.MergedInto,
+		ClosedAt:     m.ClosedAt,
+		Retention:    m.Retention,
+		SupersededBy: m.SupersededBy,
+		FinalCommit:  m.FinalCommit,
+	}
+}
+
+func (s *Store) eventPath(id string) string { return filepath.Join(s.dir(id), "events.jsonl") }
+
+func (s *Store) appendEvent(id string, e events.Event) error {
+	log, err := events.Open(s.eventPath(id))
+	if err != nil {
+		return err
+	}
+	_, err = log.Append(e)
+	return err
+}
+
+// EventsPath returns the workspace's append-only Legwork event log.
+func (s *Store) EventsPath(id string) string { return s.eventPath(id) }
 
 func (s *Store) List() ([]*Meta, error) {
 	entries, err := os.ReadDir(filepath.Join(s.Root, "workspaces"))
@@ -195,9 +277,15 @@ func (s *Store) List() ([]*Meta, error) {
 	}
 	var out []*Meta
 	for _, e := range entries {
-		if m, err := s.Load(e.Name()); err == nil {
-			out = append(out, m)
+		m, err := s.Load(e.Name())
+		if err != nil {
+			var unsupported *UnsupportedSchemaError
+			if errors.As(err, &unsupported) {
+				return nil, err
+			}
+			continue
 		}
+		out = append(out, m)
 	}
 	return out, nil
 }
@@ -235,7 +323,7 @@ func (s *Store) Create(repo, base string) (*Meta, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Meta{ID: id, Repo: repoRoot, State: "open", Created: time.Now().UTC()}
+	m := &Meta{SchemaVersion: MetaSchemaVersion, ID: id, Repo: repoRoot, State: "open", Created: time.Now().UTC()}
 	m.Tree = filepath.Join(s.dir(id), "tree")
 	m.Branch = "legwork/" + id
 	if err := os.MkdirAll(s.dir(id), 0o700); err != nil {
@@ -451,11 +539,54 @@ func (s *Store) Commit(m *Meta, message string) (*CommitResult, error) {
 		return nil, err
 	}
 	summary, _ := run("show", "--stat", "--oneline", "--summary", "--no-renames", "--format=%h %s", "--no-ext-diff", "--no-color", "HEAD")
-	m.FinalCommit = &CommitInfo{OID: oid, Summary: summary}
+	now := time.Now().UTC()
+	m.FinalCommit = &CommitInfo{
+		ReceiptID: "workspace:" + m.ID + ":commit:" + oid,
+		OID:       oid, Summary: summary, Actor: "orchestrator", Message: message, CommittedAt: &now,
+	}
 	if err := s.save(m); err != nil {
 		return nil, err
 	}
-	return &CommitResult{OID: oid, Summary: summary}, nil
+	if err := s.appendEvent(m.ID, events.Event{Type: events.TypeCommit, Actor: "orchestrator",
+		Preview: events.Truncate(message), Fields: map[string]any{
+			"workspace": m.ID, "branch": m.Branch, "receipt_id": m.FinalCommit.ReceiptID,
+			"final_commit": m.FinalCommit,
+		}}); err != nil {
+		s.recordCommitHistoryError(m, m.FinalCommit, fmt.Errorf("append workspace event %s: %w", s.eventPath(m.ID), err))
+	}
+	return &CommitResult{OID: oid, Summary: summary, Receipt: m.FinalCommit}, nil
+}
+
+// RecordCommitHistoryError records a post-durability warning without turning a
+// successful, non-idempotent git commit into an instruction to replay it.
+func (s *Store) RecordCommitHistoryError(m *Meta, receipt *CommitInfo, err error) {
+	s.recordCommitHistoryError(m, receipt, err)
+}
+
+func (s *Store) recordCommitHistoryError(m *Meta, receipt *CommitInfo, err error) {
+	if receipt == nil || err == nil {
+		return
+	}
+	receipt.HistoryError = appendHistoryError(receipt.HistoryError, err.Error())
+	// The commit receipt was already durable. Persist the warning when the
+	// state directory still permits it, but never ask callers to retry commit.
+	_ = s.save(m)
+}
+
+func (s *Store) recordCloseHistoryError(m *Meta, receipt *CloseReceipt, err error) {
+	if receipt == nil || err == nil {
+		return
+	}
+	receipt.HistoryError = appendHistoryError(receipt.HistoryError, err.Error())
+	// As above, closing is already durable once this point is reached.
+	_ = s.save(m)
+}
+
+func appendHistoryError(existing, next string) string {
+	if existing == "" {
+		return next
+	}
+	return existing + "; " + next
 }
 
 func commitEnv(tree string) []string {
@@ -595,6 +726,10 @@ func (s *Store) Close(m *Meta, opts CloseOptions) error {
 	if m.State == "closed" {
 		return fmt.Errorf("%s is already closed", m.ID)
 	}
+	actor := strings.TrimSpace(opts.Actor)
+	if actor == "" {
+		return fmt.Errorf("close actor is required")
+	}
 	disposition := opts.Disposition
 	if disposition == "" {
 		dirty, err := s.Dirty(m)
@@ -623,7 +758,14 @@ func (s *Store) Close(m *Meta, opts CloseOptions) error {
 	m.SupersededBy = strings.TrimSpace(opts.SupersededBy)
 	m.MergedInto = strings.TrimSpace(opts.MergedInto)
 	m.Retention = retention
-	return s.save(m)
+	m.CloseReceipt = closeReceipt(m, disposition, actor, now)
+	if err := s.save(m); err != nil {
+		return err
+	}
+	if err := s.appendEvent(m.ID, closeEvent(m.ID, m.CloseReceipt)); err != nil {
+		s.recordCloseHistoryError(m, m.CloseReceipt, fmt.Errorf("append workspace event %s: %w", s.eventPath(m.ID), err))
+	}
+	return nil
 }
 
 // reclaim performs blast-radius-limited reclamation of a workspace's
@@ -662,9 +804,13 @@ func keepBranch(disposition string, keepWorktree bool, retention string) bool {
 // landed (disposition "merged") or never-started (disposition "clean"),
 // reclaiming its local worktree cache and checkpoint refs. It is gc's entry to
 // the same reclamation policy Close uses; callers verify merged-ness first.
-func (s *Store) CloseMerged(m *Meta, disposition, mergedInto string) error {
+func (s *Store) CloseMerged(m *Meta, disposition, mergedInto, actor string) error {
 	if m.State == "closed" {
 		return fmt.Errorf("%s is already closed", m.ID)
+	}
+	actor = strings.TrimSpace(actor)
+	if actor == "" {
+		return fmt.Errorf("close actor is required")
 	}
 	if err := s.reclaim(m, reclaimOptions{
 		KeepBranch: true,
@@ -676,7 +822,30 @@ func (s *Store) CloseMerged(m *Meta, disposition, mergedInto string) error {
 	now := time.Now().UTC()
 	m.ClosedAt = &now
 	m.MergedInto = strings.TrimSpace(mergedInto)
-	return s.save(m)
+	m.CloseReceipt = closeReceipt(m, disposition, actor, now)
+	if err := s.save(m); err != nil {
+		return err
+	}
+	if err := s.appendEvent(m.ID, closeEvent(m.ID, m.CloseReceipt)); err != nil {
+		s.recordCloseHistoryError(m, m.CloseReceipt, fmt.Errorf("append workspace event %s: %w", s.eventPath(m.ID), err))
+	}
+	return nil
+}
+
+func closeReceipt(m *Meta, disposition, actor string, at time.Time) *CloseReceipt {
+	return &CloseReceipt{
+		ReceiptID:   "workspace:" + m.ID + ":close:" + at.Format("20060102T150405.000000000Z"),
+		Disposition: disposition,
+		Reason:      m.Reason, Target: m.MergedInto, Actor: actor, ClosedAt: &at,
+		Retention: m.Retention, SupersededBy: m.SupersededBy, FinalCommit: m.FinalCommit,
+	}
+}
+
+func closeEvent(workspaceID string, receipt *CloseReceipt) events.Event {
+	return events.Event{Type: events.TypeWorkspaceClose, Actor: receipt.Actor,
+		Preview: receipt.Disposition, Fields: map[string]any{
+			"workspace": workspaceID, "receipt_id": receipt.ReceiptID, "receipt": receipt,
+		}}
 }
 
 // Dir returns the workspace's state directory (<root>/workspaces/<id>).

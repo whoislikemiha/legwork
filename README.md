@@ -67,7 +67,8 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   cleanly, dirty target checkouts and self-merges are refused, and `--json`
   distinguishes `conflict` from `guard-refused`. The workspace `meta.json` records
   the final commit and close disposition fields (`closed_at`, `reason`,
-  `superseded_by`, `merged_into`, `retention`) for later audit. Bootstrap uses the
+  `superseded_by`, `merged_into`, `retention`) plus versioned commit/close
+  receipts and an append-only workspace event log for later audit. Bootstrap uses the
   [workstree](https://github.com/whoislikemiha/workstree) convention when the repo
   declares it.
 - **Workspace-less jobs can be acknowledged**: `legwork ack <job>` marks a terminal
@@ -85,7 +86,8 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   earlier retained turn). The core read commands accept one selector: an exact
   job ID wins, otherwise it is a run label; use `--job` or `--run` to force a
   namespace when they collide (`events` keeps its compatible
-  `events <label> --run` boolean form). `status` and `result` select a run's newest job;
+  `events <label> --run` boolean form; `events ws-N --workspace` is the separate
+  workspace-history scope). `status` and `result` select a run's newest job;
   `events` reads its run event log and `tail` includes its whole timeline,
   including a run with only notes or artifacts. `ls` shows attention/active/unreviewed jobs first,
   hides closed history by default in both human and JSON modes, and takes
@@ -112,13 +114,19 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   fresh over resume. Tune it with `[health] context_threshold` in `config.toml`
   (default 150000; `0` disables).
 - **Reclamation without a daemon**: `close` records disposition/retention metadata
-  and drops the local worktree cache; branches are kept by default as the durable
+  in one close receipt (including actor, target, and final commit), appends a
+  workspace-history event, and drops the local worktree cache; branches are kept by default as the durable
   artifact. `--preserve` records `retention=preserve` and keeps branch/checkpoint
   refs for analysis; `--keep-worktree` keeps the checkout and checkpoint refs.
   `gc` compresses/retires transcripts and sweeps orphans (dead runners, stale
   worktrees, refs with no workspace); opt-in `--close-merged` auto-closes landed
   work without deleting its branch. Runs opportunistically on dispatch; unclosed
   work is never touched.
+- **Workspace event history**: `legwork events ws-N --workspace` reads that
+  workspace's own append-only commit/close index with the normal `--since` cursor
+  and `--json` output. If history recording fails after a commit or close is
+  durable, the successful receipt/output includes `history_error`; do not replay
+  the non-idempotent operation.
 
 ## Install
 

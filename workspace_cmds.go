@@ -132,18 +132,23 @@ func wsCmd() *cobra.Command {
 				return err
 			}
 			if err := appendWorkspaceCommitEvents(s, m, message, res); err != nil {
-				return fmt.Errorf("%s committed %s but event write failed: %w", m.ID, res.OID, err)
+				wss.RecordCommitHistoryError(m, res.Receipt, err)
 			}
 			if commitJSON {
 				out := workspaceCommitOutput{
-					Workspace: m.ID,
-					Branch:    m.Branch,
-					OID:       res.OID,
-					Summary:   res.Summary,
+					Workspace:   m.ID,
+					Branch:      m.Branch,
+					OID:         res.OID,
+					Summary:     res.Summary,
+					FinalCommit: res.Receipt,
 				}
 				return printJSON(out)
 			}
-			fmt.Printf("%s committed %s\n", m.ID, res.OID)
+			if res.Receipt != nil && res.Receipt.HistoryError != "" {
+				fmt.Printf("%s committed %s (history warning: %s)\n", m.ID, res.OID, res.Receipt.HistoryError)
+			} else {
+				fmt.Printf("%s committed %s\n", m.ID, res.OID)
+			}
 			return nil
 		},
 	}
@@ -238,10 +243,11 @@ Workspace diff from legwork diff %s:
 }
 
 type workspaceCommitOutput struct {
-	Workspace string `json:"workspace"`
-	Branch    string `json:"branch"`
-	OID       string `json:"oid"`
-	Summary   string `json:"summary,omitempty"`
+	Workspace   string                `json:"workspace"`
+	Branch      string                `json:"branch"`
+	OID         string                `json:"oid"`
+	Summary     string                `json:"summary,omitempty"`
+	FinalCommit *workspace.CommitInfo `json:"final_commit,omitempty"`
 }
 
 func appendWorkspaceCommitEvents(s *job.Store, m *workspace.Meta, message string, res *workspace.CommitResult) error {
@@ -249,10 +255,15 @@ func appendWorkspaceCommitEvents(s *job.Store, m *workspace.Meta, message string
 	if err != nil {
 		return err
 	}
+	var historyErrs []error
 	fields := map[string]any{
 		"workspace": m.ID,
 		"branch":    m.Branch,
 		"oid":       res.OID,
+	}
+	if res.Receipt != nil {
+		fields["receipt_id"] = res.Receipt.ReceiptID
+		fields["final_commit"] = res.Receipt
 	}
 	if res.Summary != "" {
 		fields["summary"] = events.Truncate(res.Summary)
@@ -268,30 +279,37 @@ func appendWorkspaceCommitEvents(s *job.Store, m *workspace.Meta, message string
 		if jm.Workspace != m.ID {
 			continue
 		}
-		log, err := events.Open(filepath.Join(s.JobDir(jm.ID), "events.jsonl"))
-		if err != nil {
-			return err
-		}
-		if _, err := log.Append(ev); err != nil {
-			return fmt.Errorf("append job %s event %s: %w", jm.ID, filepath.Join(s.JobDir(jm.ID), "events.jsonl"), err)
-		}
 		if jm.Run != "" {
 			runs[jm.Run] = true
+		}
+		log, err := events.Open(filepath.Join(s.JobDir(jm.ID), "events.jsonl"))
+		if err != nil {
+			historyErrs = append(historyErrs, fmt.Errorf("open job %s event %s: %w", jm.ID, filepath.Join(s.JobDir(jm.ID), "events.jsonl"), err))
+			continue
+		}
+		if _, err := log.Append(ev); err != nil {
+			historyErrs = append(historyErrs, fmt.Errorf("append job %s event %s: %w", jm.ID, filepath.Join(s.JobDir(jm.ID), "events.jsonl"), err))
 		}
 	}
 	for run := range runs {
 		path, err := s.RunEventsPath(run)
 		if err != nil {
-			return err
+			historyErrs = append(historyErrs, fmt.Errorf("open run %s event path: %w", run, err))
+			continue
 		}
 		rl, err := events.Open(path)
 		if err != nil {
-			return err
+			historyErrs = append(historyErrs, fmt.Errorf("open run %s event %s: %w", run, path, err))
+			continue
 		}
 		runFields := map[string]any{
 			"workspace": m.ID,
 			"branch":    m.Branch,
 			"oid":       res.OID,
+		}
+		if res.Receipt != nil {
+			runFields["receipt_id"] = res.Receipt.ReceiptID
+			runFields["final_commit"] = res.Receipt
 		}
 		if res.Summary != "" {
 			runFields["summary"] = events.Truncate(res.Summary)
@@ -302,10 +320,10 @@ func appendWorkspaceCommitEvents(s *job.Store, m *workspace.Meta, message string
 			Preview: events.Truncate(message),
 			Fields:  runFields,
 		}); err != nil {
-			return fmt.Errorf("append run %s event %s: %w", run, path, err)
+			historyErrs = append(historyErrs, fmt.Errorf("append run %s event %s: %w", run, path, err))
 		}
 	}
-	return nil
+	return errors.Join(historyErrs...)
 }
 
 func diffCmd() *cobra.Command {
@@ -448,6 +466,7 @@ func closeCmd() *cobra.Command {
 				SupersededBy: supersededBy,
 				MergedInto:   verifiedTarget,
 				Retention:    retention,
+				Actor:        "orchestrator",
 			}); err != nil {
 				return err
 			}
@@ -456,15 +475,21 @@ func closeCmd() *cobra.Command {
 			_ = s.CloseJobsForWorkspace(m.ID)
 			if asJSON {
 				return printJSON(closeOutput{
-					OK:          true,
-					Workspace:   m.ID,
-					State:       m.State,
-					Disposition: m.Disposition,
-					MergedInto:  m.MergedInto,
-					Merge:       merge,
+					OK:           true,
+					Workspace:    m.ID,
+					State:        m.State,
+					Disposition:  m.Disposition,
+					MergedInto:   m.MergedInto,
+					Merge:        merge,
+					CloseReceipt: m.CloseReceipt,
+					FinalCommit:  m.FinalCommit,
 				})
 			}
-			fmt.Printf("%s closed (%s)\n", m.ID, m.Disposition)
+			if m.CloseReceipt != nil && m.CloseReceipt.HistoryError != "" {
+				fmt.Printf("%s closed (%s; history warning: %s)\n", m.ID, m.Disposition, m.CloseReceipt.HistoryError)
+			} else {
+				fmt.Printf("%s closed (%s)\n", m.ID, m.Disposition)
+			}
 			return nil
 		},
 	}
@@ -484,13 +509,15 @@ func closeCmd() *cobra.Command {
 }
 
 type closeOutput struct {
-	OK          bool                   `json:"ok"`
-	Workspace   string                 `json:"workspace"`
-	State       string                 `json:"state"`
-	Disposition string                 `json:"disposition,omitempty"`
-	MergedInto  string                 `json:"merged_into,omitempty"`
-	Merge       *workspace.MergeResult `json:"merge,omitempty"`
-	Blocked     *closeBlocked          `json:"blocked,omitempty"`
+	OK           bool                    `json:"ok"`
+	Workspace    string                  `json:"workspace"`
+	State        string                  `json:"state"`
+	Disposition  string                  `json:"disposition,omitempty"`
+	MergedInto   string                  `json:"merged_into,omitempty"`
+	Merge        *workspace.MergeResult  `json:"merge,omitempty"`
+	CloseReceipt *workspace.CloseReceipt `json:"close_receipt,omitempty"`
+	FinalCommit  *workspace.CommitInfo   `json:"final_commit,omitempty"`
+	Blocked      *closeBlocked           `json:"blocked,omitempty"`
 }
 
 type closeBlocked struct {

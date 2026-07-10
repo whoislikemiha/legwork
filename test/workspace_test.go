@@ -160,6 +160,8 @@ func TestWorkspaceCommit(t *testing.T) {
 	)
 	jid := strings.TrimSpace(e.legwork(t, "run", "--run", "pipe", "--agent", "fake", "--workspace", wsID, "edit stuff"))
 	e.waitState(t, jid, "done")
+	jid2 := strings.TrimSpace(e.legwork(t, "run", "--run", "pipe-two", "--agent", "fake", "--workspace", wsID, "edit again"))
+	e.waitState(t, jid2, "done")
 
 	out := e.legwork(t, "ws", "commit", wsID, "-m", "land workspace output")
 	if !strings.Contains(out, wsID+" committed ") {
@@ -179,9 +181,10 @@ func TestWorkspaceCommit(t *testing.T) {
 	if !ok || final["oid"] == "" || !strings.Contains(final["summary"].(string), "land workspace output") {
 		t.Fatalf("final commit not recorded in workspace meta: %v", meta)
 	}
+	receiptID := requireString(t, final, "receipt_id")
 
-	for _, got := range []string{e.legwork(t, "events", jid, "--json"), e.legwork(t, "events", "pipe", "--run", "--json")} {
-		if !strings.Contains(got, "commit") || !strings.Contains(got, "land workspace output") || !strings.Contains(got, wsID) {
+	for _, got := range []string{e.legwork(t, "events", jid, "--json"), e.legwork(t, "events", jid2, "--json"), e.legwork(t, "events", "pipe", "--run", "--json"), e.legwork(t, "events", "pipe-two", "--run", "--json")} {
+		if !strings.Contains(got, "commit") || !strings.Contains(got, "land workspace output") || !strings.Contains(got, wsID) || !strings.Contains(got, receiptID) {
 			t.Fatalf("commit event missing attribution:\n%s", got)
 		}
 	}
@@ -213,6 +216,39 @@ func TestWorkspaceCommitRefusesEmpty(t *testing.T) {
 	}
 }
 
+func TestWorkspaceCommandsRejectNewerMetadataWithoutRewritingIt(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	path := filepath.Join(e.state, "workspaces", wsID, "meta.json")
+	original, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer := strings.Replace(string(original), `"schema_version": 1`, `"schema_version": 2`, 1)
+	if newer == string(original) {
+		t.Fatalf("test fixture did not contain schema_version: %s", original)
+	}
+	if err := os.WriteFile(path, []byte(newer), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{
+		{"ws", "ls"},
+		{"ws", "commit", wsID, "-m", "must not commit"},
+		{"close", wsID},
+	} {
+		out, err := e.legworkErr(args...)
+		if err == nil || !strings.Contains(out, "newer than supported") {
+			t.Fatalf("%v did not reject newer workspace metadata: err=%v out=%s", args, err, out)
+		}
+		got, readErr := os.ReadFile(path)
+		if readErr != nil || string(got) != newer {
+			t.Fatalf("%v rewrote unsupported metadata: err=%v got=%s", args, readErr, got)
+		}
+	}
+}
+
 func TestWorkspaceCommitJSON(t *testing.T) {
 	e := newEnv(t)
 	repo := initRepo(t)
@@ -226,10 +262,11 @@ func TestWorkspaceCommitJSON(t *testing.T) {
 	}
 	out := e.legwork(t, "ws", "commit", wsID, "-m", "json commit", "--json")
 	var got struct {
-		Workspace string `json:"workspace"`
-		Branch    string `json:"branch"`
-		OID       string `json:"oid"`
-		Summary   string `json:"summary"`
+		Workspace   string         `json:"workspace"`
+		Branch      string         `json:"branch"`
+		OID         string         `json:"oid"`
+		Summary     string         `json:"summary"`
+		FinalCommit map[string]any `json:"final_commit"`
 	}
 	if err := json.Unmarshal([]byte(out), &got); err != nil {
 		t.Fatalf("bad commit json: %v\n%s", err, out)
@@ -239,6 +276,126 @@ func TestWorkspaceCommitJSON(t *testing.T) {
 	}
 	if head, _ := gitInErr(tree, "rev-parse", "HEAD"); head != got.OID {
 		t.Fatalf("json oid %q != HEAD %q", got.OID, head)
+	}
+	if got.FinalCommit == nil || got.FinalCommit["receipt_id"] == "" || got.FinalCommit["actor"] != "orchestrator" || got.FinalCommit["message"] != "json commit" || !strings.HasSuffix(got.FinalCommit["committed_at"].(string), "Z") {
+		t.Fatalf("commit receipt missing from JSON: %+v", got.FinalCommit)
+	}
+}
+
+func TestWorkspaceReceiptHistoryAndCloseJSON(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	if ws["schema_version"] != float64(1) {
+		t.Fatalf("new workspace schema version = %v", ws["schema_version"])
+	}
+	if err := os.WriteFile(filepath.Join(tree, "receipt.txt"), []byte("durable\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	commitOut := e.legwork(t, "ws", "commit", wsID, "-m", "record receipt", "--json")
+	var commit struct {
+		FinalCommit map[string]any `json:"final_commit"`
+	}
+	if err := json.Unmarshal([]byte(commitOut), &commit); err != nil {
+		t.Fatalf("bad commit json: %v\n%s", err, commitOut)
+	}
+	commitID := requireString(t, commit.FinalCommit, "receipt_id")
+
+	closeOut := e.legwork(t, "close", wsID, "--merge-into", "main", "--json")
+	var close struct {
+		CloseReceipt map[string]any `json:"close_receipt"`
+		FinalCommit  map[string]any `json:"final_commit"`
+	}
+	if err := json.Unmarshal([]byte(closeOut), &close); err != nil {
+		t.Fatalf("bad close json: %v\n%s", err, closeOut)
+	}
+	if close.FinalCommit["receipt_id"] != commitID || close.CloseReceipt["actor"] != "orchestrator" || close.CloseReceipt["disposition"] != "merged" || close.CloseReceipt["target"] != "refs/heads/main" || !strings.HasSuffix(close.CloseReceipt["closed_at"].(string), "Z") {
+		t.Fatalf("inconsistent close receipt: %+v", close)
+	}
+	events := e.legwork(t, "events", wsID, "--workspace", "--json")
+	for _, want := range []string{"\"type\": \"commit\"", "\"type\": \"workspace-close\"", commitID, close.CloseReceipt["receipt_id"].(string)} {
+		if !strings.Contains(events, want) {
+			t.Fatalf("workspace history missing %q:\n%s", want, events)
+		}
+	}
+	eventsAfterFirst := e.legwork(t, "events", wsID, "--workspace", "--since", "1", "--json")
+	var afterFirst []map[string]any
+	if err := json.Unmarshal([]byte(eventsAfterFirst), &afterFirst); err != nil || len(afterFirst) != 1 || afterFirst[0]["type"] != "workspace-close" {
+		t.Fatalf("workspace event cursor did not preserve event semantics: err=%v events=%s", err, eventsAfterFirst)
+	}
+}
+
+func TestWorkspaceCommitHistoryFailureIsSuccessfulWarning(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	if err := os.WriteFile(filepath.Join(ws["tree"].(string), "commit.txt"), []byte("commit\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(e.state, "workspaces", wsID, "events.jsonl"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	out := e.legwork(t, "ws", "commit", wsID, "-m", "commit despite history failure", "--json")
+	var got struct {
+		OID         string         `json:"oid"`
+		FinalCommit map[string]any `json:"final_commit"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad commit json: %v\n%s", err, out)
+	}
+	if got.OID == "" || got.FinalCommit["history_error"] == "" {
+		t.Fatalf("durable commit did not report history warning: %+v", got)
+	}
+	if m := e.wsStatus(t, wsID); m["final_commit"].(map[string]any)["history_error"] == "" {
+		t.Fatalf("history warning was not persisted when possible: %+v", m)
+	}
+}
+
+func TestCloseHistoryFailureIsSuccessfulWarning(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	if err := os.Mkdir(filepath.Join(e.state, "workspaces", wsID, "events.jsonl"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	out := e.legwork(t, "close", wsID, "--json")
+	var got struct {
+		State        string         `json:"state"`
+		CloseReceipt map[string]any `json:"close_receipt"`
+	}
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("bad close json: %v\n%s", err, out)
+	}
+	if got.State != "closed" || got.CloseReceipt["history_error"] == "" {
+		t.Fatalf("durable close did not report history warning: %+v", got)
+	}
+	if _, err := os.Stat(ws["tree"].(string)); !os.IsNotExist(err) {
+		t.Fatalf("close did not reclaim worktree after durable metadata: %v", err)
+	}
+}
+
+func TestFailedCloseDoesNotWriteReceiptHistory(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	tree := ws["tree"].(string)
+	if err := os.WriteFile(filepath.Join(tree, "unreviewed.txt"), []byte("no close\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := e.legworkErr("close", wsID); err == nil {
+		t.Fatalf("close must fail without a disposition:\n%s", out)
+	}
+	if _, err := os.Stat(filepath.Join(e.state, "workspaces", wsID, "events.jsonl")); !os.IsNotExist(err) {
+		t.Fatalf("failed close wrote workspace history, err=%v", err)
+	}
+	m := e.wsStatus(t, wsID)
+	if _, ok := m["close_receipt"]; ok || m["state"] != "open" {
+		t.Fatalf("failed close persisted a receipt: %+v", m)
 	}
 }
 
@@ -447,14 +604,19 @@ func TestWorkspaceCommitReportsEventAppendFailure(t *testing.T) {
 	}
 
 	out, err := e.legworkErr("ws", "commit", wsID, "-m", "durable event")
-	if err == nil {
-		t.Fatalf("commit must report event append failure:\n%s", out)
+	if err != nil {
+		t.Fatalf("durable commit must remain successful after a history append failure: %v\n%s", err, out)
 	}
 	oid, _ := gitInErr(tree, "rev-parse", "HEAD")
-	for _, want := range []string{"event write failed", oid, eventsPath} {
+	for _, want := range []string{"history warning", oid, eventsPath} {
 		if !strings.Contains(out, want) {
-			t.Fatalf("commit error missing %q:\n%s", want, out)
+			t.Fatalf("commit warning missing %q:\n%s", want, out)
 		}
+	}
+	meta := e.wsStatus(t, wsID)
+	final, ok := meta["final_commit"].(map[string]any)
+	if !ok || !strings.Contains(requireString(t, final, "history_error"), eventsPath) {
+		t.Fatalf("commit receipt did not retain history warning: %+v", meta)
 	}
 	if uncommitted, _ := gitInErr(tree, "status", "--porcelain"); uncommitted != "" {
 		t.Fatalf("workspace left uncommitted changes:\n%s", uncommitted)

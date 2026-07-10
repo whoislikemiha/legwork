@@ -319,6 +319,8 @@ func TestGCCloseMerged(t *testing.T) {
 		t.Fatalf("ws not closed merged: %v", m)
 	} else if m["closed_at"] == "" || m["merged_into"] == "" {
 		t.Fatalf("gc close-merged metadata missing: %v", m)
+	} else if receipt, ok := m["close_receipt"].(map[string]any); !ok || receipt["actor"] != "gc" {
+		t.Fatalf("gc close receipt missing actor: %v", m)
 	}
 	if _, err := os.Stat(tree); !os.IsNotExist(err) {
 		t.Fatalf("worktree should be removed: %v", err)
@@ -336,6 +338,27 @@ func TestGCCloseMerged(t *testing.T) {
 	// Dirty workspace untouched.
 	if m := e.wsStatus(t, ws2ID); m["state"] != "open" {
 		t.Fatalf("dirty ws should stay open: %v", m)
+	}
+}
+
+func TestGCCloseHistoryFailureIsSuccessfulWarning(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	if err := os.Mkdir(filepath.Join(e.state, "workspaces", wsID, "events.jsonl"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	rep := e.gcJSON(t, gcConfig(t, ""), "--close-merged")
+	if kinds(rep)[gcKindCloseClean] != 1 || rep["failed"] != float64(0) {
+		t.Fatalf("gc treated post-close history failure as reclaim failure: %v", rep)
+	}
+	if actions, ok := rep["actions"].([]any); !ok || len(actions) != 1 || !strings.Contains(actions[0].(map[string]any)["note"].(string), "history warning") {
+		t.Fatalf("gc did not make history warning explicit in output: %v", rep)
+	}
+	m := e.wsStatus(t, wsID)
+	if m["state"] != "closed" || m["close_receipt"].(map[string]any)["history_error"] == "" {
+		t.Fatalf("gc close did not retain history warning: %v", m)
 	}
 }
 
@@ -601,6 +624,7 @@ const (
 	gcKindHalfCreated = "half-created"
 	gcKindReconcile   = "reconcile"
 	gcKindCompress    = "transcript-compress"
+	gcKindCloseClean  = "close-clean"
 	gcKindCloseMerged = "close-merged"
 	gcKindSkip        = "skip"
 )

@@ -21,10 +21,12 @@ metadata. It does not introduce a general provenance framework.
    (`merged|discard|clean`), reason, target, actor, close time, retention/supersession
    facts, and the final workspace commit when known. Existing top-level lifecycle fields
    remain compatibility mirrors, not a competing source of truth.
-4. **Workspace history.** Each successful workspace commit and close appends one
-   structured event to that workspace's own Legwork event log. Existing job/run commit
-   events may remain for compatibility, but they reference the same workspace receipt
-   ID; multiple run labels do not create distinct commit identities.
+4. **Workspace history.** Each successful workspace commit and close attempts to append
+   one structured event to that workspace's own Legwork event log. If the operation is
+   already durable and the history append fails, it remains successful and its receipt
+   carries `history_error`; it must not be replayed. Existing job/run commit events may
+   remain for compatibility, but they reference the same workspace receipt ID; multiple
+   run labels do not create distinct commit identities.
 5. **One close shape.** Local merge, verified `--merged`, discard, clean close, and gc
    close populate the same receipt. CLI closes identify the actor as `orchestrator`; gc
    identifies itself as `gc`.
@@ -58,3 +60,33 @@ unknown. Loading legacy data is deterministic, idempotent, and read-only.
 - A new `ws status` presentation; actionable workspace rollups remain their own task.
 
 ## Log
+
+- Terra job `job-185` implemented the first pass; the full host gate passed before
+  review.
+- Opus/xhigh job `job-186` returned `FIX`: two high-severity partial-success traps
+  plus workspace-history queryability, future-schema, unknown-timestamp, and actor
+  findings. All were accepted.
+- Fresh Terra job `job-187` implemented the adjudicated corrections. The host gate
+  found two stale test-contract mismatches that the orchestrator corrected; focused
+  tests and the complete repository gate then passed. No mechanical second review was
+  run because the bounded review reproduced no critical defect.
+
+## Friction
+
+- Full Go verification could not start because this sandbox has no cached module
+  dependencies and blocks the required `proxy.golang.org` downloads; the focused
+  dependency-free workspace package test still ran.
+- The CLI/e2e and gc packages remain host-gate work here: `go test . ./test
+  ./internal/gc ./internal/workspace -count=1` attempted uncached dependency
+  downloads and the sandbox blocked DNS/network access to `proxy.golang.org`.
+
+## Verification
+
+- `gofmt -l .` — passed (no output).
+- `go test ./internal/workspace ./internal/events -count=1` — passed.
+- `git diff --check` — passed.
+- Host: `go vet ./... && go test ./... -count=1` — passed after the adjudicated
+  corrections and test-contract updates.
+- `go test . ./test ./internal/gc ./internal/workspace -count=1` — blocked by
+  sandboxed network/DNS while downloading uncached Go modules; no workaround or
+  dependency change attempted.

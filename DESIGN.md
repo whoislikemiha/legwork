@@ -108,6 +108,7 @@ requirement.
 legwork run       # start a job (see flags below); prints job ID immediately
 legwork resume    # continue a job's session with a new instruction / answer
 legwork events    # read a job's or run's event index; --since <cursor>, --json
+legwork events ws-N --workspace # read one workspace's commit/close event index
 legwork status    # rollup: state, phase, health line; --json
 legwork ls        # attention/active/unreviewed jobs; --all includes closed history
 legwork watch     # human: live-rendered stream (index; --full taps transcript)
@@ -145,7 +146,8 @@ without us shipping them. Event families:
   file), `file-edited`, `command-run`, `subagent-started/finished` (tagged)
 - Progress: `progress` (worker narration), `phase-complete`, `plan-ready`
 - Workspace: `checkpoint`, `setup-started/ok/failed`, `needs-bootstrap`,
-  `behind-base/conflicts`
+  `behind-base/conflicts`, `workspace-close` (fields: workspace, receipt_id,
+  receipt with disposition/reason/target/actor/close time/retention/supersession/final commit)
 - Telemetry: usage snapshots (tokens, cost, context %)
 - Orchestrator: `note`, plus attributed `resume/answer/approve/close` records
 

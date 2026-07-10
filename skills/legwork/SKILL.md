@@ -116,8 +116,8 @@ legwork run --workspace "$ws" --agent claude "implement X"
 legwork diff "$ws"                     # changes vs base, incl. untracked
 legwork ws review "$ws" --model opus    # independent read-only review of that diff
 legwork resume <job> "fix review finding Y"                 # same lineage
-legwork ws commit "$ws" -m "message" --json   # records final_commit; refuses empty
-legwork close "$ws" --merge-into main  # no-ff merge locally, records closed_at/merged_into
+legwork ws commit "$ws" -m "message" --json   # records final_commit receipt; refuses empty
+legwork close "$ws" --merge-into main  # no-ff merge locally, records close receipt + workspace event
                                        # and closes; --discard throws work away
 legwork close "$ws" --merged --reason "landed" # work landed by another path: verified
                                        # against the default branch (--into <ref>
@@ -146,6 +146,11 @@ decision is recorded in the job/run event logs, then land it with
 remote targets, self-merges, and conflicts (aborted cleanly; `--json` distinguishes
 `conflict` from `guard-refused`). If work landed some other way, use
 `close --merged --into <ref>` for verified acknowledgment.
+
+Workspace receipt history is separate from job/run logs: use `legwork events
+ws-N --workspace` (with the ordinary `--since` cursor and `--json`). A durable
+commit or close whose history append fails still succeeds and exposes a
+machine-readable `history_error` on its receipt/output; do not retry it.
 
 For dead or superseded work that is still useful for later analysis, record a run
 note, commit the final workspace tree with `legwork ws commit`, then close with

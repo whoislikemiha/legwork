@@ -3,6 +3,8 @@ package workspace
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -48,6 +50,133 @@ func TestLoadOldMetaCompatibility(t *testing.T) {
 	}
 	if m.ClosedAt != nil || m.FinalCommit != nil || m.MergedInto != "" || m.Retention != "" {
 		t.Fatalf("old optional fields should stay zero: %+v", m)
+	}
+	if m.CloseReceipt == nil || m.CloseReceipt.ReceiptID != "legacy:ws-1:close" || m.CloseReceipt.Actor != "" || m.CloseReceipt.Disposition != "discard" {
+		t.Fatalf("legacy compatibility receipt = %+v", m.CloseReceipt)
+	}
+	if listed, err := s.List(); err != nil || len(listed) != 1 || listed[0].CloseReceipt == nil {
+		t.Fatalf("legacy metadata not readable through List: metas=%+v err=%v", listed, err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "meta.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != old {
+		t.Fatalf("read-only legacy load rewrote metadata:\n%s", got)
+	}
+}
+
+func TestLoadRejectsNewerSchemaIncludingList(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "workspaces", "ws-1")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte(`{"schema_version":2,"id":"ws-1"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, load := range []func() error{
+		func() error { _, err := s.Load("ws-1"); return err },
+		func() error { _, err := s.List(); return err },
+	} {
+		err := load()
+		var unsupported *UnsupportedSchemaError
+		if !errors.As(err, &unsupported) || unsupported.Found != 2 || unsupported.Supported != MetaSchemaVersion {
+			t.Fatalf("newer schema error = %v, want UnsupportedSchemaError", err)
+		}
+	}
+}
+
+func TestLegacyReceiptOmitsUnknownTimestamps(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "workspaces", "ws-1")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"id":"ws-1","state":"closed","created":"2026-07-01T00:00:00Z","updated":"2026-07-01T00:01:00Z","final_commit":{"oid":"abc"}}`
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := s.Load("ws-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.FinalCommit.CommittedAt != nil || m.CloseReceipt.ClosedAt != nil {
+		t.Fatalf("legacy missing timestamps became known: %+v", m)
+	}
+	encoded, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "0001-01-01") || strings.Contains(string(encoded), "committed_at") || strings.Contains(string(encoded), "closed_at") {
+		t.Fatalf("legacy output emitted unknown timestamp: %s", encoded)
+	}
+}
+
+func TestCloseRequiresExplicitActorBeforeReclaim(t *testing.T) {
+	s := &Store{}
+	m := &Meta{ID: "ws-1", State: "open"}
+	if err := s.Close(m, CloseOptions{}); err == nil || !strings.Contains(err.Error(), "actor is required") {
+		t.Fatalf("Close without actor = %v, want explicit actor refusal", err)
+	}
+	if err := s.CloseMerged(m, "clean", "", ""); err == nil || !strings.Contains(err.Error(), "actor is required") {
+		t.Fatalf("CloseMerged without actor = %v, want explicit actor refusal", err)
+	}
+}
+
+func TestCommitHistoryFailureReturnsDurableReceipt(t *testing.T) {
+	repo := t.TempDir()
+	runGit := func(args ...string) {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(os.Environ(),
+			"GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	runGit("init", "-q", "-b", "main")
+	if err := os.WriteFile(filepath.Join(repo, "README.md"), []byte("base\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit("add", ".")
+	runGit("commit", "-qm", "base")
+
+	s, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := s.Create(repo, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(m.Tree, "receipt.txt"), []byte("durable\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// A directory at the event-log path injects an append failure after git and
+	// metadata have succeeded, without weakening filesystem permissions.
+	if err := os.Mkdir(s.eventPath(m.ID), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	res, err := s.Commit(m, "commit despite history failure")
+	if err != nil {
+		t.Fatalf("durable commit returned a replayable error: %v", err)
+	}
+	if res.Receipt == nil || res.Receipt.HistoryError == "" {
+		t.Fatalf("commit receipt omitted history warning: %+v", res)
+	}
+	reloaded, err := s.Load(m.ID)
+	if err != nil || reloaded.FinalCommit == nil || reloaded.FinalCommit.HistoryError == "" {
+		t.Fatalf("commit warning was not persisted when possible: meta=%+v err=%v", reloaded, err)
 	}
 }
 

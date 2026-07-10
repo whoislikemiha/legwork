@@ -177,11 +177,13 @@ legwork run --workspace ws-N --agent claude "implement X per plan.md"
 legwork diff ws-N [--stat]               -> changes vs base, incl. untracked files
 legwork ws review ws-N [--model M]       -> read-only independent review over that diff
 legwork resume <job> "review feedback: fix Y"
-legwork ws commit ws-N -m "message" --json -> orchestrator commit, recorded as final_commit
+legwork ws commit ws-N -m "message" --json -> orchestrator commit, recorded as final_commit receipt
 legwork close ws-N --merge-into main     -> no-ff merge locally, then close as merged
 legwork close ws-N --merged|--discard [--reason TEXT] [--retention POLICY]
-                                         -> records disposition metadata, then drops
+                                         -> records a close receipt + workspace event, then drops
                                             the local worktree cache
+legwork events ws-N --workspace [--since N] [--json]
+                                         -> append-only workspace commit/close history
 ```
 
 **You own git history; workers never commit.** The injected contract forbids
@@ -192,14 +194,24 @@ checkpoints them automatically after every turn. When the diff passes review,
 *you* commit with `legwork ws commit <ws> -m <message>` — you know what's one
 logical change, what's scratch, and what the message should say. The command
 stages the workspace tree, refuses empty commits, records `final_commit` in
-workspace metadata, and writes an attributed `commit` event in the workspace
-lineage's job/run logs. Then land it.
+workspace metadata with a stable receipt ID, actor, message, and time, and writes
+one attributed `commit` event to the workspace history (plus compatible job/run
+events that carry that same receipt ID). Then land it.
+
+Workspace history is a separate event index: query it with `legwork events ws-N
+--workspace`, including its normal `--since` cursor and `--json` form. If the
+commit or close is already durable but its history append cannot be recorded,
+the command still succeeds and the receipt/output carries `history_error`; do
+not retry a non-idempotent commit or close. The warning is persisted when the
+metadata store remains writable.
 
 `close` without a flag refuses if there are unreviewed changes — that's the review
 gate. After review, the usual local landing path is
 `legwork close <ws> --merge-into main`: legwork requires the workspace tree to be
 committed, switches the source checkout to that local target branch, runs
-`git merge --no-ff`, aborts cleanly on conflicts, records `merged_into`, then
+`git merge --no-ff`, aborts cleanly on conflicts, records `merged_into` in one
+close receipt (with disposition, actor, retention/supersession facts, and final
+commit), appends a workspace-history event, then
 closes. It refuses remote targets, self-merges, dirty target checkouts, and
 rechecks HEAD after switching so the merge never runs from the workspace branch.
 On a failed/conflicted merge it restores the checkout that was current before the
@@ -629,7 +641,7 @@ result [selector] [--job ID | --run L] [--turn N]
 wait <job> [--until state[,state...]] [--timeout D] [--json]
 ls [--all] [--workspace W] [--run L] [--state S[,S...]] [--limit N] [--json]
 watch <job>
-events [selector] [--job ID | --run] [--since N]
+events [selector] [--job ID | --run | --workspace] [--since N] [--json]
 ack <job> [--force] [--json]
 runs                 tail [selector] [--run L | --job J] [-n N] [--full] [--until-idle]
 dashboard            serve [--addr 127.0.0.1:0] [--allow-remote]
