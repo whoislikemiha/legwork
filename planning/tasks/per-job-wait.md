@@ -22,8 +22,28 @@ legwork wait job-149 --until needs-input,blocked,done --timeout 20m --json
   documented outcomes.
 - JSON returns the final job status plus `reached`, `waited_for`, and elapsed time.
 
-The implementation reads the existing event/liveness sources. It does not create a
-new event type or mutate a healthy job.
+This first slice accepts an exact job ID only. Run-level waiting remains
+`tail --run <label> --until-idle`; `wait` must not silently select the newest job in a
+run. Valid `--until` values are the existing job states.
+
+## Outcome and exit contract
+
+- Exit `0`: the requested state was reached, or (without `--until`) the job left
+  `queued|active`.
+- Exit `1`: timeout, or the job settled in a non-requested state. JSON distinguishes
+  these as `outcome: timeout|terminal-mismatch`.
+- Exit `2`: invalid state/timeout syntax, missing arguments, or unknown job, matching
+  the existing command-error class.
+
+Human output is one concise line and never includes the full task/result body. JSON
+returns `{job, outcome, reached, waited_for, elapsed_ms}` where `job` is the final
+persisted metadata. Omitted `--timeout` means no deadline; a supplied duration must be
+positive.
+
+The implementation reloads persisted metadata while waiting and uses the existing
+liveness reconciliation path for a dead runner. It does not create a new event type or
+mutate a healthy job. Concurrent waiters must not clobber terminal metadata or produce
+different outcomes for the same transition.
 
 ## Acceptance criteria
 
@@ -31,6 +51,8 @@ new event type or mutate a healthy job.
   runner death.
 - Multiple waiters can observe one job without interfering with each other.
 - Human output is one concise terminal result; JSON and exit behavior are stable.
+- Already-settled target/mismatch, timeout, invalid state, unknown job, and dead-runner
+  paths have focused contract tests.
 - `tail --until-idle` remains the run/pipeline-scoped primitive and notifier hooks
   remain the push alternative.
 
