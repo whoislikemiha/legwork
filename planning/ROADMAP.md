@@ -21,8 +21,9 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-*(nothing — human-readable active-job observability landed 2026-07-10; see
-[done/human-active-jobs.md](done/human-active-jobs.md))*
+- [ ] [Model-aware reasoning effort](tasks/model-aware-reasoning-effort.md) — **P1.** Remove the
+  stale global Codex `xhigh|max → high` clamp, persist requested versus resolved effort, and
+  preflight the exact agent/model/effort policy before dispatch.
 
 ## Next
 
