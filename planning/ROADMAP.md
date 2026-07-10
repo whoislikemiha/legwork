@@ -21,9 +21,7 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-- [ ] [Close and commit receipts](tasks/close-commit-receipts.md) — **P1.** `ws-80`.
-  Version the workspace rollup and persist one commit/close identity across every
-  close path without changing the tripwire or reclaim policy.
+None.
 
 ## Next
 

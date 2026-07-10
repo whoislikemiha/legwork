@@ -186,3 +186,40 @@ Worker sandbox module/DNS limits remain evidence for the existing external-
 verification-receipts task. The multi-million Codex context value is cumulative rather
 than an honest live-window measurement, exactly the existing codex-health-signal task;
 no duplicate pre-resume task was filed.
+
+## Close and commit receipts dogfood run
+
+The workspace half of receipts started with installed Legwork `dev`, commit
+`d596599a4193`, clean, build date `2026-07-10T13:09:52Z`. The bounded contract kept
+workspace metadata authoritative: additive schema versioning, one final-commit
+identity, one close decision across CLI and gc paths, and a separate workspace event
+index without changing tripwire or reclamation policy.
+
+Terra/high `job-185` implemented the first pass in `ws-80`; the full host gate passed.
+Opus/xhigh `job-186` returned **FIX** with two high, three medium, and one low finding.
+The reproduced high defects were non-replayable partial-success traps: a workspace
+history append could fail after a commit or close was already durable, causing the CLI
+to report failure and strand job closure. The review also found that workspace history
+had no CLI read path, future workspace schemas could be destructively rewritten,
+unknown legacy times serialized as year one, and default actors could misattribute a
+future caller.
+
+Fresh Terra/high `job-187` implemented the accepted corrections. Durable operations now
+succeed with a persisted `history_error` warning instead of inviting replay;
+`legwork events ws-N --workspace` exposes the workspace cursor; future schema versions
+fail closed; unknown times stay absent; and close actors are explicit. The host gate
+caught two stale test-contract mismatches that the worker sandbox could not compile;
+those were corrected and the complete gate passed.
+
+The feature then audited its own landing. The workspace-built binary committed `ws-80`
+and returned a stable `final_commit.receipt_id`; querying workspace event sequence 1
+exposed an oversized embedded diffstat. Event copies were made compact while the full
+metadata rollup remained intact, a regression test was added, and the complete gate
+passed again. A second commit produced compact event sequence 2. Closing through the
+same binary produced an orchestrator-attributed merged receipt and queryable
+`workspace-close` sequence 3 after worktree reclamation. The full repository gate passed
+again on `main` after merge `edb4725`.
+
+The worker sandbox's uncached module/DNS block remains direct evidence for the already
+scheduled external-verification-receipts task. The oversized event was fixed in scope;
+no new roadmap item emerged.
