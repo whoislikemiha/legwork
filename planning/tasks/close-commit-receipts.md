@@ -1,6 +1,6 @@
 # Close and commit receipts
 
-Status: next · Priority: P1 · Origin: AUDIT C1–C4 + quality-receipts split · Depends: quality-receipts · Workspace: —
+Status: in flight · Priority: P1 · Origin: AUDIT C1–C4 + quality-receipts split · Depends: quality-receipts · Workspace: ws-80
 
 ## Goal
 
