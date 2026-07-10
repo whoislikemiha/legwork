@@ -21,12 +21,12 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-*(nothing)*
+- [ ] [Unified job and run addressing](tasks/unified-addressing.md) — **P1.** `ws-74`.
+  One selector grammar for `status`, `result`, `events`, and `tail`, while preserving
+  legacy flags and existing JSON event shapes.
 
 ## Next
 
-- [ ] [Unified job and run addressing](tasks/unified-addressing.md) — **P1.** One selector grammar
-  across the core loop, with explicit resolution and no silent multi-job mutation.
 - [ ] [Per-job blocking wait](tasks/per-job-wait.md) — **P1.** Replace hand-built supervisors with
   `legwork wait <job>`; already-terminal jobs return immediately and dead runners do not hang.
 - [ ] [Durable quality and lifecycle receipts](tasks/quality-receipts.md) — **P1.** Preserve worker
