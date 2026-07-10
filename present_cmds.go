@@ -147,26 +147,31 @@ func tailCmd() *cobra.Command {
 	var n int
 	var full, untilIdle, asJSON bool
 	c := &cobra.Command{
-		Use:   "tail",
+		Use:   "tail [selector] [--run <label> | --job <id>]",
 		Short: "Follow the merged event stream (all jobs + run logs); scriptable with --until-idle",
-		Args:  cobra.NoArgs,
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {
 				return err
 			}
-			if runLabel != "" && jobID != "" {
-				return fmt.Errorf("--run and --job are mutually exclusive")
+			positional := ""
+			if len(args) == 1 {
+				positional = args[0]
+			}
+			var selected job.Selection
+			if positional != "" || runLabel != "" || jobID != "" {
+				selected, err = resolveReadSelector(s, positional, jobID, runLabel)
+				if err != nil {
+					return err
+				}
 			}
 			var scope func() ([]timeline.Source, error)
 			switch {
-			case jobID != "":
-				if _, err := s.LoadMeta(jobID); err != nil {
-					return err
-				}
-				scope = timeline.ScopeJob(s, jobID)
-			case runLabel != "":
-				scope = timeline.ScopeRun(s, runLabel)
+			case selected.Kind == job.SelectorJob:
+				scope = timeline.ScopeJob(s, selected.Newest().ID)
+			case selected.Kind == job.SelectorRun:
+				scope = timeline.ScopeRun(s, selected.Selector)
 			default:
 				scope = timeline.ScopeAll(s)
 			}
@@ -208,13 +213,19 @@ func tailCmd() *cobra.Command {
 			}
 
 			for {
-				if untilIdle && !scopeActive(s, runLabel, jobID) {
-					// Drain any stragglers that landed with the terminal state,
-					// then exit cleanly — the scriptable "pipeline is done".
-					if items, err := tl.Poll(); err == nil {
-						emit(items)
+				if untilIdle {
+					active, err := selectionActive(s, selected)
+					if err != nil {
+						return err
 					}
-					return nil
+					if !active {
+						// Drain any stragglers that landed with the terminal state,
+						// then exit cleanly — the scriptable "pipeline is done".
+						if items, err := tl.Poll(); err == nil {
+							emit(items)
+						}
+						return nil
+					}
 				}
 				time.Sleep(500 * time.Millisecond)
 				items, err := tl.Poll()
@@ -225,8 +236,8 @@ func tailCmd() *cobra.Command {
 			}
 		},
 	}
-	c.Flags().StringVar(&runLabel, "run", "", "scope to one run label (its log + its jobs)")
-	c.Flags().StringVar(&jobID, "job", "", "scope to one job")
+	c.Flags().StringVar(&runLabel, "run", "", "force a run label selector (its log + its jobs)")
+	c.Flags().StringVar(&jobID, "job", "", "force an exact job ID selector")
 	c.Flags().IntVarP(&n, "lines", "n", 30, "backfill the last N events before following")
 	c.Flags().BoolVar(&full, "full", false, "include the firehose (tool calls, progress, usage)")
 	c.Flags().BoolVar(&untilIdle, "until-idle", false, "exit 0 once no job in scope is active/queued")
@@ -234,26 +245,44 @@ func tailCmd() *cobra.Command {
 	return c
 }
 
-// scopeActive reports whether any job in the tail's scope is still active or
-// queued (reconciling stale runners first). This is the --until-idle gate.
-func scopeActive(s *job.Store, runLabel, jobID string) bool {
-	metas, err := s.List()
-	if err != nil {
-		return false
+// selectionActive reports whether any job in the tail's selection is still
+// active or queued (reconciling stale runners first). This is the --until-idle
+// gate.
+func selectionActive(s *job.Store, sel job.Selection) (bool, error) {
+	var metas []*job.Meta
+	if sel.Kind == job.SelectorRun {
+		all, err := s.List()
+		if err != nil {
+			return false, err
+		}
+		for _, m := range all {
+			if m.Run == sel.Selector {
+				metas = append(metas, m)
+			}
+		}
+	} else if sel.Kind == job.SelectorJob {
+		// The runner writes meta.json independently. Reload it for every
+		// liveness poll so Reconcile never persists the selector's stale
+		// active state over a newer terminal result.
+		m, err := s.LoadMeta(sel.Newest().ID)
+		if err != nil {
+			return false, err
+		}
+		metas = []*job.Meta{m}
+	} else {
+		var err error
+		metas, err = s.List()
+		if err != nil {
+			return false, err
+		}
 	}
 	for _, m := range metas {
-		if jobID != "" && m.ID != jobID {
-			continue
-		}
-		if runLabel != "" && m.Run != runLabel {
-			continue
-		}
 		s.Reconcile(m)
 		if m.State == job.StateActive || m.State == job.StateQueued {
-			return true
+			return true, nil
 		}
 	}
-	return false
+	return false, nil
 }
 
 // tailLine renders one merged item as "HH:MM:SS  <badge>  <type>  <preview>".

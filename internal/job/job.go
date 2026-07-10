@@ -166,6 +166,24 @@ func (s *Store) RunEventsPath(label string) (string, error) {
 	return filepath.Join(dir, "events.jsonl"), nil
 }
 
+// HasRunEvents reports whether a run already has an event log without creating
+// any state. A run can be meaningful before its first job: notes and artifacts
+// both record events in this log.
+func (s *Store) HasRunEvents(label string) (bool, error) {
+	dir, err := s.RunDir(label, false)
+	if err != nil {
+		return false, err
+	}
+	info, err := os.Stat(filepath.Join(dir, "events.jsonl"))
+	if err == nil {
+		return !info.IsDir(), nil
+	}
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	return false, err
+}
+
 // RunArtifactDir is the run-attached artifact directory. It lives under the
 // state dir, never under a repo worktree.
 func (s *Store) RunArtifactDir(label string, create bool) (string, error) {
@@ -372,9 +390,23 @@ func (s *Store) Reconcile(m *Meta) bool {
 	if m.State != StateActive || s.Alive(m) {
 		return false
 	}
-	m.State = StateInterrupted
-	m.RunnerPID = 0
-	_ = s.SaveMeta(m)
+	// The caller may have kept a Meta pointer while the detached runner wrote
+	// its terminal state. Reload after observing a dead PID so an old active
+	// snapshot can never overwrite that newer terminal record.
+	fresh, err := s.LoadMeta(m.ID)
+	if err != nil {
+		return false
+	}
+	if fresh.State != StateActive || s.Alive(fresh) {
+		*m = *fresh
+		return false
+	}
+	fresh.State = StateInterrupted
+	fresh.RunnerPID = 0
+	if err := s.SaveMeta(fresh); err != nil {
+		return false
+	}
+	*m = *fresh
 	if log, err := events.Open(filepath.Join(s.JobDir(m.ID), "events.jsonl")); err == nil {
 		_, _ = log.Append(events.Event{Type: events.TypeInterrupted, Actor: "runner",
 			Preview: "runner died without finishing the turn"})

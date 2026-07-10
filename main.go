@@ -590,31 +590,70 @@ func runProvision(workDir, command string, timeout time.Duration) (string, int, 
 // field only appears when high — additive, no schema break.
 type metaOut struct {
 	*job.Meta
-	ContextHigh bool `json:"context_high,omitempty"`
+	ContextHigh  bool   `json:"context_high,omitempty"`
+	Selector     string `json:"selector"`
+	SelectorKind string `json:"selector_kind"`
+	ResolvedJob  string `json:"resolved_job"`
 }
 
 type resultOut struct {
-	Job    string `json:"job"`
-	Run    string `json:"run,omitempty"`
-	Turn   int    `json:"turn,omitempty"`
-	State  string `json:"state"`
-	Result string `json:"result"`
+	Job          string `json:"job"`
+	Run          string `json:"run,omitempty"`
+	Turn         int    `json:"turn,omitempty"`
+	State        string `json:"state"`
+	Result       string `json:"result"`
+	Selector     string `json:"selector"`
+	SelectorKind string `json:"selector_kind"`
+	ResolvedJob  string `json:"resolved_job"`
+}
+
+func resolveReadSelector(s *job.Store, positional, jobFlag, runFlag string) (job.Selection, error) {
+	if positional != "" && (jobFlag != "" || runFlag != "") {
+		return job.Selection{}, fmt.Errorf("a positional selector cannot be combined with --job or --run")
+	}
+	if jobFlag != "" && runFlag != "" {
+		return job.Selection{}, fmt.Errorf("--job and --run are mutually exclusive")
+	}
+	if jobFlag != "" {
+		return job.Resolve(s, jobFlag, job.SelectorJob)
+	}
+	if runFlag != "" {
+		return job.Resolve(s, runFlag, job.SelectorRun)
+	}
+	return job.Resolve(s, positional, "")
+}
+
+// resolutionNotice is deliberately stderr-only: result's stdout is the raw
+// worker report and JSON output must remain machine-consumable.
+func resolutionNotice(cmd *cobra.Command, sel job.Selection, resolved *job.Meta) {
+	if sel.Kind == job.SelectorRun {
+		fmt.Fprintf(cmd.ErrOrStderr(), "resolved run %q to newest job %s\n", sel.Selector, resolved.ID)
+	}
 }
 
 func statusCmd() *cobra.Command {
 	var asJSON bool
+	var jobID, runLabel string
 	c := &cobra.Command{
-		Use:   "status <job>",
-		Short: "Job rollup: state, telemetry, question/result",
-		Args:  cobra.ExactArgs(1),
+		Use:   "status [selector] [--job <id> | --run <label>]",
+		Short: "Job rollup; a run selector resolves to its newest job",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {
 				return err
 			}
-			m, err := s.LoadMeta(args[0])
+			positional := ""
+			if len(args) == 1 {
+				positional = args[0]
+			}
+			sel, err := resolveReadSelector(s, positional, jobID, runLabel)
 			if err != nil {
 				return err
+			}
+			m := sel.Newest()
+			if m == nil {
+				return fmt.Errorf("run %q has no jobs; status requires a job", sel.Selector)
 			}
 			s.Reconcile(m)
 			health, err := config.LoadHealth()
@@ -623,8 +662,10 @@ func statusCmd() *cobra.Command {
 			}
 			high := m.ContextHigh(health.ContextThreshold)
 			if asJSON {
-				return printJSON(metaOut{Meta: m, ContextHigh: high})
+				return printJSON(metaOut{Meta: m, ContextHigh: high, Selector: sel.Selector,
+					SelectorKind: string(sel.Kind), ResolvedJob: m.ID})
 			}
+			resolutionNotice(cmd, sel, m)
 			fmt.Printf("job:    %s (%s)\nstate:  %s\ntask:   %s\n", m.ID, m.Agent, m.State, m.Task)
 			if m.Run != "" {
 				fmt.Printf("run:    %s\n", m.Run)
@@ -654,16 +695,19 @@ func statusCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
+	c.Flags().StringVar(&jobID, "job", "", "force an exact job ID selector")
+	c.Flags().StringVar(&runLabel, "run", "", "force a run label selector")
 	return c
 }
 
 func resultCmd() *cobra.Command {
 	var asJSON bool
 	var turn int
+	var jobID, runLabel string
 	c := &cobra.Command{
-		Use:   "result <job|run>",
-		Short: "Print a job's final report, or the newest job in a run",
-		Args:  cobra.ExactArgs(1),
+		Use:   "result [selector] [--job <id> | --run <label>]",
+		Short: "Print a final report; a run selector resolves to its newest job",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Flags().Changed("turn") && turn <= 0 {
 				return fmt.Errorf("--turn must be positive")
@@ -672,9 +716,17 @@ func resultCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			m, err := resolveResultJob(s, args[0])
+			positional := ""
+			if len(args) == 1 {
+				positional = args[0]
+			}
+			sel, err := resolveReadSelector(s, positional, jobID, runLabel)
 			if err != nil {
 				return err
+			}
+			m := sel.Newest()
+			if m == nil {
+				return fmt.Errorf("run %q has no jobs; result requires a job", sel.Selector)
 			}
 			s.Reconcile(m)
 
@@ -698,49 +750,20 @@ func resultCmd() *cobra.Command {
 				}
 			}
 
+			res.Selector, res.SelectorKind, res.ResolvedJob = sel.Selector, string(sel.Kind), m.ID
 			if asJSON {
 				return printJSON(res)
 			}
+			resolutionNotice(cmd, sel, m)
 			fmt.Print(res.Result)
 			return nil
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
 	c.Flags().IntVar(&turn, "turn", 0, "print the Nth retained turn result (1-based)")
+	c.Flags().StringVar(&jobID, "job", "", "force an exact job ID selector")
+	c.Flags().StringVar(&runLabel, "run", "", "force a run label selector")
 	return c
-}
-
-func resolveResultJob(s *job.Store, arg string) (*job.Meta, error) {
-	m, jobErr := s.LoadMeta(arg)
-	metas, err := s.List()
-	if err != nil {
-		return nil, err
-	}
-	var runJobs []*job.Meta
-	for _, jm := range metas {
-		if jm.Run == arg {
-			runJobs = append(runJobs, jm)
-		}
-	}
-	if jobErr == nil && len(runJobs) > 0 {
-		return nil, fmt.Errorf("%q is both a job id and a run label", arg)
-	}
-	if jobErr == nil {
-		return m, nil
-	}
-	if len(runJobs) == 0 {
-		if err := job.ValidateRunLabel(arg); err != nil {
-			return nil, err
-		}
-		return nil, fmt.Errorf("no job or run %q", arg)
-	}
-	newest := runJobs[0]
-	for _, jm := range runJobs[1:] {
-		if jm.Created.After(newest.Created) || (jm.Created.Equal(newest.Created) && jm.Updated.After(newest.Updated)) {
-			newest = jm
-		}
-	}
-	return newest, nil
 }
 
 func retainedResult(s *job.Store, m *job.Meta, turn int) (resultOut, error) {
@@ -843,43 +866,81 @@ func exitNoResult(format string, args ...any) {
 func eventsCmd() *cobra.Command {
 	var since int
 	var asJSON, isRun bool
+	var jobID string
 	c := &cobra.Command{
-		Use:   "events <job|run>",
-		Short: "Read a job's event index, or a run's with --run (cursor with --since)",
-		Args:  cobra.ExactArgs(1),
+		Use:   "events [selector] [--job <id> | --run]",
+		Short: "Read a job or run event index (cursor with --since)",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := openStore()
 			if err != nil {
 				return err
 			}
-			var path string
-			if isRun {
-				if path, err = s.RunEventsPath(args[0]); err != nil {
-					return err
-				}
-			} else {
-				if _, err := s.LoadMeta(args[0]); err != nil {
-					return err
-				}
-				path = filepath.Join(s.JobDir(args[0]), "events.jsonl")
+			positional := ""
+			if len(args) == 1 {
+				positional = args[0]
 			}
-			evs, err := events.Read(path, since)
-			if err != nil && !os.IsNotExist(err) {
+			// events <label> --run is the existing boolean namespace override.
+			// Keep it directly rather than encoding it as a string sentinel.
+			if isRun {
+				if jobID != "" {
+					return fmt.Errorf("--job and --run are mutually exclusive")
+				}
+				if positional == "" {
+					return fmt.Errorf("selector is required")
+				}
+				sel, err := job.Resolve(s, positional, job.SelectorRun)
+				if err != nil {
+					return err
+				}
+				return printEvents(s, sel, since, asJSON)
+			}
+			sel, err := resolveReadSelector(s, positional, jobID, "")
+			if err != nil {
 				return err
 			}
-			if asJSON {
-				return printJSON(evs)
-			}
-			for _, e := range evs {
-				printEvent(e)
-			}
-			return nil
+			return printEvents(s, sel, since, asJSON)
 		},
 	}
 	c.Flags().IntVar(&since, "since", 0, "only events with seq greater than this")
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
-	c.Flags().BoolVar(&isRun, "run", false, "the argument is a run label, not a job ID")
+	c.Flags().StringVar(&jobID, "job", "", "force an exact job ID selector")
+	c.Flags().BoolVar(&isRun, "run", false, "the selector is a run label, not a job ID")
 	return c
+}
+
+// printEvents preserves the stable per-log event API. Run logs are a distinct
+// index with their own sequence cursor; tail is the provenance-bearing merged
+// view across job and run logs.
+func printEvents(s *job.Store, sel job.Selection, since int, asJSON bool) error {
+	if sel.Kind == job.SelectorJob {
+		evs, err := events.Read(filepath.Join(s.JobDir(sel.Newest().ID), "events.jsonl"), since)
+		if err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		if asJSON {
+			return printJSON(evs)
+		}
+		for _, e := range evs {
+			printEvent(e)
+		}
+		return nil
+	}
+	path, err := s.RunEventsPath(sel.Selector)
+	if err != nil {
+		return err
+	}
+	evs, err := events.Read(path, since)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if asJSON {
+		return printJSON(evs)
+	}
+	for _, e := range evs {
+		printEvent(e)
+	}
+	return nil
 }
 
 // fmtContext renders the session context footprint in tokens. No percentage:

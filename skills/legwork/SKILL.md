@@ -213,18 +213,26 @@ Four read-only surfaces over the same event logs (`runs`/`tail` are ssh-friendly
 `dashboard` needs a TTY, `serve` is a local browser surface):
 
 ```bash
-legwork result <job|run>          # raw final report; run resolves to newest job
+legwork result <selector>         # raw final report; job IDs win, runs resolve to newest
 legwork runs                       # one line per --run label: state rollup, cost,
                                    # ctx health, your latest note (the overview)
 legwork tail                       # tail -f across all jobs + run logs, notes
                                    # interleaved; --run/--job scope, --full firehose
-legwork tail --run L --until-idle  # blocks, exits 0 when no job in scope is
+legwork tail L --until-idle        # blocks, exits 0 when no job in scope is
                                    # active/queued — the scriptable "wait for my pipeline"
 legwork dashboard                  # interactive TUI (needs a TTY): attention banner,
                                    # prioritized runs/jobs, detail focus + event scroll
 legwork serve                      # local browser console: prints a localhost URL,
                                    # GET-only, live via SSE, no mutation endpoints
 ```
+
+`status`, `result`, `events`, and `tail` share one selector rule: an existing
+job ID wins; otherwise the value is a run label. `status`/`result` select the
+newest run job; `events` reads the run's own cursor-addressable event log, while
+`tail` spans the whole run. Use `--job <id>` or `--run <label>` to force a
+colliding namespace; `events <label> --run` remains its legacy boolean override.
+Single-target JSON reports `selector`, `selector_kind`, and `resolved_job`. A run
+with only notes/artifacts is valid for `events` and `tail`.
 
 Prefer `result` over `status --json` surgery when you need the worker's final
 report; use `--turn N` for an earlier retained turn. Prefer `runs` over `ls` for
@@ -252,7 +260,7 @@ legwork artifact get --run <label> plan.md
 Names are single safe path components; traversal is rejected. Existing artifacts
 are not replaced unless `--overwrite` is explicit. v1 stores UTF-8 text/markdown
 artifacts and rejects binary data. `artifact save` records an `artifact` event in
-the run log, so `tail --run <label>` and `events <label> --run` show when the
+the run log, so `tail <label>` and `events <label>` show when the
 record changed.
 
 For long run-specific append prompts, save once as an artifact and reuse it without
@@ -298,7 +306,7 @@ doc/invariant rules and says nothing about commits or status blocks.
 plumbing in a subshell so state-dir overrides do not leak:
 `( export LEGWORK_STATE_DIR=$(mktemp -d); legwork run --agent fake "test" )`;
 omit `--model` to take the agent default (the probe confirms it); when model or
-effort matters, verify `legwork status <job> --json` includes the persisted
+effort matters, verify `legwork status <selector> --json` includes the persisted
 `model`/`effort`; `ws new` is safe to call back-to-back (ID allocation is
 internally serialized); codex workspace-write turns get writable
 `TMPDIR`/`GOCACHE` per job — never inject a `GOCACHE=/tmp` override; the ws↔task
@@ -316,8 +324,8 @@ landed) so the run reads as a narrative.
 
 - Group pipeline jobs: `--run <label>`; narrate decisions:
   `legwork note <label> "plan approved, splitting into 2 workspaces"`;
-  watch the merged timeline live with `legwork tail --run <label>` (or the
-  snapshot `legwork events <label> --run`).
+  watch the merged timeline live with `legwork tail <label>` (or the
+  snapshot `legwork events <label>`).
 - Model policy: big model + `--read-only` for plan/review turns; cheaper `--model`
   for mechanical implementation of an approved plan. Dial reasoning with `--effort`
   (`low` for mechanical edits, `high`/`max` for hard design work; codex clamps

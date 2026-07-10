@@ -75,14 +75,14 @@ contract before writing append-prompt text.
 ```
 legwork run --agent claude "task"        -> prints job ID immediately
   ... get notified, or poll ...
-legwork status <job> --json              -> state decides your next move:
+legwork status <selector> --json         -> job IDs win; a run selects its newest job:
   done         verify it (diff, tests in events), then next phase or close
   needs-input  legwork answer <job> "<decision>"   (same session continues)
   blocked      inspect status.blocked; approve provision, verify outside, or escalate
   failed       read events; retry as a fresh job or escalate
   auth-required tell the human: agent login needed on this machine (claude /login, codex login)
   interrupted  the turn died mid-flight (crash/cancel); session survives -> resume
-legwork result <job|run>                 -> print the final report, raw
+legwork result <selector>                -> print the final report, raw
 legwork resume <job> "next instruction"  -> another turn in the same session
 legwork approve <job> [--timeout 30m]    -> run approved needs-provision command, then resume
 ```
@@ -297,6 +297,18 @@ cell `ctx:180k!` and `status` prints a `hint:` line (`--json` sets
 
 ## Grouping and narration
 
+Core read commands (`status`, `result`, `events`, and `tail`) take one selector.
+An existing job ID wins; any other selector names a run. `status` and `result`
+resolve a run to its newest job. `events` reads that run's own event index with
+its native cursor, while `tail` includes every job in the run. Use `--job <id>`
+or `--run <label>` to force a namespace when a run is named like a job (for
+`events`, the existing `events <label> --run` form remains the run override).
+Only a selector with neither jobs nor a run event log fails clearly rather than
+selecting an unrelated job. A log-only run (notes/artifacts) is valid for `events`
+and `tail`; `status` and `result` explain that they require a job. Single-target
+JSON includes `selector`, `selector_kind`, and `resolved_job`; human resolution
+notices go to stderr so stdout stays scriptable.
+
 Group a pipeline's jobs with `--run <label>`; narrate your decisions:
 
 ```
@@ -305,7 +317,7 @@ legwork note auth-refactor "plan approved; splitting implement into 2 workspaces
 legwork artifact save --run auth-refactor --name plan.md ./plan.md
 legwork artifact list --run auth-refactor
 legwork artifact get --run auth-refactor plan.md
-legwork events auth-refactor --run      -> merged timeline: jobs + your notes
+legwork events auth-refactor            -> run event index: lifecycle + your notes
 ```
 
 Notes make your reasoning auditable — report decisions as you make them.
@@ -372,7 +384,7 @@ firehose (tool calls, progress, usage). Finished lines carry the turn's
 
 `--until-idle` makes `tail` the scriptable *wait for my pipeline* primitive: it
 exits 0 once no job in scope is active or queued (after draining events), so an
-orchestrator can replace a polling loop with `legwork tail --run L --until-idle`.
+orchestrator can replace a polling loop with `legwork tail L --until-idle`.
 `--json` emits the merged events as JSONL (raw event + `job`/`run` provenance).
 
 `dashboard` is htop-for-jobs: an attention banner, a prioritized runs/jobs
@@ -512,7 +524,7 @@ as a run artifact (see "Grouping and narration").
   `( export LEGWORK_STATE_DIR=$(mktemp -d); legwork run --agent fake "test" )`.
 - **Model/effort receipt:** when a run depends on a specific model or effort, verify
   the persisted dispatch metadata, not just the command you typed:
-  `legwork status <job> --json` includes `model` and `effort`.
+  `legwork status <selector> --json` includes `model` and `effort`.
 - **`ws new` concurrency:** back-to-back and concurrent `ws new` calls are safe.
   ID allocation is serialized internally by an exclusive lock, so there is no
   duplicate-ID or lost-update risk — no need to serialize creation yourself.
@@ -588,12 +600,13 @@ run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P | --append-prompt-file PATH|-]
     [--effort E] [--fallback-model M] <task>
 resume <job> <msg>   answer <job> <msg>   approve <job> [--timeout D]   cancel <job>
-status <job>         result <job|run> [--turn N]
+status [selector] [--job ID | --run L]
+result [selector] [--job ID | --run L] [--turn N]
 ls [--all] [--workspace W] [--run L] [--state S[,S...]] [--limit N] [--json]
 watch <job>
-events <job|run> [--run] [--since N]
+events [selector] [--job ID | --run] [--since N]
 ack <job> [--force] [--json]
-runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]
+runs                 tail [selector] [--run L | --job J] [-n N] [--full] [--until-idle]
 dashboard            serve [--addr 127.0.0.1:0] [--allow-remote]
 ws new --repo R      ws ls               ws review <ws> [--model M] [--effort high]
                                           [--append-prompt P | --append-prompt-file PATH|-]

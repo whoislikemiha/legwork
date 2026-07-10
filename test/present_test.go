@@ -335,13 +335,20 @@ func TestTailUntilIdleWaitsForFinish(t *testing.T) {
 
 	// tail --until-idle must block until the job leaves active/queued.
 	start := time.Now()
-	out := e.legwork(t, "tail", "--job", id, "--until-idle", "-n", "0")
+	out := e.legwork(t, "tail", id, "--until-idle", "-n", "0")
 	elapsed := time.Since(start)
 	if elapsed < 500*time.Millisecond {
 		t.Fatalf("tail --until-idle returned too early (%v) — did not wait for the turn:\n%s", elapsed, out)
 	}
 	if !strings.Contains(out, "finished") {
 		t.Fatalf("tail --until-idle should have drained the finished event:\n%s", out)
+	}
+	// The runner owns terminal meta writes. Tail's repeated liveness checks
+	// must reload that file rather than reconciling an old active snapshot over
+	// the final state and result.
+	final := e.waitState(t, id, "done")
+	if final["result"] != "finished" {
+		t.Fatalf("tail overwrote the runner's terminal result: %+v", final)
 	}
 }
 

@@ -77,8 +77,12 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   to one line per `--run` label (state, cost, context health, latest note); `tail`
   is `tail -f` across every job and run log, worker events and your notes
   interleaved — `--until-idle` turns it into a scriptable *wait for my pipeline*;
-  `result <job|run>` prints the worker's final report raw (with `--turn N` for an
-  earlier retained turn); `ls` shows attention/active/unreviewed jobs first,
+  `result <selector>` prints the worker's final report raw (with `--turn N` for an
+  earlier retained turn). The core read commands accept one selector: an exact
+  job ID wins, otherwise it is a run label; use `--job` or `--run` to force a
+  namespace when they collide. `status` and `result` select a run's newest job;
+  `events` reads its run event log and `tail` includes its whole timeline,
+  including a run with only notes or artifacts. `ls` shows attention/active/unreviewed jobs first,
   hides closed history by default in both human and JSON modes, and takes
   `--all`, `--workspace`, `--run`, `--state`, and `--limit`; `dashboard` is a
   read-only TUI; `serve` is the local live browser console for human operators
@@ -140,7 +144,7 @@ identity matters; it prints version (or `dev`), commit, dirty flag, and date.
 Smoke-test any setup without API spend in a subshell so state-dir overrides do not leak:
 `( export LEGWORK_STATE_DIR=$(mktemp -d); legwork run --agent fake "test" )`.
 When model or effort matters, verify the receipt with
-`legwork status <job> --json` and check `model`/`effort`.
+`legwork status <selector> --json` and check `model`/`effort`.
 
 A loadable skill for agent harnesses ships at
 [`skills/legwork/SKILL.md`](skills/legwork/SKILL.md), and release binaries embed

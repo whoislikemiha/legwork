@@ -176,10 +176,19 @@ func TestResultPrintsRawJSONAndRunLatest(t *testing.T) {
 	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--run", "pipe", "do it"))
 	e.waitState(t, id, "done")
 
-	if out := e.legwork(t, "result", id); out != "line one\nline two" {
+	rawResult := func(args ...string) string {
+		cmd := exec.Command(binPath, args...)
+		cmd.Env = append(os.Environ(), "LEGWORK_STATE_DIR="+e.state, "LEGWORK_FAKE_SCRIPT="+e.script)
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("result %v: %v", args, err)
+		}
+		return string(out)
+	}
+	if out := rawResult("result", id); out != "line one\nline two" {
 		t.Fatalf("raw result mismatch:\n%q", out)
 	}
-	if out := e.legwork(t, "result", "pipe"); out != "line one\nline two" {
+	if out := rawResult("result", "pipe"); out != "line one\nline two" {
 		t.Fatalf("run result mismatch:\n%q", out)
 	}
 
