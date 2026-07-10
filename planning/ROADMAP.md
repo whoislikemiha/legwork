@@ -21,9 +21,7 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-- [ ] [Durable quality and lifecycle receipts](tasks/quality-receipts.md) — **P1.** `ws-76`.
-  Preserve last-turn outcomes and structured `ws review` verdicts only; close/commit
-  receipts are the next phase.
+None.
 
 ## Next
 

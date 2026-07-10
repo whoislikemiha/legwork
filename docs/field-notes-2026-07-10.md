@@ -148,3 +148,41 @@ The full repository gate passed in the workspace and again after merge `48128f4`
 run-level primitive. The worker/host cache difference is further evidence for the
 existing external-verification-receipts task, not a new duplicate. No additional
 roadmap item emerged from this run.
+
+## Quality receipts dogfood run
+
+The first receipts slice started with installed Legwork `dev`, commit `caa965024967`,
+clean, build date `2026-07-10T12:09:33Z`. The task was split before dispatch: this
+workspace owned last-turn outcomes and structured review verdicts only; close and
+commit identity remained a separate next task. Terra/high `job-172` implemented the
+slice in `ws-76`; the host full gate and a real Claude/Haiku runner smoke passed.
+
+Opus/xhigh `job-176` returned **FIX** and immediately dogfooded the core failure: its
+ordinary prose plus fenced JSON verdict produced `latest_review.parsed:false`. The
+review also reproduced two high-severity data-integrity problems: review completion
+could be lost if workspace receipt persistence failed, and a trimmed git diff could
+drop trailing context and become an invalid patch while still being hashed as the
+review input. SHIP-with-low-findings, severity normalization, and legacy backfill
+semantics needed correction too.
+
+The resumed Terra lineage exposed `context_high:true` at a 6.42M Codex context rollup,
+so it was cancelled immediately and the accepted findings were reseeded into fresh
+`job-180`. That job corrected the bounded set; host verification passed again. Focused
+Opus re-review `job-181` then proved the receipt path itself: workspace metadata stored
+`parsed:true`, verdict `FIX`, one medium and three low findings, the exact checkpoint,
+and the prompt-diff digest. The remaining interrupted-turn outcome refresh, duplicate
+human status line, event-schema note, and stderr/diff separation were fixed directly.
+Focused tests and the full `gofmt`/`go vet`/`go test` gate passed before landing and
+again on `main` after merge `3802c33`.
+
+The landed behavior keeps a compact structured outcome on terminal jobs and after
+close, best-effort backfills legacy closed jobs without mutating them on read, binds
+each review request to an immutable checkpoint and exact raw diff digest, and records
+strict fail-closed review receipts plus `review-verdict` events. The close operation
+itself was run with the workspace-built binary; `job-181` remained queryable as
+`state:closed` with its final `state:done` outcome.
+
+Worker sandbox module/DNS limits remain evidence for the existing external-
+verification-receipts task. The multi-million Codex context value is cumulative rather
+than an honest live-window measurement, exactly the existing codex-health-signal task;
+no duplicate pre-resume task was filed.

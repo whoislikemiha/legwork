@@ -1,6 +1,6 @@
 # Durable quality and lifecycle receipts
 
-Status: in flight · Priority: P1 · Origin: AUDIT C1–C4 · Depends: — · Workspace: ws-76
+Status: done · Priority: P1 · Origin: AUDIT C1–C4 · Depends: — · Workspace: ws-76
 
 ## Goal
 
