@@ -223,3 +223,44 @@ again on `main` after merge `edb4725`.
 The worker sandbox's uncached module/DNS block remains direct evidence for the already
 scheduled external-verification-receipts task. The oversized event was fixed in scope;
 no new roadmap item emerged.
+
+## External verification receipts dogfood run
+
+This slice started with installed Legwork `dev`, commit `d0cd1a837913`, clean, build
+date `2026-07-10T13:47:13Z`. The contract remained exact-job-only: an explicit
+`legwork verify <job> -- <argv...>` runs directly in an open workspace only for a
+terminal `blocked.kind=verify` job, persists an immutable pass/fail receipt, and never
+rewrites the worker's historical outcome.
+
+Terra/high `job-188` implemented the first pass in `ws-81`. The workspace-built
+verifier immediately audited itself: its first full host run persisted a failing
+receipt for four host-only test mismatches; after correction, the repeated attempt
+persisted a distinct passing receipt. Opus/xhigh `job-189` then returned **FIX** with
+three high, four medium, and three low findings. Reproduced high defects included a
+stale pass hiding a later decision block, a concurrent verify/resume lost update, and
+full 64-KiB command output being sent through default notifier payloads. The review
+also reproduced post-cap redaction leaks, command-start ambiguity, timeout descendants,
+and misleading derived state labels.
+
+Fresh Terra/high `job-190` implemented the adjudicated correction set. Receipts now
+bind to worker turn plus post-command checkpoint/diff identity; a separate lease blocks
+concurrent resume without changing worker state; metadata is reloaded before merge;
+events and notifications use compact copies; redaction precedes the final bound;
+command-start failures create no false receipt; timeout cleanup is bounded; and human
+lists retain the real worker state. Workspace schema v2 keeps v0/v1 reads and upgrades
+only on the next successful write, while future versions fail closed.
+
+The new command ran the authoritative gate on its own implementation. One attempt
+correctly persisted a failing receipt for a stale display assertion plus the known
+`TestCodexPassthroughs` teardown race. After correcting the assertion, receipt
+`verification:job-190:1783697125410173671` passed
+`gofmt -l . && go vet ./... && go test ./... -count=1 && git diff --check`, naming
+turn 1, checkpoint `refs/legwork/ws-81/ckpt-6`, and its diff digest. No mechanical
+second review followed because the independent review found no critical defect and the
+accepted set had focused regression coverage plus the complete host gate.
+
+The workspace-built v2 binary was required after the first receipt upgraded `ws-81`;
+the installed v1 binary correctly refused the newer metadata until landing. The task
+merged as `72c27fa`; the complete gate passed again on `main`. Sandbox module/DNS
+friction is now addressed by the shipped verifier, and the schema transition is a
+documented compatibility boundary rather than a new roadmap item.
