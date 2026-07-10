@@ -93,9 +93,11 @@ Act on `state`:
 - `blocked` — read `legwork status "$job" --json` and inspect `blocked.kind`.
   `provision` means the worker supplied an exact command; run `legwork approve
   "$job"` only when you agree to execute it outside the sandbox; use `--timeout` to
-  bound long installs. `verify` means run verification outside the sandbox and attach
-  the result with `resume` or a run note. `decision` should be escalated like any
-  other judgment call.
+  bound long installs. `verify` means run `legwork verify <job> -- <argv...>` for a
+  terminal workspace job: argv executes directly in its worktree and writes a
+  pass/fail receipt without resuming or rewriting the worker. Use `sh -lc` explicitly
+  when shell syntax is needed. `decision` should be escalated like any other judgment
+  call.
 - `failed` — read `legwork events "$job"`; fix and resume, or start a fresh job.
 - `auth-required` — tell the human to log the agent in on that machine
   (`claude /login`, `codex login`).

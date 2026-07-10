@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -226,7 +227,8 @@ func TestWorkspaceCommandsRejectNewerMetadataWithoutRewritingIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	newer := strings.Replace(string(original), `"schema_version": 1`, `"schema_version": 2`, 1)
+	currentVersion := int(ws["schema_version"].(float64))
+	newer := strings.Replace(string(original), fmt.Sprintf(`"schema_version": %d`, currentVersion), fmt.Sprintf(`"schema_version": %d`, currentVersion+1), 1)
 	if newer == string(original) {
 		t.Fatalf("test fixture did not contain schema_version: %s", original)
 	}
@@ -288,7 +290,7 @@ func TestWorkspaceReceiptHistoryAndCloseJSON(t *testing.T) {
 	ws := e.wsNew(t, repo)
 	wsID := ws["id"].(string)
 	tree := ws["tree"].(string)
-	if ws["schema_version"] != float64(1) {
+	if ws["schema_version"] != float64(2) {
 		t.Fatalf("new workspace schema version = %v", ws["schema_version"])
 	}
 	if err := os.WriteFile(filepath.Join(tree, "receipt.txt"), []byte("durable\n"), 0o644); err != nil {

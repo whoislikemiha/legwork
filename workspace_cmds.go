@@ -38,7 +38,7 @@ func activeJobIn(s *job.Store, wsID string) (string, error) {
 			continue
 		}
 		s.Reconcile(m)
-		if m.State == job.StateActive || m.State == job.StateQueued {
+		if m.State == job.StateActive || m.State == job.StateQueued || m.VerificationLeaseLive(time.Now().UTC()) {
 			return m.ID, nil
 		}
 	}
@@ -83,7 +83,7 @@ func wsCmd() *cobra.Command {
 		Short: "List workspaces",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, wss, err := openWorkspaces()
+			s, wss, err := openWorkspaces()
 			if err != nil {
 				return err
 			}
@@ -92,12 +92,29 @@ func wsCmd() *cobra.Command {
 				return err
 			}
 			if lsJSON {
-				return printJSON(metas)
+				out := make([]*workspace.Meta, 0, len(metas))
+				for _, m := range metas {
+					copy := *m
+					if workspaceCurrentVerification(s, m) == nil {
+						copy.LatestVerification = nil
+					}
+					out = append(out, &copy)
+				}
+				return printJSON(out)
 			}
 			for _, m := range metas {
 				state := m.State
 				if m.Disposition != "" {
 					state += "/" + m.Disposition
+				}
+				if r := workspaceCurrentVerification(s, m); r != nil {
+					if r.Passed {
+						state += "/verified"
+					} else if r.TimedOut {
+						state += "/verify-timeout"
+					} else {
+						state += "/verify-failed"
+					}
 				}
 				fmt.Printf("%-8s %-14s ckpts:%-3d %6s  %s\n",
 					m.ID, state, m.Checkpoints, time.Since(m.Updated).Round(time.Second), m.Repo)
@@ -220,6 +237,18 @@ func wsCmd() *cobra.Command {
 
 	ws.AddCommand(newCmd, lsCmd, commitCmd, reviewCmd)
 	return ws
+}
+
+func workspaceCurrentVerification(s *job.Store, wm *workspace.Meta) *job.VerificationReceipt {
+	r := wm.LatestVerification
+	if r == nil || r.Workspace != wm.ID {
+		return nil
+	}
+	jm, err := s.LoadMeta(r.Job)
+	if err != nil || jm.CurrentVerification() == nil || jm.CurrentVerification().ReceiptID != r.ReceiptID {
+		return nil
+	}
+	return r
 }
 
 func workspaceReviewPrompt(wsID, diff string) string {

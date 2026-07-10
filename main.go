@@ -60,7 +60,7 @@ health, recipes).`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), approveCmd(), statusCmd(), eventsCmd(),
+	root.AddCommand(runCmd(), resumeCmd(), answerCmd(), approveCmd(), verifyCmd(), statusCmd(), eventsCmd(),
 		resultCmd(), lsCmd(), watchCmd(), cancelCmd(), ackCmd(), wsCmd(), diffCmd(), closeCmd(),
 		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd(),
 		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd(), versionCmd(), rulesCmd(),
@@ -381,6 +381,11 @@ func doResumeWithEvent(id, message, eventType, preview string, fields map[string
 	if err != nil {
 		return nil, err
 	}
+	unlock, err := job.LockMeta(s.Root, id)
+	if err != nil {
+		return nil, err
+	}
+	defer unlock()
 	m, err := s.LoadMeta(id)
 	if err != nil {
 		return nil, err
@@ -391,6 +396,14 @@ func doResumeWithEvent(id, message, eventType, preview string, fields map[string
 	}
 	if m.State == job.StateClosed {
 		return nil, fmt.Errorf("%s is closed", id)
+	}
+	if m.VerificationLeaseLive(time.Now().UTC()) {
+		return nil, fmt.Errorf("%s has live host verification lease; wait for it to finish", id)
+	}
+	// A timed-out/crashed verifier cannot hold the job indefinitely. This
+	// happens under the same metadata lock as the following resume save.
+	if m.VerificationLease != nil {
+		m.VerificationLease = nil
 	}
 	if m.Workspace != "" {
 		if active, err := activeJobIn(s, m.Workspace); err != nil {
@@ -413,8 +426,16 @@ func doResumeWithEvent(id, message, eventType, preview string, fields map[string
 	m.Task = message
 	m.Question = ""
 	m.Blocked = nil
+	m.LatestVerification = nil
 	if err := s.SaveMeta(m); err != nil {
 		return nil, err
+	}
+	if m.Workspace != "" {
+		if _, wss, err := openWorkspaces(); err == nil {
+			if err := wss.ClearVerification(m.Workspace, m.ID); err != nil {
+				return nil, err
+			}
+		}
 	}
 	if err := runner.Spawn(s, m); err != nil {
 		return nil, err
@@ -675,7 +696,14 @@ func statusCmd() *cobra.Command {
 			}
 			high := m.ContextHigh(health.ContextThreshold)
 			if asJSON {
-				return printJSON(metaOut{Meta: m, ContextHigh: high, Selector: sel.Selector,
+				// latest_verification is a current rollup in the public status
+				// surface. Do not make an old-turn receipt look current to JSON
+				// consumers that do not reconstruct the binding themselves.
+				out := *m
+				if out.CurrentVerification() == nil {
+					out.LatestVerification = nil
+				}
+				return printJSON(metaOut{Meta: &out, ContextHigh: high, Selector: sel.Selector,
 					SelectorKind: string(sel.Kind), ResolvedJob: m.ID})
 			}
 			resolutionNotice(cmd, sel, m)
@@ -700,6 +728,18 @@ func statusCmd() *cobra.Command {
 					fmt.Printf(" detail=%q", m.Blocked.Detail)
 				}
 				fmt.Println()
+			}
+			if r := m.CurrentVerification(); r != nil {
+				state := "failed"
+				if r.Passed {
+					state = "passed (reviewable)"
+				} else if r.TimedOut {
+					state = "timed out"
+				}
+				fmt.Printf("verification: %s  receipt: %s\n", state, r.ReceiptID)
+				if !r.Passed {
+					fmt.Printf("retry: %s\n", shellCommand(verifyRetry(m.ID, r.Argv)))
+				}
 			}
 			if m.State == job.StateClosed && m.LastOutcome != nil {
 				fmt.Printf("last outcome: %s", m.LastOutcome.State)
@@ -1207,14 +1247,17 @@ func lsCmd() *cobra.Command {
 				if m.Model != "" {
 					agent += "/" + collapseWhitespace(m.Model)
 				}
-				prefix := fmt.Sprintf("%-8s %-18s %-13s %6s %-9s %-6s ",
+				prefix := fmt.Sprintf("%-8s %-18s %-14s %6s %-9s %-6s ",
 					collapseWhitespace(m.ID), clip(agent, 18),
-					clip(collapseWhitespace(string(m.State)), 13), fmtAge(m.Updated), ctx, where)
+					clip(collapseWhitespace(lsState(m)), 14), fmtAge(m.Updated), ctx, where)
 				if len([]rune(prefix)) >= width {
 					fmt.Println(clip(prefix, width))
 					continue
 				}
 				fmt.Println(prefix + clip(lsSummary(m), width-len([]rune(prefix))))
+				if r := m.CurrentVerification(); r != nil && !r.Passed {
+					fmt.Printf("  retry: %s\n", shellCommand(verifyRetry(m.ID, r.Argv)))
+				}
 			}
 			return nil
 		},
@@ -1289,7 +1332,7 @@ func filterLSMetas(metas []*job.Meta, f lsFilters) []*job.Meta {
 func sortLSMetas(metas []*job.Meta) {
 	sort.SliceStable(metas, func(i, j int) bool {
 		a, b := metas[i], metas[j]
-		if ar, br := lsAttentionRank(a.State), lsAttentionRank(b.State); ar != br {
+		if ar, br := lsAttentionRank(a), lsAttentionRank(b); ar != br {
 			return ar < br
 		}
 		if !a.Updated.Equal(b.Updated) {
@@ -1302,8 +1345,14 @@ func sortLSMetas(metas []*job.Meta) {
 	})
 }
 
-func lsAttentionRank(s job.State) int {
-	switch s {
+func lsAttentionRank(m *job.Meta) int {
+	if r := m.CurrentVerification(); r != nil {
+		if r.Passed {
+			return 2 // verification passed: reviewable work, not a host-check alert
+		}
+		return 0 // failed/timed-out host check remains explicit attention
+	}
+	switch m.State {
 	case job.StateNeedsInput, job.StateAuthNeeded, job.StateBlocked, job.StateFailed, job.StateInterrupted:
 		return 0
 	case job.StateActive, job.StateQueued:
@@ -1316,6 +1365,15 @@ func lsAttentionRank(s job.State) int {
 }
 
 func lsSummary(m *job.Meta) string {
+	if r := m.CurrentVerification(); r != nil {
+		if r.Passed {
+			return "verification passed — reviewable"
+		}
+		if r.TimedOut {
+			return "verification timed out — retry below"
+		}
+		return "verification failed — retry below"
+	}
 	task := collapseWhitespace(m.Task)
 	if task == "" {
 		task = "-"
@@ -1325,6 +1383,8 @@ func lsSummary(m *job.Meta) string {
 	}
 	return task
 }
+
+func lsState(m *job.Meta) string { return string(m.State) }
 
 func collapseWhitespace(s string) string {
 	return strings.Join(strings.Fields(s), " ")

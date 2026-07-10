@@ -26,10 +26,20 @@ v2 adds structured blocked reasons without changing existing v1 fields:
   checkpoint and diff digest, parsed `SHIP|FIX` verdict, finding counts, and
   completion time. Malformed or ambiguous reviewer output is retained with
   `parsed:false` and `parse_error`; it is never promoted to `SHIP`.
+- `verification` records an orchestrator-run host check. Its `fields.receipt_id`
+  identifies the attempt and `fields.verification` contains the compact receipt
+  (job/workspace, argv, cwd, pass/fail/timeout, exit code when known, duration,
+  bounded output, actor, timestamps, and any history warning). The same receipt ID
+  is appended to the qualifying job and workspace logs; metadata retains only the
+  latest rollup. It never rewrites `finished.fields.state` or its blocked reason.
+- `verification-refused` records a command that could not start. It has no receipt
+  and therefore cannot be mistaken for a pass or failure attempt.
 
 Migration story: v1 event logs remain readable as-is; absent `fields.blocked` means
 the blocked reason is unknown. v1 consumers that ignore unknown fields/types continue
 to work, while v2-aware consumers can route provision blocks to `legwork approve`.
+Workspace metadata v1 remains readable and is upgraded to v2 on the next successful
+write; metadata with a future schema version is refused without rewriting it.
 
 ## Workspace receipt events
 

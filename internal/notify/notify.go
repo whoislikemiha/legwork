@@ -21,7 +21,7 @@ import (
 //
 //	[notify]
 //	command = "ntfy publish legwork"
-//	events  = ["needs-input", "needs-provision", "done", "blocked", "failed", "auth-required", "interrupted"]
+//	events  = ["needs-input", "needs-provision", "done", "blocked", "failed", "auth-required", "interrupted", "verification-passed", "verification-failed"]
 type Config struct {
 	Notify struct {
 		Command string   `toml:"command"`
@@ -30,7 +30,7 @@ type Config struct {
 }
 
 // DefaultEvents when the config lists none.
-var DefaultEvents = []string{"needs-input", "needs-provision", "done", "blocked", "failed", "auth-required", "interrupted"}
+var DefaultEvents = []string{"needs-input", "needs-provision", "done", "blocked", "failed", "auth-required", "interrupted", "verification-passed", "verification-failed"}
 
 func Load() (*Config, error) {
 	var cfg Config
@@ -48,16 +48,17 @@ func Load() (*Config, error) {
 
 // Payload is what the notify command receives on stdin.
 type Payload struct {
-	Event    string             `json:"event"` // terminal state or event type
-	Job      string             `json:"job"`
-	Run      string             `json:"run,omitempty"`
-	Agent    string             `json:"agent"`
-	Task     string             `json:"task"`
-	Question string             `json:"question,omitempty"`
-	Blocked  *job.BlockedReason `json:"blocked,omitempty"`
-	Result   string             `json:"result,omitempty"`
-	CostUSD  float64            `json:"cost_usd,omitempty"`
-	Context  int                `json:"context,omitempty"`
+	Event        string                   `json:"event"` // terminal state or event type
+	Job          string                   `json:"job"`
+	Run          string                   `json:"run,omitempty"`
+	Agent        string                   `json:"agent"`
+	Task         string                   `json:"task"`
+	Question     string                   `json:"question,omitempty"`
+	Blocked      *job.BlockedReason       `json:"blocked,omitempty"`
+	Result       string                   `json:"result,omitempty"`
+	CostUSD      float64                  `json:"cost_usd,omitempty"`
+	Context      int                      `json:"context,omitempty"`
+	Verification *job.VerificationReceipt `json:"verification,omitempty"`
 }
 
 // Send fires the notifier if the event is subscribed. Failures are returned

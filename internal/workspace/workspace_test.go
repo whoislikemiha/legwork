@@ -72,7 +72,7 @@ func TestLoadRejectsNewerSchemaIncludingList(t *testing.T) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte(`{"schema_version":2,"id":"ws-1"}`), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte(`{"schema_version":3,"id":"ws-1"}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	s, err := Open(root)
@@ -85,9 +85,69 @@ func TestLoadRejectsNewerSchemaIncludingList(t *testing.T) {
 	} {
 		err := load()
 		var unsupported *UnsupportedSchemaError
-		if !errors.As(err, &unsupported) || unsupported.Found != 2 || unsupported.Supported != MetaSchemaVersion {
+		if !errors.As(err, &unsupported) || unsupported.Found != 3 || unsupported.Supported != MetaSchemaVersion {
 			t.Fatalf("newer schema error = %v, want UnsupportedSchemaError", err)
 		}
+	}
+}
+
+func TestLoadV1VerificationCompatibility(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "workspaces", "ws-1")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"schema_version":1,"id":"ws-1","state":"open"}`
+	if err := os.WriteFile(filepath.Join(dir, "meta.json"), []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := s.Load("ws-1")
+	if err != nil || m.SchemaVersion != 1 || m.LatestVerification != nil {
+		t.Fatalf("v1 workspace must remain readable without a receipt: meta=%+v err=%v", m, err)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "meta.json"))
+	if err != nil || string(got) != old {
+		t.Fatalf("read-only v1 load rewrote metadata: err=%v got=%s", err, got)
+	}
+	if err := s.save(m); err != nil {
+		t.Fatal(err)
+	}
+	upgraded, err := s.Load("ws-1")
+	if err != nil || upgraded.SchemaVersion != MetaSchemaVersion {
+		t.Fatalf("successful v1 write did not upgrade to v2: meta=%+v err=%v", upgraded, err)
+	}
+}
+
+func TestRecordVerificationHistoryFailureIsSoft(t *testing.T) {
+	root := t.TempDir()
+	s, err := Open(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := &Meta{ID: "ws-1", State: "open"}
+	if err := os.MkdirAll(s.dir(m.ID), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.save(m); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(filepath.Join(s.dir(m.ID), "events.jsonl"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	r := &job.VerificationReceipt{ReceiptID: "r1", Job: "job-1", Workspace: m.ID, Turn: 1, Passed: true, Actor: "orchestrator"}
+	if err := s.RecordVerification(m.ID, r); err != nil {
+		t.Fatalf("durable verification should survive history failure: %v", err)
+	}
+	if r.HistoryError == "" {
+		t.Fatal("history error was not retained on receipt")
+	}
+	stored, err := s.Load(m.ID)
+	if err != nil || stored.LatestVerification == nil || stored.LatestVerification.ReceiptID != r.ReceiptID {
+		t.Fatalf("receipt was not retained after history failure: meta=%+v err=%v", stored, err)
 	}
 }
 

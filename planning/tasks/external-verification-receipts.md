@@ -81,3 +81,33 @@ that distinguishes pass from fail.
 - Standalone `legwork verify <workspace>` or verification of workspace-less jobs.
 
 ## Log
+
+- Terra job `job-188` implemented the first slice. The workspace-built command
+  immediately dogfooded itself: its first receipt truthfully captured four host-only
+  test mismatches; after correction, the same job received a passing full-gate receipt.
+- Opus/xhigh job `job-189` returned `FIX` with three high, four medium, and three low
+  findings. Reproductions included stale-pass triage, a verify/resume lost update,
+  oversized notifier output, post-cap redaction leaks, unbounded timeout descendants,
+  and command-start ambiguity.
+- Fresh Terra job `job-190` implemented the adjudicated corrections. The orchestrator
+  corrected one stale human-output assertion; the full host gate then passed through
+  `legwork verify` itself as receipt `verification:job-190:1783697125410173671`.
+- No mechanical second review was dispatched: the independent review found no critical
+  defect, all accepted findings have focused regression coverage, and the authoritative
+  full gate passed after the correction set.
+
+## Verification
+
+- Host: `gofmt -l . && go vet ./... && go test ./... -count=1 && git diff --check` passed.
+- Dogfood: fail and pass receipts remained immutable, the worker stayed historically
+  `blocked.kind=verify`, and the passing receipt names turn 1 plus checkpoint/diff identity.
+
+## Friction
+
+- 2026-07-10: the worker sandbox can run dependency-free focused Go tests, but the
+  full repository gate cannot fetch the uncached module zip files because DNS/network
+  access to `proxy.golang.org` is denied. No dependency or harness workaround was used.
+- The workspace-built verifier upgraded `ws-81` metadata to v2 before landing, so the
+  installed v1 binary correctly refused to read it. Orchestration had to stay on the
+  workspace binary until merge/install; this is the documented one-way upgrade boundary,
+  not a new roadmap item.

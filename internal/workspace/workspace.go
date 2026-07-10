@@ -20,7 +20,7 @@ import (
 	"github.com/whoislikemiha/legwork/internal/job"
 )
 
-const MetaSchemaVersion = 1
+const MetaSchemaVersion = 2
 
 // Meta is the persisted workspace record.
 type Meta struct {
@@ -49,6 +49,9 @@ type Meta struct {
 	// LatestReview is a current rollup. The reviewer job and its event log
 	// remain the historical source of every individual review turn.
 	LatestReview *ReviewReceipt `json:"latest_review,omitempty"`
+	// LatestVerification mirrors the qualifying job's current verification
+	// rollup so workspace readiness readers do not need to infer it from prose.
+	LatestVerification *job.VerificationReceipt `json:"latest_verification,omitempty"`
 	// Setup notes: "ok", "skipped: <why>", captured for observability.
 	Setup string `json:"setup,omitempty"`
 }
@@ -194,7 +197,7 @@ func (s *Store) newID() (string, error) {
 }
 
 func (s *Store) save(m *Meta) error {
-	if m.SchemaVersion == 0 {
+	if m.SchemaVersion < MetaSchemaVersion {
 		m.SchemaVersion = MetaSchemaVersion
 	}
 	m.Updated = time.Now().UTC()

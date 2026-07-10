@@ -68,6 +68,13 @@ type Meta struct {
 	// LastOutcome is the compact receipt of the most recent terminal worker
 	// turn. It remains available after State later advances to closed.
 	LastOutcome *Outcome `json:"last_outcome,omitempty"`
+	// LatestVerification is the orchestrator-owned host verification rollup.
+	// It never changes the worker turn's state, result, or blocked reason.
+	LatestVerification *VerificationReceipt `json:"latest_verification,omitempty"`
+	// VerificationLease serializes a host verification with resume and other
+	// workspace activity. It is deliberately separate from State: a lease must
+	// never make a historical blocked worker turn appear active.
+	VerificationLease *VerificationLease `json:"verification_lease,omitempty"`
 	// Review is set only for jobs dispatched by `ws review`. It records the
 	// immutable snapshot the reviewer received; the workspace keeps a rollup
 	// receipt once that turn finishes.
@@ -80,6 +87,101 @@ type Meta struct {
 	// Context is the session's footprint after the last turn (not
 	// cumulative): the health metric for spotting spinning workers.
 	Context int `json:"context,omitempty"`
+}
+
+// VerificationReceipt records one explicit host-side verification attempt.
+// Meta retains only the latest attempt; job and workspace event logs retain
+// the full append-only history.
+type VerificationReceipt struct {
+	ReceiptID string `json:"receipt_id"`
+	Job       string `json:"job"`
+	Workspace string `json:"workspace"`
+	// Turn is the blocked worker turn that authorized this host command.
+	Turn          int       `json:"turn"`
+	CheckpointRef string    `json:"checkpoint_ref,omitempty"`
+	CheckpointOID string    `json:"checkpoint_oid,omitempty"`
+	DiffSHA256    string    `json:"diff_sha256,omitempty"`
+	Argv          []string  `json:"argv"`
+	Cwd           string    `json:"cwd"`
+	Passed        bool      `json:"passed"`
+	TimedOut      bool      `json:"timed_out,omitempty"`
+	ExitCode      *int      `json:"exit_code,omitempty"`
+	DurationMS    int64     `json:"duration_ms"`
+	Output        string    `json:"output,omitempty"`
+	OutputCut     bool      `json:"output_truncated,omitempty"`
+	Actor         string    `json:"actor"`
+	StartedAt     time.Time `json:"started_at"`
+	CompletedAt   time.Time `json:"completed_at"`
+	HistoryError  string    `json:"history_error,omitempty"`
+}
+
+// VerificationLease is a short-lived, persisted ownership record. Expiry is
+// intentional: a client killed after acquiring the lease cannot wedge a job.
+type VerificationLease struct {
+	ID        string    `json:"id"`
+	Turn      int       `json:"turn"`
+	StartedAt time.Time `json:"started_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func (m *Meta) VerificationLeaseLive(now time.Time) bool {
+	return m.VerificationLease != nil && m.VerificationLease.ExpiresAt.After(now)
+}
+
+// CurrentVerification is the only receipt eligible for current/reviewable UI.
+// Older receipts remain in append-only history, but cannot survive a resume,
+// decision, or different blocked worker turn as a passing rollup.
+func (m *Meta) CurrentVerification() *VerificationReceipt {
+	r := m.LatestVerification
+	if r == nil || r.Job != m.ID || r.Turn != m.Turns || m.State != StateBlocked || m.Blocked == nil || m.Blocked.Kind != "verify" {
+		return nil
+	}
+	return r
+}
+
+const verificationArgvMax = 12
+
+// CompactVerificationReceipt is the shared event/notifier representation.
+// Metadata retains the exact supplied argv and bounded full output.
+func CompactVerificationReceipt(receipt *VerificationReceipt) *VerificationReceipt {
+	if receipt == nil {
+		return nil
+	}
+	compact := *receipt
+	compact.Output = events.Truncate(compact.Output)
+	compact.HistoryError = events.Truncate(compact.HistoryError)
+	if len(compact.Argv) > verificationArgvMax {
+		compact.Argv = append([]string(nil), compact.Argv[:verificationArgvMax]...)
+		compact.Argv = append(compact.Argv, "…")
+	} else {
+		compact.Argv = append([]string(nil), compact.Argv...)
+	}
+	for i := range compact.Argv {
+		compact.Argv[i] = events.Truncate(compact.Argv[i])
+	}
+	return &compact
+}
+
+func VerificationPreview(receipt *VerificationReceipt) string {
+	state := "failed"
+	if receipt.Passed {
+		state = "passed"
+	} else if receipt.TimedOut {
+		state = "timed out"
+	}
+	return events.Truncate("verification " + state + ": " + strings.Join(CompactVerificationReceipt(receipt).Argv, " "))
+}
+
+// VerificationEvent is the single compact history representation shared by
+// job and workspace logs, so their previews and bounded receipt fields cannot
+// drift apart.
+func VerificationEvent(receipt *VerificationReceipt) events.Event {
+	return events.Event{Type: events.TypeVerification, Actor: receipt.Actor, Preview: VerificationPreview(receipt), Fields: map[string]any{
+		"receipt_id":   receipt.ReceiptID,
+		"workspace":    receipt.Workspace,
+		"job":          receipt.Job,
+		"verification": CompactVerificationReceipt(receipt),
+	}}
 }
 
 // BlockedReason is the machine-readable reason for StateBlocked.
@@ -348,6 +450,24 @@ func LockAlloc(root string) (func(), error) {
 	return func() {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		f.Close()
+	}, nil
+}
+
+// LockMeta serializes read-modify-write job metadata operations. Unlike the
+// allocation lock it is per-job, so a long host verification never blocks
+// unrelated dispatches.
+func LockMeta(root, id string) (func(), error) {
+	f, err := os.OpenFile(filepath.Join(root, "jobs", id, ".meta.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX); err != nil {
+		_ = f.Close()
+		return nil, err
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		_ = f.Close()
 	}, nil
 }
 

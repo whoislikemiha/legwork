@@ -218,3 +218,35 @@ func TestReconcileRefreshesOutcomeAfterPreviousTerminalTurn(t *testing.T) {
 		t.Fatalf("interrupted outcome time is stale: outcome=%s updated=%s", stale.LastOutcome.At, stale.Updated)
 	}
 }
+
+func TestCurrentVerificationRequiresBoundBlockedTurn(t *testing.T) {
+	m := &Meta{ID: "job-1", State: StateBlocked, Turns: 2, Blocked: &BlockedReason{Kind: "verify"},
+		LatestVerification: &VerificationReceipt{ReceiptID: "r1", Job: "job-1", Turn: 2}}
+	if m.CurrentVerification() == nil {
+		t.Fatal("matching blocked verification was not current")
+	}
+	m.Turns++
+	if m.CurrentVerification() != nil {
+		t.Fatal("receipt from an earlier worker turn remained current")
+	}
+	m.Turns--
+	m.Blocked = &BlockedReason{Kind: "decision"}
+	if m.CurrentVerification() != nil {
+		t.Fatal("verification receipt survived a different blocked kind")
+	}
+}
+
+func TestCompactVerificationReceiptBoundsNotificationAndEventFields(t *testing.T) {
+	argv := make([]string, 14)
+	for i := range argv {
+		argv[i] = strings.Repeat("x", 240)
+	}
+	compact := CompactVerificationReceipt(&VerificationReceipt{Argv: argv,
+		Output: strings.Repeat("o", 240), HistoryError: strings.Repeat("h", 240)})
+	if len(compact.Argv) != 13 || compact.Argv[12] != "…" {
+		t.Fatalf("argv was not bounded: %d %#v", len(compact.Argv), compact.Argv)
+	}
+	if len([]rune(compact.Output)) > 201 || len([]rune(compact.HistoryError)) > 201 {
+		t.Fatalf("compact receipt left oversized text: %#v", compact)
+	}
+}

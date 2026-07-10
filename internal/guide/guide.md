@@ -85,6 +85,8 @@ legwork status <selector> --json         -> job IDs win; a run selects its newes
 legwork result <selector>                -> print the final report, raw
 legwork resume <job> "next instruction"  -> another turn in the same session
 legwork approve <job> [--timeout 30m]    -> run approved needs-provision command, then resume
+legwork verify <job> [--timeout 30m] -- <argv...>
+                                         -> host verification receipt; worker remains historical blocked
 ```
 
 Dispatch options stick for the job's lifetime: `--read-only`, `--append-prompt`
@@ -108,8 +110,16 @@ reason: `provision`, `verify`, or `decision`. `provision` includes an exact comm
 the sandbox could not run; `legwork approve <job>` is the explicit gate that runs
 that command in the job worktree outside the sandbox, bounded by `--timeout`, and
 resumes the same session. No approval means no command runs. `verify` means the work may be complete but the
-suite needs an outside-sandbox verification run; attach the result with `resume` or
-your run notes. `decision` should be escalated like any other judgment call.
+suite needs an outside-sandbox verification run. For a terminal workspace job, run
+`legwork verify <job> -- <argv...>`; it executes argv directly in the workspace
+worktree (use `sh -lc` explicitly for shell syntax), records bounded/redacted output,
+and leaves the worker's blocked turn intact. A passing receipt makes the work
+reviewable; a failing receipt stays attention-worthy and prints a retry. `decision`
+should be escalated like any other judgment call.
+
+Workspace metadata schema v2 adds the current verification rollup. Schema v1 (and
+legacy unversioned metadata) remains read-compatible and upgrades only on its next
+successful metadata write; a newer schema version is refused rather than rewritten.
 
 ## Preflight: doctor before you dispatch
 
@@ -150,11 +160,12 @@ Configure the notifier in `~/.config/legwork/config.toml` (or `$LEGWORK_CONFIG`)
 ```toml
 [notify]
 command = "<any shell command>"   # receives a JSON payload on stdin
-events  = ["needs-input", "needs-provision", "done", "blocked", "failed", "auth-required", "interrupted"]
+events  = ["needs-input", "needs-provision", "done", "blocked", "failed", "auth-required", "interrupted", "verification-passed", "verification-failed"]
 ```
 
 The payload: `{"event", "job", "run", "agent", "task", "question", "blocked", "result",
-"cost_usd", "context"}` — often enough to decide without another round-trip.
+"cost_usd", "context", "verification"}` — verification completion uses
+`verification-passed` or `verification-failed`, with its receipt in `verification`.
 
 - **Human notifications**: `command = "jq -r '\"legwork \" + .job + \": \" + .event' | xargs -I{} ntfy publish mytopic {}"`
   (or any Telegram/webhook one-liner).
@@ -635,7 +646,8 @@ skill install [--target hermes|claude|codex|all] [--force] [--json]
 run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P | --append-prompt-file PATH|-]
     [--effort E] [--fallback-model M] <task>
-resume <job> <msg>   answer <job> <msg>   approve <job> [--timeout D]   cancel <job>
+resume <job> <msg>   answer <job> <msg>   approve <job> [--timeout D]
+verify <job> [--timeout D] -- <argv...>   cancel <job>
 status [selector] [--job ID | --run L]
 result [selector] [--job ID | --run L] [--turn N]
 wait <job> [--until state[,state...]] [--timeout D] [--json]

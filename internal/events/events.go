@@ -27,27 +27,29 @@ type Event struct {
 
 // Event types (families per DESIGN.md §3).
 const (
-	TypeQueued         = "queued"
-	TypeStarted        = "started"
-	TypeFinished       = "finished" // fields.state = done|needs-input|blocked|failed|auth-required; v2 may include fields.blocked
-	TypeInterrupted    = "interrupted"
-	TypeClosed         = "closed"
-	TypeNeedsInput     = "needs-input"
-	TypeNeedsProvision = "needs-provision"
-	TypeAnswer         = "answer"
-	TypeApprove        = "approve"
-	TypeResume         = "resume"
-	TypeCancel         = "cancel"
-	TypeText           = "text"      // assistant text (preview)
-	TypeToolCall       = "tool-call" // fields: tool, target
-	TypeProgress       = "progress"
-	TypeUsage          = "usage"    // fields: cost_usd, tokens_in, tokens_out, context
-	TypeNote           = "note"     // orchestrator narration
-	TypeArtifact       = "artifact" // fields: name, size_bytes
-	TypeCommit         = "commit"   // orchestrator-owned workspace commit
-	TypeWorkspaceClose = "workspace-close"
-	TypeCheckpoint     = "checkpoint" // fields: ref, oid
-	TypeReviewVerdict  = "review-verdict"
+	TypeQueued              = "queued"
+	TypeStarted             = "started"
+	TypeFinished            = "finished" // fields.state = done|needs-input|blocked|failed|auth-required; v2 may include fields.blocked
+	TypeInterrupted         = "interrupted"
+	TypeClosed              = "closed"
+	TypeNeedsInput          = "needs-input"
+	TypeNeedsProvision      = "needs-provision"
+	TypeAnswer              = "answer"
+	TypeApprove             = "approve"
+	TypeResume              = "resume"
+	TypeCancel              = "cancel"
+	TypeText                = "text"      // assistant text (preview)
+	TypeToolCall            = "tool-call" // fields: tool, target
+	TypeProgress            = "progress"
+	TypeUsage               = "usage"    // fields: cost_usd, tokens_in, tokens_out, context
+	TypeNote                = "note"     // orchestrator narration
+	TypeArtifact            = "artifact" // fields: name, size_bytes
+	TypeCommit              = "commit"   // orchestrator-owned workspace commit
+	TypeWorkspaceClose      = "workspace-close"
+	TypeCheckpoint          = "checkpoint" // fields: ref, oid
+	TypeReviewVerdict       = "review-verdict"
+	TypeVerification        = "verification"
+	TypeVerificationRefused = "verification-refused"
 )
 
 const previewMax = 200

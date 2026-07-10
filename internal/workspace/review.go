@@ -170,3 +170,37 @@ func (s *Store) RecordReview(wsID string, receipt *ReviewReceipt) error {
 	m.LatestReview = receipt
 	return s.save(m)
 }
+
+// RecordVerification advances the workspace mirror then appends its history
+// event. A history append failure is recorded on the already-durable receipt;
+// callers must not replay a completed host command.
+func (s *Store) RecordVerification(wsID string, receipt *job.VerificationReceipt) error {
+	m, err := s.Load(wsID)
+	if err != nil {
+		return err
+	}
+	m.LatestVerification = receipt
+	if err := s.save(m); err != nil {
+		return err
+	}
+	if err := s.appendEvent(wsID, job.VerificationEvent(receipt)); err != nil {
+		receipt.HistoryError = appendHistoryError(receipt.HistoryError,
+			fmt.Sprintf("append workspace event %s: %v", s.eventPath(wsID), err))
+		_ = s.save(m)
+	}
+	return nil
+}
+
+// ClearVerification removes only the current rollup belonging to a resumed
+// job. Append-only receipt history intentionally remains intact.
+func (s *Store) ClearVerification(wsID, jobID string) error {
+	m, err := s.Load(wsID)
+	if err != nil {
+		return err
+	}
+	if m.LatestVerification == nil || m.LatestVerification.Job != jobID {
+		return nil
+	}
+	m.LatestVerification = nil
+	return s.save(m)
+}

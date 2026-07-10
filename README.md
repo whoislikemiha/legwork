@@ -19,6 +19,7 @@ $ legwork result job-7         # raw final report
 $ legwork diff ws-1            # the reviewable diff (incl. untracked files)
 $ legwork answer job-7 "use the token-bucket approach"   # if it asked
 $ legwork approve job-7        # if it needs an explicit provisioning command
+$ legwork verify job-7 -- go test ./... -count=1  # host-side receipt for blocked.kind=verify
 $ legwork ws review ws-1 --model opus    # independent read-only review of the diff
 $ legwork ws commit ws-1 -m "add API rate limiting"
 $ legwork close ws-1 --merge-into main --reason "landed in main" # merges, records, reclaims
@@ -52,7 +53,9 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   Blocked turns can carry `blocked.kind` (`provision`, `verify`, `decision`);
   provision blocks include an exact command and require explicit
   `legwork approve <job>` before legwork runs it outside the sandbox, bounded by
-  `--timeout`, and resumes.
+  `--timeout`, and resumes. A workspace job blocked specifically with `verify`
+  can instead use `legwork verify <job> -- <argv...>`: argv runs directly in its
+  worktree, and the pass/fail receipt is retained without rewriting the worker turn.
 - **Workspaces are review gates**: one worktree + one branch + one diff + one close.
   Workers never commit; the orchestrator reviews the diff directly or dispatches
   `legwork ws review <ws>` for a high-effort read-only reviewer seeded with
