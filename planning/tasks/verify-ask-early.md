@@ -1,38 +1,46 @@
-# Verify the ask-early path actually fires
+# Verify the ask-early contract with real agents
 
 Status: later · Priority: P2 · Origin: AUDIT A4 · Depends: — · Workspace: —
 
 ## Goal
 
-Prove the ask-early contract works. Across 96 real jobs there were **0 `needs-input`** finishes
-and **0 `answer` round-trips** — the whole corpus leaned on `resume`. Either every task was
-well-specified, or the injected ask-early bias is not actually triggering `state: needs-input`.
-Establish which, and fix or document the result.
+Determine whether the injected “ask early instead of guessing” rule changes real
+Claude and Codex behavior. The plumbing is tested, but the production corpus recorded
+zero `needs-input` turns and zero `answer` round-trips across 96 jobs.
 
-## Context & design
+## Evaluation
 
-- The injected contract claims an ask-early bias: "if a decision is ambiguous and materially
-  affects the outcome, end your turn with `state: needs-input` rather than guessing" (DESIGN §4).
-  This deliberately inverts the usual plow-ahead bias. If it never fires in practice, the bias is
-  either dead or the tasks never hit it.
-- The fake-agent `needs-input→answer` loop is *already* an e2e test (AGENTS.md: the suite
-  covers "needs-input→answer"), so the plumbing works. The gap this task closes is **real-agent
-  behavior**: in 96 production jobs no worker ever chose `needs-input`. Confirm whether the
-  injected wording actually makes a real claude/codex worker stop-and-ask on an ambiguous task.
-- Then, with a real agent (cheap smoke), confirm an ambiguous task actually produces
-  `needs-input` and not a guess — i.e. the injected wording earns its place. If real agents don't
-  ask, either strengthen the wording (`internal/rules`) or accept resume-only and drop the claim
-  from the docs.
+Run a small, repeatable real-agent matrix in temporary state directories:
 
-## Constraints
+- a clearly specified task that should complete;
+- a materially ambiguous but safe task that should ask before acting;
+- a preference question the orchestrator can answer and resume;
+- an impossible/environmental case that should be `blocked`, not `needs-input`.
 
-- The fake-agent e2e must run in CI with zero API spend (the contract suite is the quality story).
-- Any rules-text change is tool-owned and travels with the parser version.
-- Don't invent a `needs-input` shape that diverges from the existing event schema / status-block
-  contract — reuse `question:` from the status block.
+Record agent, model, rules version, outcome, question quality, and whether the answer
+continuation completes in the same session. Prompts must be task-shaped and must not
+directly tell the model which status to emit.
 
-## Blockers
+## Decision after evidence
 
-None.
+- If both adapters reliably ask, keep the contract and add the real-smoke recipe.
+- If wording changes improve behavior, make the smallest rules update and re-run the
+  parser/real-agent checks together.
+- If behavior remains unreliable, document ask-early as best-effort rather than a
+  guarantee; do not keep strengthening prompt prose indefinitely.
+
+## Acceptance criteria
+
+- The fake-agent `needs-input -> answer` contract remains zero-spend CI coverage.
+- At least one real Claude and one real Codex model are tested against the same
+  behavioral cases.
+- Results are reproducible enough to justify either the wording or a truthful docs
+  downgrade.
+- Any rules change is tool-owned, parser-compatible, and verified with the full gate
+  plus real-agent smoke.
+
+## Non-goals
+
+- Forcing every ambiguity into a question or adding a classifier for model intent.
 
 ## Log

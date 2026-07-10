@@ -1,44 +1,53 @@
-# Truthful health signal (codex ctx + mid-turn + diff-progress)
+# Truthful live job health
 
-Status: next · Priority: P1 · Origin: AUDIT B1–B2 (+ prior ROADMAP "mid-turn cost/context", ctx-hint follow-up) · Depends: — · Workspace: —
+Status: next · Priority: P1 · Origin: AUDIT B1–B2 · Depends: — · Workspace: —
 
 ## Goal
 
-Make the health surface tell the truth. Three linked problems: codex `ctx` is inflated garbage,
-running jobs show `ctx:-` (no live signal), and there is no agent-agnostic "is it spinning?"
-metric. Fix the lie, add a heartbeat, and add a diff-progress signal.
+Make `ls` and `status` answer the operational question: should I keep waiting, inspect
+the job, or start fresh? A health warning must be trustworthy enough to change an
+orchestrator's behavior.
 
-## Context & design
+## Product signals
 
-- **B1 codex ctx inflation.** codex `ctx` median **1.44M**, max **30.7M** (`job-78`); 63/66
-  codex jobs exceed the 150k `context_threshold`, so the `!` marker and `context_high` json fire
-  on nearly every codex job — including this review's own pure-read research jobs (431k–1056k). It
-  is summed across a turn's calls, not the live window: `job-78`/`job-33` are 3-turn jobs with
-  ~30M. The claude summing bug was already fixed to "last call's real window"; do the same for
-  codex, or if the codex stream genuinely doesn't expose a live window, **suppress `!`/`context_high`
-  for codex** rather than emit a known-false alarm.
-- **B2a mid-turn signal.** Telemetry only lands at the turn boundary, so a $13 / runaway turn is
-  invisible until it ends and running jobs show `ctx:-`. Add a coarse heartbeat (tokens-so-far
-  from the transcript tee the runner already writes) to `status`/`ls` while a runner is live.
-  Read-side only — cheaper than the mid-turn toolbelt.
-- **B2b diff-progress = the real health metric.** Bytes/files changed in the worktree over the
-  last N minutes, shown in `ls`. High tool activity + zero diff-progress = spinning, and it is
-  agent-agnostic (no dependence on either CLI's ctx accounting). The runner already snapshots the
-  worktree for checkpoints — derive progress from consecutive checkpoint trees.
+### Context truth
 
-## Constraints
+Codex currently reports cumulative token accounting as if it were the live context
+window, producing routine multi-million-token `ctx!` alarms. Report the measurement
+basis explicitly (`window`, `cumulative`, or `unknown`) and set `context_high` only
+when the value is comparable to the configured window threshold. Unknown is better
+than a known-false warning.
 
-- Do not change the event schema's existing telemetry fields without a `v` bump; prefer adding new
-  fields (heartbeat, diff-progress) over redefining `context`.
-- The codex ctx fix must be verified against a **live multi-call codex turn** (AGENTS.md: the
-  codex adapter's ctx "may have the same summing issue — verify before changing"). Fake agent
-  can't reproduce real ctx accounting.
-- Keep `[health] context_threshold` config working; `0` disables. If suppressing `!` on codex,
-  document it in the capability flags.
+### Mid-turn heartbeat
 
-## Blockers
+While a runner is active, show last provider activity and any usage snapshot the
+adapter can truthfully derive. A live job should not display `ctx:-` with no indication
+of whether events are still arriving.
 
-None. Sub-items are independent: ctx fix (adapter), heartbeat (runner+status, read-only),
-diff-progress (runner checkpoints + ls). Ship in that rough order of leverage.
+### Workspace progress
+
+For mutating workspace jobs, show recent file/diff progress: changed file count,
+diff-size movement, and age of the latest change/checkpoint. High activity with no
+workspace progress is the agent-agnostic spinning signal.
+
+Human output stays compact; JSON exposes values, timestamps, and measurement basis so
+orchestrators can apply their own policy.
+
+## Acceptance criteria
+
+- A real multi-call Codex turn establishes what the current CLI actually reports;
+  tests do not encode an assumed accounting model.
+- Codex cumulative totals no longer trigger a false context-window alarm.
+- Active jobs show a heartbeat age even when exact context is unavailable.
+- Workspace progress distinguishes active editing, long-running verification, and
+  stale/no-change work without declaring any of them failed.
+- Claude, Codex, resumed jobs, read-only jobs, and dead runners have explicit behavior.
+- Existing event fields are not redefined without a schema version; new telemetry is
+  additive.
+
+## Non-goals
+
+- Automatic cancellation, token budgets, or judging semantic code quality.
+- Pretending all adapters expose the same telemetry.
 
 ## Log

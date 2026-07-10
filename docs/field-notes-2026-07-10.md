@@ -63,3 +63,33 @@ now P1/Next.
   operation surface; each preserves the no-daemon/no-database/no-MCP boundaries.
 - Moved human-readable active-job observability to `planning/done/` and left the next
   implementation wave explicit in `planning/ROADMAP.md`.
+
+## Roadmap authoring correction
+
+Later the same day, the roadmap rewrite campaign exposed a failure in orchestration
+proportionality. Installed Legwork was `dev`, commit `49e024612dec`, clean, build date
+`2026-07-10T08:41:44Z`.
+
+The requested campaign was to improve the existing task descriptions. Preflight found
+that Legwork silently clamped Codex `xhigh` to `high`, while a direct Codex CLI 0.144.1
+probe confirmed `gpt-5.6-sol` accepted `xhigh`. Instead of recording that friction and
+continuing, the orchestrator made it a prerequisite, delegated an exhaustive task
+specification, and treated the generated 190-line task as an approved contract.
+
+That produced `ws-68`: two Terra/high implementation turns, an Opus/xhigh FIX review,
+host verification, and a second Opus review over a 16-file, 547-addition diff. The
+scope had expanded from one adapter mapping into effort receipts, doctor behavior,
+legacy metadata recovery, and model normalization. `job-153` was interrupted and
+`ws-68` was discarded; none of that code landed.
+
+The durable product issue remains real but is now the proportional
+`model-aware-reasoning-effort` task: pass an explicit Codex `xhigh` through, keep
+`max` conservative, update focused tests/docs, and add no metadata system. The twelve
+pre-existing task files plus that new task were rewritten directly by the orchestrator
+as concise product contracts; no task-writing agent was used.
+
+Process lesson: dogfood friction becomes a roadmap input, not an automatic blocker.
+Delegated task drafts are research until the orchestrator approves scope. Small fixes
+need an explicit size/time budget and bounded review; the full implement→review→fix→
+re-review loop is reserved for changes whose user-visible risk justifies it. This is
+now stated in the guide and bundled skill.

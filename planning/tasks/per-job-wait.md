@@ -1,36 +1,42 @@
 # Per-job blocking wait
 
-Status: next · Priority: P1 · Origin: AUDIT E1 (+ field-notes 2026-07-07 #1) · Depends: — · Workspace: —
+Status: next · Priority: P1 · Origin: AUDIT E1 + 2026-07-10 dogfood · Depends: — · Workspace: —
 
 ## Goal
 
-A first-class blocking verb: `legwork wait --job X --until done|blocked|needs-input`. Exits 0 when
-the job reaches a target state, non-zero on timeout. The scriptable "wake me when this specific
-job needs me".
+Provide the scriptable “wake me when this specific job needs attention” primitive so
+orchestrators do not build polling loops or misuse run-scoped `tail --until-idle`.
 
-## Context & design
+## Desired experience
 
-- `tail --until-idle` (used to drive the 2026-07-08 dogfood review) already blocks and exits when
-  no job in scope is active — it is the run-scoped wait. The gap is **granularity**: it is
-  run-scoped, so after every `resume` the orchestrator must re-attach a monitor, and per-job facts
-  ("job interrupted, diff persists"; "this one hit needs-input") are lost in run-scoped idle.
-  After `cancel`, run-scoped `--until-idle` fires even though the interesting fact is one job's.
-- Design: `wait` blocks on the job's event stream (reuse the cursor reads that `events`/`tail`
-  use in `internal/events`/`internal/timeline`) until `finished` with a matching state (or any
-  terminal state if `--until` omitted). Support `--timeout`; exit codes distinguish
-  reached-target / timeout / job-not-found, consistent with the existing exit-code table.
-- Complements, does not replace, the notifier (push wake-on-event) and `tail --until-idle`
-  (pipeline wait). This is the pull-side blocking primitive for a single job.
+```bash
+legwork wait job-149
+legwork wait job-149 --until needs-input,blocked,done --timeout 20m --json
+```
 
-## Constraints
+- With no `--until`, wait until the job leaves `queued|active`.
+- With `--until`, return when one of the requested states is reached.
+- An already-matching job returns immediately with the same result shape.
+- A dead runner is reconciled to `interrupted`; wait must not hang on stale liveness.
+- Timeout, unknown job, target reached, and terminal-but-not-requested are distinct,
+  documented outcomes.
+- JSON returns the final job status plus `reached`, `waited_for`, and elapsed time.
 
-- Never interactively prompt; `--json` supported; stable exit codes (contract).
-- Pure read-side over existing event logs — no new event types, no schema change.
-- Must handle a job that is already terminal (return immediately) and a dead runner
-  (liveness → `interrupted`, don't hang forever).
+The implementation reads the existing event/liveness sources. It does not create a
+new event type or mutate a healthy job.
 
-## Blockers
+## Acceptance criteria
 
-None.
+- Waiting works across initial runs, resumes, answers, cancellation, and mid-turn
+  runner death.
+- Multiple waiters can observe one job without interfering with each other.
+- Human output is one concise terminal result; JSON and exit behavior are stable.
+- `tail --until-idle` remains the run/pipeline-scoped primitive and notifier hooks
+  remain the push alternative.
+
+## Non-goals
+
+- Scheduling jobs, reserving runners, or implementing a pipeline engine.
+- Waiting for workspace lifecycle milestones such as merge or close.
 
 ## Log

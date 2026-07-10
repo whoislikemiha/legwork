@@ -1,32 +1,48 @@
 # Checkpoint discoverability — `ws ckpts`
 
-Status: later · Priority: P2 · Origin: orchestrator field feedback 2026-07-08 · Depends: — · Workspace: —
+Status: later · Priority: P2 · Origin: 2026-07-08 delta-review dogfood · Depends: — · Workspace: —
 
 ## Goal
 
-`legwork ws ckpts <ws>` lists a workspace's checkpoint refs — one line per checkpoint:
-ref, timestamp, creating job + turn, subject/short diffstat. Makes the delta-review
-pattern first-class instead of folklore.
+Make workspace checkpoints discoverable through Legwork so orchestrators can review a
+specific implementation or fix delta without remembering hidden ref names or running
+`git for-each-ref` themselves.
 
-## Context & design
+## Desired experience
 
-- Checkpoint refs (`refs/legwork/<ws>/ckpt-N`) are quietly one of legwork's best
-  features: the 2026-07-08 TOTP delta security review was literally "verify
-  ckpt-1..ckpt-3" — reviewing only what the fix turn changed. But nothing lists them;
-  the orchestrator only knew they existed from `tail` output scrolling past. Ref names
-  are undocumented API surface being used from memory.
-- Include the ckpt list (or latest ckpt) in `ws ls`/`status --json` output so scripted
-  orchestrators can construct delta ranges without shelling to `git for-each-ref`.
-- Pairs with [ws-review-verb.md](ws-review-verb.md): a first-class reviewer wants
-  `--since ckpt-N` and this listing is where those names become discoverable. Document
-  the delta-review recipe in [orchestrator-recipes.md](orchestrator-recipes.md).
+```bash
+legwork ws ckpts ws-49
+legwork ws ckpts ws-49 --json
+```
 
-## Constraints
+Each checkpoint reports, when known:
 
-- Read-side only; `--json` supported; stable ordering (ckpt number).
+- stable checkpoint ID/ref and numeric order;
+- creation time;
+- creating job and turn;
+- commit/tree object;
+- short diffstat from the previous checkpoint;
+- whether it is the latest reviewed checkpoint.
 
-## Blockers
+Legacy refs with missing metadata remain listable and mark unknown fields explicitly.
+Ordering is by checkpoint number, not filesystem or lexical accident. The latest
+checkpoint may also appear in workspace status, but the full list belongs here.
 
-None.
+This complements the landed [`ws review`](../done/ws-review-verb.md) flow. Support for
+reviewing `--since <checkpoint>` or `diff --since-last-review` should consume these
+stable IDs but remains a separate review-cursor capability.
+
+## Acceptance criteria
+
+- Empty, open, closed-preserved, legacy, and missing-workspace cases have stable human
+  and JSON output.
+- Checkpoint IDs round-trip into existing `diff --at` behavior.
+- Listing is read-only and never creates, deletes, or advances checkpoints/review
+  cursors.
+- The guide documents the delta-review recipe using the command rather than raw refs.
+
+## Non-goals
+
+- A checkpoint browser UI, semantic diff summary, or automatic review approval.
 
 ## Log

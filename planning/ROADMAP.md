@@ -21,45 +21,40 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-- [ ] [Model-aware reasoning effort](tasks/model-aware-reasoning-effort.md) — **P1.** Remove the
-  stale global Codex `xhigh|max → high` clamp, persist requested versus resolved effort, and
-  preflight the exact agent/model/effort policy before dispatch.
+*(nothing)*
 
 ## Next
 
+- [ ] [Unified job and run addressing](tasks/unified-addressing.md) — **P1.** One selector grammar
+  across the core loop, with explicit resolution and no silent multi-job mutation.
 - [ ] [Per-job blocking wait](tasks/per-job-wait.md) — **P1.** Replace hand-built supervisors with
-  `legwork wait <job> --until done|blocked|needs-input`; already-terminal jobs return immediately.
+  `legwork wait <job>`; already-terminal jobs return immediately and dead runners do not hang.
+- [ ] [Durable quality and lifecycle receipts](tasks/quality-receipts.md) — **P1.** Preserve worker
+  outcome, review verdict, commit identity, and close disposition as structured facts.
 - [ ] [External verification receipts](tasks/external-verification-receipts.md) — **P1.** Run and
-  persist orchestrator-side verification for `blocked.kind=verify`, resolving the actionable state
-  without resuming poisoned worker context.
+  record explicit host-side checks for `blocked.kind=verify` without rewriting worker history.
 - [ ] [Actionable workspace and job status](tasks/actionable-workspace-status.md) — **P1.** Add
-  `ws status` and deterministic attention/next-actions over implementation, review, verification,
-  diff, commit, merge, and close facts.
-- [ ] [Quality receipts / accountability shape](tasks/quality-receipts.md) — **P1.** Persist
-  last-turn state in meta; first-class `close` event; dedupe cross-label commit events; backfill
-  version-skewed workspace metadata; structured review verdicts (AUDIT C1–C4).
-- [ ] [Truthful health signal](tasks/codex-health-signal.md) — **P1.** Fix/suppress codex `ctx`
-  inflation, add a mid-turn heartbeat and diff-progress so running health stops lying (AUDIT B1–B2).
-- [ ] [Unified job/run addressing](tasks/unified-addressing.md) — **P1.** Every relevant verb takes
-  a job ID or run label consistently; eliminate selector folklore and command-specific guessing.
+  `ws status` with truthful attention and copyable next actions across the landing lifecycle.
 - [ ] [Transient provider failure recovery](tasks/transient-provider-recovery.md) — **P1.** Classify
-  capacity/overload separately from task failure, preserve checkpoint evidence, and provide bounded
-  retry/actionable recovery when a provider fails after useful tool work.
+  temporary provider failures, preserve useful progress, and make replay safety explicit.
+- [ ] [Truthful live job health](tasks/codex-health-signal.md) — **P1.** Stop false Codex context
+  alarms and expose heartbeat plus workspace progress with an honest measurement basis.
 
 ## Later
 
-- [ ] [Verify the ask-early path actually fires](tasks/verify-ask-early.md) — **P2.** 0
-  `needs-input` in 96 jobs; prove the contract path works before trusting it (AUDIT A4).
 - [ ] [Orchestrator profiles](tasks/orchestrator-profiles.md) — **P1.** Named, inspectable presets
-  for agent/model/effort/access/timeout policy; explicit flags override resolved profile values.
-- [ ] [Native-feel structured operation surface](tasks/native-operation-surface.md) — **P1.** Stable
-  JSON envelopes and schema discovery for the core control loop without MCP or a daemon.
+  for agent/model/effort/access/timeout policy, with explicit resolved dispatch values.
+- [ ] [Stable structured operation surface](tasks/native-operation-surface.md) — **P1.** Versioned
+  JSON operations and schema discovery for the core CLI-over-ssh loop without MCP or a daemon.
+- [ ] [Exact Codex `xhigh` passthrough](tasks/model-aware-reasoning-effort.md) — **P2.** Stop
+  silently clamping an explicit supported `xhigh` request; keep the fix adapter-local and small.
+- [ ] [Verify the ask-early contract](tasks/verify-ask-early.md) — **P2.** Use controlled real-agent
+  cases to prove or truthfully downgrade a behavior that fired 0 times in the 96-job audit.
 - [ ] [Checkpoint discoverability](tasks/ckpt-listing.md) — **P2.** `ws ckpts` lists ckpt refs;
   makes the delta-review pattern (used for the 2026-07-08 TOTP security fix) first-class instead
   of folklore. Pairs with `ws review`.
-- [ ] [Honest cost accounting + per-run rollup](tasks/cost-rollup.md) — **P2.** codex jobs report
-  `$0.00` (subscription) next to Opus `$1.23`; show basis + token totals, roll up per run. May
-  fold into quality-receipts.
+- [ ] [Honest cost accounting and run rollups](tasks/cost-rollup.md) — **P2.** Distinguish metered,
+  subscription, and unknown usage; aggregate only comparable values.
 - [ ] Small remainders — carried from the pre-system roadmap; **no task file yet, create one when
   picked up** (each is a real item, just not currently scheduled):
   - **Command grammar + self-describing JSON** (P2) — wrapped/documented `--json` envelopes,

@@ -1,33 +1,51 @@
-# Unified job/run addressing
+# Unified job and run addressing
 
-Status: next · Priority: P1 · Origin: run-selector piece of the "command grammar" remainder, promoted with field evidence 2026-07-08 · Depends: — · Workspace: —
+Status: next · Priority: P1 · Origin: AUDIT E3 + repeated orchestration dogfood · Depends: — · Workspace: —
 
 ## Goal
 
-Every verb accepts the same address: a job id (`job-110`) or a run name
-(`totp-2fa-delta-review`), positional. A run name resolves to its jobs (most recent when
-one is needed).
+An orchestrator should not need to remember which commands take a positional job ID,
+which take `--job`, and which take `--run`. Core read-side verbs use one predictable
+target grammar for jobs and run labels.
 
-## Context & design
+## Desired experience
 
-- Observed friction: `status` takes a positional job id while `tail` takes `--run <name>`
-  — the orchestrator maintained a mental job↔run map all session (job-108 ↔ totp-2fa,
-  job-110 ↔ the delta review, ...). Two addressing schemes for one object graph.
-- Design: a single resolver (`internal/`): exact job id → that job; otherwise treat as run
-  label → its job set. Verbs that need exactly one job (`status`, `result`, `resume`,
-  `wait`) take the newest and say so (`resolved 'pwa-review' → job-113`); verbs that
-  operate on sets (`tail`, `events`, `ls`) take them all. Ambiguity (a run literally named
-  like a job id) → error, never guess.
-- Subsumes only the run-selector part of the "command grammar + self-describing JSON"
-  remainder; the JSON-envelope and help-examples parts stay in that remainder.
+```bash
+legwork status job-110
+legwork status totp-review
+legwork events totp-review
+legwork result totp-review
+legwork tail totp-review
+```
 
-## Constraints
+Resolution rules must be explicit and shared:
 
-- Backward compatible: existing `--run` flags keep working; positional forms are additive.
-- Resolution messages go to stderr so stdout stays scriptable.
+- An exact `job-N` selects that job.
+- Any other value is a run label and selects the jobs in that run.
+- Set-oriented verbs (`events`, `tail`, filtered lists) operate on the whole run.
+- Read-only verbs that need one job may select the newest job, but human and JSON
+  output must expose both the supplied selector and the resolved job ID.
+- Mutating verbs must never silently choose among multiple jobs. They require an
+  exact job ID unless the run has exactly one eligible target.
+- Workspace IDs remain a separate, explicit namespace.
 
-## Blockers
+Existing `--job` and `--run` flags remain supported during migration and resolve
+through the same implementation. Ambiguous or empty runs fail with a stable,
+actionable error rather than guessing.
 
-None.
+## Acceptance criteria
+
+- The core control-loop verbs share one resolver and one documented rule set.
+- Human resolution messages stay off scriptable stdout; JSON includes
+  `selector`, `selector_kind`, and resolved IDs where relevant.
+- Exact job IDs, multi-job runs, empty runs, job-shaped run names, and legacy flags
+  have contract coverage.
+- Help examples use the same positional grammar consistently.
+
+## Non-goals
+
+- Pipeline, queue, or delegation-tree semantics.
+- Making workspace IDs interchangeable with job/run selectors.
+- Removing legacy selector flags in the first release.
 
 ## Log

@@ -268,6 +268,14 @@ legwork artifact get --run <label> append-prompt.md |
 
 `legwork guide` carries these in full with the evidence; the plays in short:
 
+**Proportionality gate.** Match the pipeline to user-visible risk and expected
+change size. Small fixes get a short orchestrator-owned task, focused verification,
+and a bounded review; use design agents and repeated review for genuinely broad or
+high-risk work. Treat delegated task drafts as research until the orchestrator
+approves the scope. If a one-flag fix expands across many surfaces, stop and rescope.
+Record dogfood friction as a roadmap item, but do not automatically interrupt the
+campaign to fully solve it.
+
 **The campaign shape (a wave of N tasks).** `doctor` per agent+model → read the
 tasks and note which touch the same files (that ordering, saved as an artifact,
 decides landing) → one workspace per task, implement **in parallel** → `ws review`

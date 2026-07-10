@@ -1,28 +1,54 @@
-# Native-feel structured operation surface
+# Stable structured operation surface
 
-Status: later · Priority: P1 · Origin: repeated orchestrator-side JSON parsing and command-shape discovery · Depends: unified-addressing · Workspace: —
+Status: later · Priority: P1 · Origin: repeated JSON-shape discovery in orchestrators · Depends: unified-addressing, actionable-workspace-status · Workspace: —
 
 ## Goal
 
-Let agent harnesses drive Legwork through stable structured operations without parsing human tables, sampling unknown JSON shapes, or memorizing inconsistent selectors.
+Let Hermes and other agent harnesses drive the core Legwork loop through documented,
+versioned CLI operations without parsing human tables or sampling commands to discover
+whether JSON is an array, object, selector, or error string.
 
-## Context & design
+## Product scope
 
-- Define and document stable JSON envelopes for the core loop: dispatch, status, wait, events/result, workspace status/diff/review/commit/close, artifact, and verification.
-- Use one selector grammar for job/run/workspace where meaningful; self-describing error envelopes include code, message, selector, and next actions.
-- Provide machine-readable command/schema discovery from the CLI so wrappers can generate operations without MCP.
-- Keep human CLI output optimized for humans; structured operations are the agent control plane.
-- A thin Hermes/plugin adapter may wrap the CLI later, but the CLI-over-ssh contract remains canonical.
+Define a stable structured contract for the operations an orchestrator actually
+composes:
 
-## Constraints
+- dispatch and continuation;
+- job/workspace status and wait;
+- events and result;
+- diff, review, verification, commit, and close;
+- run notes and artifacts.
 
-- Do not add MCP, a daemon, a database, or orchestration-tree semantics (ROADMAP rejected ideas).
-- Existing event schema remains public and versioned independently.
-- Additive migration path for current `--json` consumers; document envelope versions.
-- Contract tests/snapshots for every operation and stable exit code.
+The contract includes:
 
-## Blockers
+- one selector grammar from [unified addressing](unified-addressing.md);
+- versioned success and error envelopes with stable machine codes;
+- explicit resolved IDs and next actions;
+- schema/examples that can be inspected without reading Go source;
+- bounded text fields, with full results/diffs available through dedicated verbs.
 
-Resolve unified addressing and decide the JSON envelope migration strategy.
+Human output remains optimized independently. CLI-over-ssh is canonical; a future
+Hermes/plugin wrapper may translate these operations but does not own the contract.
+
+## Compatibility strategy
+
+Before changing existing `--json` output, choose and document an additive opt-in
+migration path. Existing scripts must not silently receive a new top-level shape. The
+public event schema remains separately versioned and is not wrapped or rewritten by
+this task.
+
+## Acceptance criteria
+
+- Every core operation has a documented JSON example, stable error code, and contract
+  test/snapshot.
+- A harness can discover the supported operation/schema version locally.
+- Success, usage error, missing selector, attention state, conflict, and guard refusal
+  are structurally distinguishable without parsing prose.
+- Existing JSON consumers have an explicit compatibility period and migration guide.
+- The surface works identically over local shell and ssh.
+
+## Non-goals
+
+- MCP, a daemon, database, network API, orchestration tree, or generated SDK suite.
 
 ## Log

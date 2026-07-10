@@ -131,7 +131,8 @@ $ legwork guide
 It covers the run→observe→steer loop, hooking notifications up as your wake-up
 signal, workspace review flow, health recipes (spotting and recovering a
 poisoned-context worker), and orchestration recipes — the multi-task campaign
-shape (parallel implement, serial land), append-prompt norms, and the
+shape (parallel implement, serial land), a proportionality gate for keeping small
+fixes small, append-prompt norms, and the
 competition/design-only patterns. Preflight a machine before dispatching with
 `legwork doctor` (agent binary, auth, model, state dir, notifier — machine-readable,
 stable exit codes). Record `legwork version --json` in field notes when build

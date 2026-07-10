@@ -1,30 +1,48 @@
 # Transient provider failure recovery
 
-Status: next · Priority: P1 · Origin: job-147 GPT-5.6 Terra capacity failure after successful tool work · Depends: quality-receipts · Workspace: —
+Status: next · Priority: P1 · Origin: job-147 capacity failure after useful tool work · Depends: quality-receipts · Workspace: —
 
 ## Goal
 
-Do not collapse a turn with preserved workspace progress into an opaque terminal failure when the provider returns a transient capacity/overload error late in the turn. Give orchestrators a truthful, recoverable state and first-class retry path.
+When a provider fails because of capacity, overload, rate limits, or a temporary
+transport problem, preserve useful workspace progress and give the orchestrator an
+honest recovery path instead of collapsing everything into generic `failed`.
 
-## Context & design
+## Desired behavior
 
-- Classify provider overload/capacity/rate-limit failures separately from code/task failures.
-- Preserve the last successful text/tool/checkpoint evidence and expose whether workspace progress exists.
-- Retry transient failures with bounded backoff when safe; support configured same-agent fallback where the adapter/provider can guarantee session semantics.
-- If automatic recovery exhausts, emit an actionable state such as `interrupted` or a typed transient block with `next_actions`, not generic `failed`.
-- `resume`/retry should make model/session/fallback behavior explicit in events and status.
-- Distinguish provider capacity from quota-reset exhaustion; coordinate with the existing quota/limit observability remainder.
+- Adapters classify transient provider failures separately from task/code failure,
+  auth failure, quota exhaustion, and explicit cancellation.
+- Status exposes a stable kind, retryability, provider message, retry/reset time when
+  known, and whether tool/file/checkpoint progress exists.
+- The latest valid checkpoint, diff, transcript, and successful events remain visible.
+- Recovery actions state whether they will resume the same provider session or start a
+  fresh job from preserved artifacts.
+- Model/fallback/retry choices are recorded as events; a provider failure never erases
+  which model actually ran.
 
-## Constraints
+## Retry safety
 
-- Never report `done` without a valid final status block.
-- Never replay non-idempotent orchestrator actions; retries apply to provider turns, not external side effects.
-- Preserve checkpoint/diff evidence and public event-schema compatibility; add versioned event types if needed.
-- Noninteractive, `--json`, stable classification/error codes, bounded retries.
-- Tests cover capacity before tools, after tool work, after checkpoint-worthy edits, retry success, retry exhaustion, and explicit cancel.
+- Before any external tool or file-changing work, a small bounded automatic retry may
+  be allowed when the adapter can prove the turn is safe to replay.
+- After useful tool work, Legwork does not automatically replay the turn. It surfaces
+  an explicit orchestrator action because commands and side effects may not be
+  idempotent.
+- Exhausted retries remain actionable and never become `done` without a valid worker
+  status block.
 
-## Blockers
+## Acceptance criteria
 
-Define adapter-level transient error classification for Claude and Codex.
+- Capacity before work, capacity after edits, rate limit with reset, quota exhaustion,
+  auth failure, transport interruption, and explicit cancel are distinguishable.
+- A late provider failure leaves the workspace diff/checkpoint reviewable.
+- Human and JSON status recommend a bounded next action rather than generic “retry”.
+- Retry attempts and model/session changes are auditable.
+- Fake-adapter tests cover classification and replay guards; live probes cover provider
+  wording without depending on a real outage.
+
+## Non-goals
+
+- A general scheduler, infinite retries, or replaying arbitrary side effects.
+- Hiding provider failures behind silent lower-quality fallback.
 
 ## Log

@@ -399,6 +399,20 @@ are the *campaign*: how to run many tasks at once, what to put in an
 append-prompt, and the handful of patterns the corpus proves earn their tokens.
 Follow them literally; every step has a default so you never have to derive one.
 
+### Proportionality before orchestration
+
+The pipeline is a quality multiplier, not a reason to expand every change. Before
+writing a task or dispatching a worker, classify the work by user-visible risk and
+expected size. Small, obvious fixes need a short task, focused tests, and a bounded
+review; architectural or security work earns the full design/review loop.
+
+Treat task-agent output as research until the orchestrator approves its scope. If a
+one-flag fix becomes a multi-surface metadata system, or the task description takes
+longer than the likely implementation, stop and rescope before dispatch. Likewise,
+dogfood friction should be recorded as a roadmap item but does not automatically
+block the campaign that discovered it. Agents explore and implement; the orchestrator
+owns the final task contract and decides which review findings are in scope.
+
 ### The campaign shape (running a wave of tasks)
 
 This is the top-level recipe the others slot into. Given N tasks (e.g. a set of

@@ -4,25 +4,54 @@ Status: next · Priority: P1 · Origin: 2026-07-10 orchestration dogfood · Depe
 
 ## Goal
 
-One read-side command should answer “what happened, is this workspace ready, and what should I do next?” without making an orchestrator join `status`, `events`, `diff`, reviewer JSON, verification notes, and git state by hand.
+One command should answer: what happened in this workspace, what still needs
+attention, and what is the next safe action? Orchestrators should not join job status,
+events, diffs, review prose, verification notes, and git state by hand.
 
-## Context & design
+## Desired experience
 
-- Add `legwork ws status <ws>` with human and JSON output.
-- Summarize workspace lifecycle, latest implementation/review jobs, structured review verdict, verification receipts, dirty/diff state, commit/ahead/behind/merged facts, active lock, and retention/disposition.
-- Emit deterministic `attention` and `next_actions` entries such as review, external verify, fix findings, commit, merge, close, or resolve conflict.
-- Improve job `status` with the same action vocabulary where applicable; `blocked: verify` must point at the verification operation rather than generic resume advice.
-- Read persisted facts only. Do not infer SHIP from prose or silently mutate state while rendering.
+```bash
+legwork ws status ws-68
+legwork ws status ws-68 --json
+```
 
-## Constraints
+The rollup includes:
 
-- No database/daemon and no pipeline semantics; this is a truthful rollup over existing files/git facts.
-- Never weaken close/review gates.
-- Noninteractive, `--json`, stable exit codes, no giant task/result bodies.
-- Tests cover empty/new workspace, active implementation, blocked verify, SHIP/FIX review, dirty/untracked, committed/unmerged, merged/unclosed, and closed states.
+- workspace/base/branch identity and open/closed disposition;
+- active implementation or review job and lock state;
+- dirty/untracked/diff summary and latest checkpoint;
+- latest structured review verdict and what diff it covered;
+- latest external verification receipt;
+- final commit, ahead/behind/merged facts, and close readiness;
+- deterministic `attention` and `next_actions` codes.
 
-## Blockers
+Examples of next actions are `wait`, `answer`, `verify`, `review`, `fix-findings`,
+`commit`, `merge`, `resolve-conflict`, and `close`. Each action includes the reason
+and a copyable CLI command where it is safe to do so.
 
-Structured review verdicts and external verification receipts improve fidelity; ship a useful partial rollup first if dependencies are staged.
+Job `status` uses the same attention/action vocabulary for job-local states. In
+particular, `blocked.kind=verify` points to verification rather than generic resume.
+
+## Truth and safety rules
+
+- Read persisted receipts and current git facts; never infer `SHIP` from prose.
+- Status rendering is read-only and never advances state, runs a command, or closes a
+  workspace.
+- Unknown or version-skewed facts are shown as unknown, not guessed.
+- Review, verification, merge, and close remain separate gates.
+
+## Acceptance criteria
+
+- New, active, needs-input, blocked-verify, FIX, SHIP, dirty, committed, merged,
+  conflicted, and closed workspaces have stable fixtures.
+- Human output is compact and decision-oriented; JSON exposes the underlying facts,
+  attention codes, and next actions without embedding full task/result bodies.
+- A workspace with incomplete receipts remains useful but explicitly says which facts
+  are unavailable.
+- No status invocation mutates metadata, refs, worktrees, or job state.
+
+## Non-goals
+
+- A pipeline engine, auto-merge, policy daemon, or replacement for `diff`/`events`.
 
 ## Log

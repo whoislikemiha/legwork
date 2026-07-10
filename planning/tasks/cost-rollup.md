@@ -1,33 +1,44 @@
-# Honest cost accounting + per-run rollup
+# Honest cost accounting and run rollups
 
-Status: later · Priority: P2 · Origin: orchestrator field feedback 2026-07-08 · Depends: — · Workspace: —
+Status: later · Priority: P2 · Origin: 2026-07-08 orchestration dogfood · Depends: — · Workspace: —
 
 ## Goal
 
-"What did this wave cost?" must be answerable. Per-job costs are honest about their
-accounting basis, and `legwork ls`/`status` can roll up totals per run.
+Answer “what did this run consume?” without presenting subscription-backed Codex jobs
+as literally free or mixing incomparable accounting into one misleading dollar total.
 
-## Context & design
+## Product contract
 
-- Observed: an Opus review job reports `$1.23`; every codex job reports `$0.00` because
-  subscription usage has no per-call price. `$0.00` reads as "free", which is a lie of
-  presentation — a wave (implement + review + fix + delta-review) currently sums to a
-  meaningless number.
-- Design: cost becomes `{amount?, basis: metered|subscription|unknown}`; human output
-  shows `$1.23` / `n/a (subscription)` instead of a fake zero. Tokens are always known —
-  report tokens_in/out per job regardless of basis, and let the rollup show both: metered
-  $ total + token totals per agent/model. `legwork ls --run X --totals` (or a `costs`
-  verb) prints the per-run rollup.
-- Overlaps [quality-receipts.md](quality-receipts.md) (accountability shape) — if that
-  task restructures job metadata, land this as part of it rather than separately.
+Every job reports an accounting basis alongside its existing usage:
 
-## Constraints
+- `metered` — the provider reported a monetary amount;
+- `subscription` — tokens/context are known but no per-turn price exists;
+- `unknown` — neither a trustworthy amount nor subscription basis is available.
 
-- Never invent prices for subscription usage; no price tables to maintain unless an agent
-  reports its own.
+Human output renders these honestly: `$1.23`, `subscription`, or `unknown`, never a
+fabricated estimate. Existing monetary fields remain backward compatible; additive
+basis fields explain how to interpret zero or missing values.
 
-## Blockers
+Run-level totals belong in the run overview, for example `legwork runs --totals`:
 
-None.
+- metered currency total only across metered jobs;
+- token/context totals grouped by agent and model;
+- counts of subscription and unknown jobs;
+- optional phase/job breakdown without duplicating one workspace commit across labels.
+
+## Acceptance criteria
+
+- Mixed Claude-metered, Codex-subscription, fake, and missing-usage runs render without
+  converting subscription use to `$0.00` spend.
+- Human and JSON totals state their basis and grouping.
+- Resumed jobs aggregate turns once; repeated run labels do not duplicate a job.
+- Legacy metadata remains readable and is classified conservatively.
+- No static price table or guessed provider cost is introduced.
+
+## Boundaries
+
+- [Quality receipts](quality-receipts.md) owns lifecycle/identity deduplication; cost
+  rollup consumes the stable job/workspace identity when available.
+- This task does not add budgets, billing enforcement, or quota prediction.
 
 ## Log
