@@ -1,6 +1,6 @@
 # Quality receipts / accountability shape
 
-Status: later · Priority: P1 · Origin: AUDIT C1–C4 (+ prior ROADMAP "Quality receipts" lane) · Depends: — · Workspace: —
+Status: next · Priority: P1 · Origin: AUDIT C1–C4 (+ prior ROADMAP "Quality receipts" lane) · Depends: — · Workspace: —
 
 ## Goal
 

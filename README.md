@@ -78,21 +78,24 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   is `tail -f` across every job and run log, worker events and your notes
   interleaved — `--until-idle` turns it into a scriptable *wait for my pipeline*;
   `result <job|run>` prints the worker's final report raw (with `--turn N` for an
-  earlier retained turn); `dashboard` is a read-only TUI; `serve` is the local
-  live browser console for human operators during multi-agent runs. Every surface
-  is a renderer over the same JSONL, so they can never disagree.
+  earlier retained turn); `ls` shows attention/active/unreviewed jobs first,
+  hides closed history by default in both human and JSON modes, and takes
+  `--all`, `--workspace`, `--run`, `--state`, and `--limit`; `dashboard` is a
+  read-only TUI; `serve` is the local live browser console for human operators
+  during multi-agent runs. Every surface is a renderer over the same JSONL, so
+  they can never disagree.
 - **Run artifacts stay out of diffs**: `legwork artifact save/list/get --run <label>`
   stores plans, review notes, job maps, and process notes under the state dir's run
   record, not in repo worktrees. v1 accepts UTF-8 text/markdown artifacts; binary
   blobs are rejected. Long run-specific append prompts can be stored once as an
   artifact and piped back into dispatch with `--append-prompt-file -`, avoiding
   multi-line shell quoting.
-- **Context as the health metric**: `ls` shows each session's context footprint
-  (`ctx:145k`) — the early-warning signal for a worker spinning in circles. Once a
-  job crosses a threshold, `ls` marks it `ctx:180k!` and `status` prints a `hint:`
-  line (`--json`: `context_high`) — the built-in cue to start fresh over resume.
-  Tune it with `[health] context_threshold` in `config.toml` (default 150000; `0`
-  disables).
+- **Context as the health metric**: `ls` shows each non-closed session's context
+  footprint (`ctx:145k`) — the early-warning signal for a worker spinning in
+  circles. Once a job crosses a threshold, `ls` marks it `ctx:180k!` and `status`
+  prints a `hint:` line (`--json`: `context_high`) — the built-in cue to start
+  fresh over resume. Tune it with `[health] context_threshold` in `config.toml`
+  (default 150000; `0` disables).
 - **Reclamation without a daemon**: `close` records disposition/retention metadata
   and drops the local worktree cache; branches are kept by default as the durable
   artifact. `--preserve` records `retention=preserve` and keeps branch/checkpoint

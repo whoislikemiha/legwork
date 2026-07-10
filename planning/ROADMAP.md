@@ -21,32 +21,40 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-*(nothing — wave 1, all seven `next-roadmap` tasks, landed on main 2026-07-08; see
-[done/](done/) for verdicts and the [field notes](../docs/field-notes-2026-07-08.md) for the
-run retrospective)*
+- [ ] [Human-readable active-job observability](tasks/human-active-jobs.md) — **P1.** Make plain
+  `legwork ls` show current attention/active/unreviewed jobs newest-first in one physical line;
+  hide closed history by default and add first-class workspace/run/state/limit filters. Promoted
+  from live 2026-07-10 dogfood after a multiline closed `job-96` buried the current jobs.
 
 ## Next
 
-*(nothing scheduled — both 2026-07-08 waves landed: wave 1 = the seven dogfood-audit tasks,
-wave 2 = the how-to-orchestrate delivery (recipes, `rules`, `version`, `--append-prompt-file`).
-Pick the next batch from Later; quality-receipts and the truthful health signal are the
-standing P1s.)*
-
-## Later
-
+- [ ] [Per-job blocking wait](tasks/per-job-wait.md) — **P1.** Replace hand-built supervisors with
+  `legwork wait <job> --until done|blocked|needs-input`; already-terminal jobs return immediately.
+- [ ] [External verification receipts](tasks/external-verification-receipts.md) — **P1.** Run and
+  persist orchestrator-side verification for `blocked.kind=verify`, resolving the actionable state
+  without resuming poisoned worker context.
+- [ ] [Actionable workspace and job status](tasks/actionable-workspace-status.md) — **P1.** Add
+  `ws status` and deterministic attention/next-actions over implementation, review, verification,
+  diff, commit, merge, and close facts.
 - [ ] [Quality receipts / accountability shape](tasks/quality-receipts.md) — **P1.** Persist
   last-turn state in meta; first-class `close` event; dedupe cross-label commit events; backfill
   version-skewed workspace metadata; structured review verdicts (AUDIT C1–C4).
 - [ ] [Truthful health signal](tasks/codex-health-signal.md) — **P1.** Fix/suppress codex `ctx`
-  inflation, add a mid-turn heartbeat and a diff-progress metric so `ctx:-`-while-running and the
-  crying-wolf `!` stop lying (AUDIT B1–B2).
-- [ ] [Per-job blocking wait](tasks/per-job-wait.md) — **P2.** `legwork wait --job X --until
-  done|blocked|needs-input` (AUDIT E1; field-notes 2026-07-07 #1).
+  inflation, add a mid-turn heartbeat and diff-progress so running health stops lying (AUDIT B1–B2).
+- [ ] [Unified job/run addressing](tasks/unified-addressing.md) — **P1.** Every relevant verb takes
+  a job ID or run label consistently; eliminate selector folklore and command-specific guessing.
+- [ ] [Transient provider failure recovery](tasks/transient-provider-recovery.md) — **P1.** Classify
+  capacity/overload separately from task failure, preserve checkpoint evidence, and provide bounded
+  retry/actionable recovery when a provider fails after useful tool work.
+
+## Later
+
 - [ ] [Verify the ask-early path actually fires](tasks/verify-ask-early.md) — **P2.** 0
   `needs-input` in 96 jobs; prove the contract path works before trusting it (AUDIT A4).
-- [ ] [Unified job/run addressing](tasks/unified-addressing.md) — **P2.** Every verb takes a job
-  id OR a run name (`status` vs `tail --run` currently disagree). Promoted run-selector piece of
-  the command-grammar remainder.
+- [ ] [Orchestrator profiles](tasks/orchestrator-profiles.md) — **P1.** Named, inspectable presets
+  for agent/model/effort/access/timeout policy; explicit flags override resolved profile values.
+- [ ] [Native-feel structured operation surface](tasks/native-operation-surface.md) — **P1.** Stable
+  JSON envelopes and schema discovery for the core control loop without MCP or a daemon.
 - [ ] [Checkpoint discoverability](tasks/ckpt-listing.md) — **P2.** `ws ckpts` lists ckpt refs;
   makes the delta-review pattern (used for the 2026-07-08 TOTP security fix) first-class instead
   of folklore. Pairs with `ws review`.
@@ -55,29 +63,22 @@ standing P1s.)*
   fold into quality-receipts.
 - [ ] Small remainders — carried from the pre-system roadmap; **no task file yet, create one when
   picked up** (each is a real item, just not currently scheduled):
-  - **Native-feel adapter surface** (P1) — expose the loop (`run`/`status`/`events`/`diff`/`ws
-    commit`/`close`/`artifact`) as structured operations so harnesses don't parse human output.
   - **Command grammar + self-describing JSON** (P2) — wrapped/documented `--json` envelopes,
     examples in help (AUDIT E3). Run-selector consistency promoted to
-    [unified-addressing.md](tasks/unified-addressing.md).
+    [unified-addressing.md](tasks/unified-addressing.md); envelope work promoted to
+    [native-operation-surface.md](tasks/native-operation-surface.md).
   - **`needs-decision` via `approve`** (P2) — route permission judgment calls via
     `--permission-prompt-tool`; gates fail closed; hooks handle policy denies. `legwork
     approve` shipped 2026-07-08 gating `needs-provision`; this item extends the same verb
     to permission-shaped decisions (DESIGN §5 updated accordingly).
-  - **`worktree.toml` verify hook** (P1) — `verify = "…"` run OUTSIDE the sandbox after each turn,
-    result attached to job status, so workers/reviewers never run the suite in a sandbox that
-    can't (pairs with the "verify" blocked kind and writable-tmpdir).
   - **`TestCodexPassthroughs` teardown flake** (P2, small) — recurring `TempDir RemoveAll:
     directory not empty` race between the detached runner's writes and test cleanup (bit 3×
     on 2026-07-08, in worker sandboxes and on the host; auto-gc already suppressed). Make the
     test wait for runner exit or retire the job dir teardown-safe.
   - **Codex quota/limit observability** (P2) — classify usage-limit failures (`job-33`/`job-48`)
     distinctly from real failures; support configured reset windows.
-  - **Closed-job visibility in `ls`** (P2) — decide whether `ack`'d jobs hide by default with
-    `--all`.
   - **`ws refresh`** (P2) — reconcile an open workspace with a moved base (fetch/merge/report
     conflicts as needs-input).
-  - **Profiles** (P2) — named agent+model+access+rules+timeout presets (`--profile opus-review`).
   - **`max_concurrent`** (P2) — cap simultaneous runners with a visible pending queue.
   - **`diff --since-last-review`** (P2) — per-workspace review cursor shared by CLI and `serve`.
   - **`serve` information density** (P2) — clamp long notes/tasks/results, progressive disclosure.

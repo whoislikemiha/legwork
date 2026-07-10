@@ -1,6 +1,6 @@
 # Unified job/run addressing
 
-Status: later · Priority: P2 · Origin: run-selector piece of the "command grammar" remainder, promoted with field evidence 2026-07-08 · Depends: — · Workspace: —
+Status: next · Priority: P1 · Origin: run-selector piece of the "command grammar" remainder, promoted with field evidence 2026-07-08 · Depends: — · Workspace: —
 
 ## Goal
 

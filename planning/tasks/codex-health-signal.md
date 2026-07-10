@@ -1,6 +1,6 @@
 # Truthful health signal (codex ctx + mid-turn + diff-progress)
 
-Status: later · Priority: P1 · Origin: AUDIT B1–B2 (+ prior ROADMAP "mid-turn cost/context", ctx-hint follow-up) · Depends: — · Workspace: —
+Status: next · Priority: P1 · Origin: AUDIT B1–B2 (+ prior ROADMAP "mid-turn cost/context", ctx-hint follow-up) · Depends: — · Workspace: —
 
 ## Goal
 

@@ -1,6 +1,6 @@
 # Per-job blocking wait
 
-Status: later · Priority: P2 · Origin: AUDIT E1 (+ field-notes 2026-07-07 #1) · Depends: — · Workspace: —
+Status: next · Priority: P1 · Origin: AUDIT E1 (+ field-notes 2026-07-07 #1) · Depends: — · Workspace: —
 
 ## Goal
 

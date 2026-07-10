@@ -275,8 +275,15 @@ git-style, gated to at most once per `auto_interval` (default 24h). Configure un
 
 ## Health: watch context, not cost
 
-`legwork ls` shows `ctx:145k` per job — the live window of the session's most
-recent agent call (what the next call will pay to re-read).
+`legwork ls` shows attention/active/unreviewed jobs first and hides closed
+history by default, in both human and JSON modes. Use `--all` for history,
+`--workspace <ws>`, `--run <label>`, `--state <comma-separated>`, and
+`--limit <n>` to narrow the view; explicit `--state closed` is a direct closed
+history query. Each row is one terminal line, with multiline task/run text
+collapsed and clipped to the terminal width.
+
+The `ctx:145k` cell is the live window of the session's most recent agent call
+(what the next call will pay to re-read).
 High context + no new diff progress = a spinning worker. The fix is NOT
 `resume "keep going"`: cancel, then start a **fresh job** seeded with the artifacts
 (the plan file, `legwork diff` output) — a poisoned context does not recover.
@@ -567,7 +574,9 @@ run [--agent A] [--model M] [--workspace W | --dir D] [--read-only]
     [--run L] [--append-prompt P | --append-prompt-file PATH|-]
     [--effort E] [--fallback-model M] <task>
 resume <job> <msg>   answer <job> <msg>   approve <job> [--timeout D]   cancel <job>
-status <job>         result <job|run> [--turn N]            ls   watch <job>
+status <job>         result <job|run> [--turn N]
+ls [--all] [--workspace W] [--run L] [--state S[,S...]] [--limit N] [--json]
+watch <job>
 events <job|run> [--run] [--since N]
 ack <job> [--force] [--json]
 runs                 tail [--run L | --job J] [-n N] [--full] [--until-idle]

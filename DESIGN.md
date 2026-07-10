@@ -109,7 +109,7 @@ legwork run       # start a job (see flags below); prints job ID immediately
 legwork resume    # continue a job's session with a new instruction / answer
 legwork events    # read a job's or run's event index; --since <cursor>, --json
 legwork status    # rollup: state, phase, health line; --json
-legwork ls        # all jobs/workspaces: state, age, health, disk, unclosed nags
+legwork ls        # attention/active/unreviewed jobs; --all includes closed history
 legwork watch     # human: live-rendered stream (index; --full taps transcript)
 legwork diff      # workspace diff; --since-last-review; --at <ckpt>
 legwork answer    # answer a needs-input / needs-decision by ID

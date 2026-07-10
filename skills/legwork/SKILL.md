@@ -194,13 +194,18 @@ events, transcripts, and artifacts on the normal retention path.
 
 ## Health and recovery
 
-`legwork ls` shows `ctx:145k` per job. High context + stale diff = spinning
-worker. Do NOT resume with "keep going": `legwork cancel <job>`, then start a
-**fresh job** seeded with the artifacts (plan file, `diff` output). Poisoned context
-does not recover. legwork flags the crossing for you: `ls` marks the cell
-`ctx:180k!`, `status` prints a `hint:` line, and `--json` sets `context_high`.
-Tune the trip point with `[health] context_threshold` in `config.toml` (tokens,
-default 150000; `0` disables).
+`legwork ls` is the one-glance active-job view: attention/active/unreviewed jobs
+first, closed history hidden by default in both human and JSON modes, and one
+physical terminal line per job. Use `--all` for history, plus `--workspace`,
+`--run`, `--state`, and `--limit` to narrow it.
+
+`legwork ls` also shows `ctx:145k` per listed job. High context + stale diff =
+spinning worker. Do NOT resume with "keep going": `legwork cancel <job>`, then
+start a **fresh job** seeded with the artifacts (plan file, `diff` output).
+Poisoned context does not recover. legwork flags the crossing for you: `ls` marks
+the cell `ctx:180k!`, `status` prints a `hint:` line, and `--json` sets
+`context_high`. Tune the trip point with `[health] context_threshold` in
+`config.toml` (tokens, default 150000; `0` disables).
 
 ## Watching a pipeline
 
