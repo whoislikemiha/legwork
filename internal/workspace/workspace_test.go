@@ -121,6 +121,28 @@ func TestLegacyReceiptOmitsUnknownTimestamps(t *testing.T) {
 	}
 }
 
+func TestReceiptEventsKeepDetailedMetadataOutOfCompactIndex(t *testing.T) {
+	long := strings.Repeat("x", 500)
+	commit := &CommitInfo{ReceiptID: "workspace:ws-1:commit:abc", OID: "abc", Summary: long, Message: long}
+	close := &CloseReceipt{
+		ReceiptID: "workspace:ws-1:close:now", Disposition: "merged", Reason: long,
+		FinalCommit: commit,
+	}
+
+	for _, receipt := range []any{compactCommitInfo(commit), compactCloseReceipt(close)} {
+		encoded, err := json.Marshal(receipt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(encoded), long) || !strings.Contains(string(encoded), "…") {
+			t.Fatalf("receipt event was not compact: %s", encoded)
+		}
+	}
+	if commit.Summary != long || close.Reason != long {
+		t.Fatal("compacting an event mutated authoritative receipt metadata")
+	}
+}
+
 func TestCloseRequiresExplicitActorBeforeReclaim(t *testing.T) {
 	s := &Store{}
 	m := &Meta{ID: "ws-1", State: "open"}

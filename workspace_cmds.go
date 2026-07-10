@@ -263,7 +263,7 @@ func appendWorkspaceCommitEvents(s *job.Store, m *workspace.Meta, message string
 	}
 	if res.Receipt != nil {
 		fields["receipt_id"] = res.Receipt.ReceiptID
-		fields["final_commit"] = res.Receipt
+		fields["final_commit"] = compactCommitEventReceipt(res.Receipt)
 	}
 	if res.Summary != "" {
 		fields["summary"] = events.Truncate(res.Summary)
@@ -309,7 +309,7 @@ func appendWorkspaceCommitEvents(s *job.Store, m *workspace.Meta, message string
 		}
 		if res.Receipt != nil {
 			runFields["receipt_id"] = res.Receipt.ReceiptID
-			runFields["final_commit"] = res.Receipt
+			runFields["final_commit"] = compactCommitEventReceipt(res.Receipt)
 		}
 		if res.Summary != "" {
 			runFields["summary"] = events.Truncate(res.Summary)
@@ -324,6 +324,17 @@ func appendWorkspaceCommitEvents(s *job.Store, m *workspace.Meta, message string
 		}
 	}
 	return errors.Join(historyErrs...)
+}
+
+func compactCommitEventReceipt(info *workspace.CommitInfo) *workspace.CommitInfo {
+	if info == nil {
+		return nil
+	}
+	compact := *info
+	compact.Summary = events.Truncate(compact.Summary)
+	compact.Message = events.Truncate(compact.Message)
+	compact.HistoryError = events.Truncate(compact.HistoryError)
+	return &compact
 }
 
 func diffCmd() *cobra.Command {

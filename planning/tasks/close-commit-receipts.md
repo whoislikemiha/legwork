@@ -70,6 +70,9 @@ unknown. Loading legacy data is deterministic, idempotent, and read-only.
   found two stale test-contract mismatches that the orchestrator corrected; focused
   tests and the complete repository gate then passed. No mechanical second review was
   run because the bounded review reproduced no critical defect.
+- Dogfooding the new workspace event query on this workspace exposed an oversized
+  embedded git diffstat. Event copies now truncate receipt detail while metadata keeps
+  the full rollup; focused coverage and the complete host gate pass after that fix.
 
 ## Friction
 

@@ -550,7 +550,7 @@ func (s *Store) Commit(m *Meta, message string) (*CommitResult, error) {
 	if err := s.appendEvent(m.ID, events.Event{Type: events.TypeCommit, Actor: "orchestrator",
 		Preview: events.Truncate(message), Fields: map[string]any{
 			"workspace": m.ID, "branch": m.Branch, "receipt_id": m.FinalCommit.ReceiptID,
-			"final_commit": m.FinalCommit,
+			"final_commit": compactCommitInfo(m.FinalCommit),
 		}}); err != nil {
 		s.recordCommitHistoryError(m, m.FinalCommit, fmt.Errorf("append workspace event %s: %w", s.eventPath(m.ID), err))
 	}
@@ -844,8 +844,35 @@ func closeReceipt(m *Meta, disposition, actor string, at time.Time) *CloseReceip
 func closeEvent(workspaceID string, receipt *CloseReceipt) events.Event {
 	return events.Event{Type: events.TypeWorkspaceClose, Actor: receipt.Actor,
 		Preview: receipt.Disposition, Fields: map[string]any{
-			"workspace": workspaceID, "receipt_id": receipt.ReceiptID, "receipt": receipt,
+			"workspace": workspaceID, "receipt_id": receipt.ReceiptID, "receipt": compactCloseReceipt(receipt),
 		}}
+}
+
+// Event indexes stay compact even when metadata keeps a detailed git diffstat,
+// reason, or history error. The receipt ID links back to that authoritative rollup.
+func compactCommitInfo(info *CommitInfo) *CommitInfo {
+	if info == nil {
+		return nil
+	}
+	compact := *info
+	compact.Summary = events.Truncate(compact.Summary)
+	compact.Message = events.Truncate(compact.Message)
+	compact.HistoryError = events.Truncate(compact.HistoryError)
+	return &compact
+}
+
+func compactCloseReceipt(receipt *CloseReceipt) *CloseReceipt {
+	if receipt == nil {
+		return nil
+	}
+	compact := *receipt
+	compact.Reason = events.Truncate(compact.Reason)
+	compact.Target = events.Truncate(compact.Target)
+	compact.Retention = events.Truncate(compact.Retention)
+	compact.SupersededBy = events.Truncate(compact.SupersededBy)
+	compact.HistoryError = events.Truncate(compact.HistoryError)
+	compact.FinalCommit = compactCommitInfo(compact.FinalCommit)
+	return &compact
 }
 
 // Dir returns the workspace's state directory (<root>/workspaces/<id>).
