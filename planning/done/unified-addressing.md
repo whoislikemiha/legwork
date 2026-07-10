@@ -1,6 +1,6 @@
 # Unified job and run addressing
 
-Status: in flight · Priority: P1 · Origin: AUDIT E3 + repeated orchestration dogfood · Depends: — · Workspace: ws-74
+Status: done · Priority: P1 · Origin: AUDIT E3 + repeated orchestration dogfood · Depends: — · Workspace: ws-74
 
 ## Goal
 

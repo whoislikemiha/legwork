@@ -21,9 +21,7 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-- [ ] [Unified job and run addressing](tasks/unified-addressing.md) — **P1.** `ws-74`.
-  One selector grammar for `status`, `result`, `events`, and `tail`, while preserving
-  legacy flags and existing JSON event shapes.
+*(nothing)*
 
 ## Next
 
@@ -59,7 +57,7 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
   picked up** (each is a real item, just not currently scheduled):
   - **Command grammar + self-describing JSON** (P2) — wrapped/documented `--json` envelopes,
     examples in help (AUDIT E3). Run-selector consistency promoted to
-    [unified-addressing.md](tasks/unified-addressing.md); envelope work promoted to
+    [unified-addressing.md](done/unified-addressing.md); envelope work promoted to
     [native-operation-surface.md](tasks/native-operation-surface.md).
   - **`needs-decision` via `approve`** (P2) — route permission judgment calls via
     `--permission-prompt-tool`; gates fail closed; hooks handle policy denies. `legwork
@@ -69,6 +67,10 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
     directory not empty` race between the detached runner's writes and test cleanup (bit 3×
     on 2026-07-08, in worker sandboxes and on the host; auto-gc already suppressed). Make the
     test wait for runner exit or retire the job dir teardown-safe.
+  - **Reconciliation persistence-error liveness** (P3, small) — stale-meta hardening now
+    refuses to overwrite a newer terminal record, but `tail --until-idle` can keep waiting when
+    the reconciled state cannot be persisted. Return the storage error or advance the read-side
+    state without weakening the no-clobber guarantee.
   - **Codex quota/limit observability** (P2) — classify usage-limit failures (`job-33`/`job-48`)
     distinctly from real failures; support configured reset windows.
   - **`ws refresh`** (P2) — reconcile an open workspace with a moved base (fetch/merge/report

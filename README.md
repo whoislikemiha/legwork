@@ -80,7 +80,8 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   `result <selector>` prints the worker's final report raw (with `--turn N` for an
   earlier retained turn). The core read commands accept one selector: an exact
   job ID wins, otherwise it is a run label; use `--job` or `--run` to force a
-  namespace when they collide. `status` and `result` select a run's newest job;
+  namespace when they collide (`events` keeps its compatible
+  `events <label> --run` boolean form). `status` and `result` select a run's newest job;
   `events` reads its run event log and `tail` includes its whole timeline,
   including a run with only notes or artifacts. `ls` shows attention/active/unreviewed jobs first,
   hides closed history by default in both human and JSON modes, and takes

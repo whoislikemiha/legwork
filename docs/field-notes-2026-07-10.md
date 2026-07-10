@@ -93,3 +93,33 @@ Delegated task drafts are research until the orchestrator approves scope. Small 
 need an explicit size/time budget and bounded review; the full implement→review→fix→
 re-review loop is reserved for changes whose user-visible risk justifies it. This is
 now stated in the guide and bundled skill.
+
+## Unified addressing dogfood run
+
+The first implementation from the rewritten board used installed Legwork `dev`,
+commit `49e024612dec`, clean, build date `2026-07-10T08:41:44Z`. Terra/high
+implemented the bounded read-side selector slice in `ws-74` (`job-159`); host
+verification caught one missing import and then two focused compatibility-test
+failures before review. The worker sandbox again could not fetch uncached Go modules,
+so every full gate ran from the orchestrator seat.
+
+Opus/xhigh review (`job-165`) returned **FIX** after reproducing a critical regression:
+`tail <job> --until-idle` reconciled a cached active `Meta` over the runner's newer
+terminal record, erasing result and telemetry and appending a false interrupted event.
+It also caught broken run-event cursor semantics, an unversioned JSON element-shape
+change, masked metadata corruption, and a user-visible flag sentinel. A fresh
+Terra/high fix job (`job-166`) corrected only those findings. Focused re-review returned
+**SHIP** after rebuilding the binary and reproducing the original failure and queued /
+positional variants. `ws-74` landed as merge `b38f9ae`.
+
+The full gate passed in the workspace. Post-merge, all packages and focused selector /
+tail / artifact tests passed; the known `TestCodexPassthroughs` detached-runner cleanup
+race failed twice and remains the existing P2 small remainder rather than interrupting
+this task. Codex context telemetry climbed above six million during the three-turn
+implementation lineage, reinforcing the existing truthful-health task rather than
+triggering an unrelated fix.
+
+One new low-severity edge from re-review was added to the roadmap: when reconciliation
+cannot persist metadata, `tail --until-idle` can keep waiting even though stale-meta
+clobber is prevented. Worker verification limitations continue to support the existing
+external-verification-receipts task; no duplicate task was filed.
