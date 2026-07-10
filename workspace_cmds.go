@@ -181,16 +181,17 @@ func wsCmd() *cobra.Command {
 			} else if active != "" {
 				return fmt.Errorf("%s already has active job %s (one active job per workspace)", m.ID, active)
 			}
-			diff, err := wss.Diff(m, false)
+			snapshot, err := wss.ReviewSnapshot(m)
 			if err != nil {
 				return err
 			}
 			jm, err := dispatchJob(dispatchOptions{
-				Agent: reviewAgent, Task: workspaceReviewPrompt(m.ID, diff),
+				Agent: reviewAgent, Task: workspaceReviewPrompt(m.ID, snapshot.Diff),
 				Workspace: m.ID, RunLabel: reviewRun, Timeout: reviewTimeout,
 				Model: reviewModel, Effort: reviewEffort,
 				FallbackModel: reviewFallbackModel, AppendPrompt: resolvedAppendPrompt,
-				ReadOnly: true,
+				ReadOnly: true, Review: &job.ReviewRequest{CheckpointRef: snapshot.CheckpointRef,
+					CheckpointOID: snapshot.CheckpointOID, DiffSHA256: snapshot.DiffSHA256},
 			})
 			if err != nil {
 				return err

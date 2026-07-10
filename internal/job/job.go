@@ -65,6 +65,13 @@ type Meta struct {
 	Blocked *BlockedReason `json:"blocked,omitempty"`
 	// Result is the final status-block-stripped output of the last turn.
 	Result string `json:"result,omitempty"`
+	// LastOutcome is the compact receipt of the most recent terminal worker
+	// turn. It remains available after State later advances to closed.
+	LastOutcome *Outcome `json:"last_outcome,omitempty"`
+	// Review is set only for jobs dispatched by `ws review`. It records the
+	// immutable snapshot the reviewer received; the workspace keeps a rollup
+	// receipt once that turn finishes.
+	Review *ReviewRequest `json:"review,omitempty"`
 	// Telemetry, cumulative across turns.
 	CostUSD   float64 `json:"cost_usd,omitempty"`
 	Turns     int     `json:"turns,omitempty"`
@@ -80,6 +87,27 @@ type BlockedReason struct {
 	Kind    string `json:"kind,omitempty"` // provision | verify | decision
 	Detail  string `json:"detail,omitempty"`
 	Command string `json:"command,omitempty"` // required for provision
+}
+
+// Outcome is the durable result of the last worker turn. Reason is a concise
+// human-readable explanation (question, blocked reason, or result) while the
+// structured fields preserve the machine-readable detail.
+type Outcome struct {
+	State    State          `json:"state"`
+	Reason   string         `json:"reason,omitempty"`
+	Question string         `json:"question,omitempty"`
+	Blocked  *BlockedReason `json:"blocked,omitempty"`
+	Turn     int            `json:"turn,omitempty"`
+	At       time.Time      `json:"at,omitempty"`
+}
+
+// ReviewRequest identifies the exact workspace snapshot and diff supplied to
+// a reviewer. The full diff remains in the reviewer job's original task; the
+// digest makes that immutable source cheaply queryable from metadata.
+type ReviewRequest struct {
+	CheckpointRef string `json:"checkpoint_ref"`
+	CheckpointOID string `json:"checkpoint_oid"`
+	DiffSHA256    string `json:"diff_sha256"`
 }
 
 // ContextHigh reports whether the last turn's window crossed the health
@@ -336,7 +364,21 @@ func (s *Store) Create(m *Meta) error {
 
 // SaveMeta atomically persists meta.json.
 func (s *Store) SaveMeta(m *Meta) error {
-	m.Updated = time.Now().UTC()
+	return s.saveMetaAt(m, time.Now().UTC())
+}
+
+// SaveTerminalMeta writes a completed turn and its compact outcome receipt as
+// one record. The receipt's time is the terminal record's persisted Updated
+// timestamp, never the later close time.
+func (s *Store) SaveTerminalMeta(m *Meta) error {
+	updated := time.Now().UTC()
+	m.Updated = updated
+	m.captureOutcome(updated)
+	return s.saveMetaAt(m, updated)
+}
+
+func (s *Store) saveMetaAt(m *Meta, updated time.Time) error {
+	m.Updated = updated
 	data, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
@@ -357,6 +399,14 @@ func (s *Store) LoadMeta(id string) (*Meta, error) {
 	var m Meta
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, err
+	}
+	// Closed records written before LastOutcome existed can still recover the
+	// final turn deterministically from Legwork's own compact event log. Keep
+	// this best-effort: corrupt or pruned logs must not make status unusable.
+	if m.State == StateClosed && m.LastOutcome == nil {
+		if outcome := s.backfillOutcome(&m); outcome != nil {
+			m.LastOutcome = outcome
+		}
 	}
 	return &m, nil
 }
@@ -401,15 +451,17 @@ func (s *Store) Reconcile(m *Meta) bool {
 		*m = *fresh
 		return false
 	}
+	const interruptedReason = "runner died without finishing the turn"
 	fresh.State = StateInterrupted
 	fresh.RunnerPID = 0
-	if err := s.SaveMeta(fresh); err != nil {
+	fresh.Result = interruptedReason
+	if err := s.SaveTerminalMeta(fresh); err != nil {
 		return false
 	}
 	*m = *fresh
 	if log, err := events.Open(filepath.Join(s.JobDir(m.ID), "events.jsonl")); err == nil {
 		_, _ = log.Append(events.Event{Type: events.TypeInterrupted, Actor: "runner",
-			Preview: "runner died without finishing the turn"})
+			Preview: interruptedReason})
 	}
 	return true
 }
@@ -428,6 +480,7 @@ func (s *Store) CloseJobsForWorkspace(wsID string) error {
 			continue
 		}
 		if jm.State != StateClosed {
+			jm.rememberOutcome()
 			jm.State = StateClosed
 			jm.Closed = now
 			if err := s.SaveMeta(jm); err != nil {
@@ -445,6 +498,7 @@ func (s *Store) Close(m *Meta) error {
 		return fmt.Errorf("%s is already closed", m.ID)
 	}
 	prev := m.State
+	m.rememberOutcome()
 	now := time.Now().UTC()
 	m.State = StateClosed
 	m.Closed = now
@@ -454,10 +508,86 @@ func (s *Store) Close(m *Meta) error {
 	}
 	if log, err := events.Open(filepath.Join(s.JobDir(m.ID), "events.jsonl")); err == nil {
 		_, _ = log.Append(events.Event{Type: events.TypeClosed, Actor: "orchestrator",
-			Preview: "job acknowledged", Fields: map[string]any{"previous_state": string(prev)}})
+			Preview: "job acknowledged", Fields: map[string]any{"previous_state": string(prev), "outcome": m.LastOutcome}})
 	}
 	s.cleanTempBestEffort(m.ID)
 	return nil
+}
+
+func (m *Meta) rememberOutcome() {
+	if m.LastOutcome != nil {
+		return
+	}
+	m.captureOutcome(m.Updated)
+}
+
+func (m *Meta) captureOutcome(at time.Time) {
+	reason := m.Result
+	if m.Question != "" {
+		reason = m.Question
+	} else if m.Blocked != nil {
+		if m.Blocked.Detail != "" {
+			reason = m.Blocked.Detail
+		} else if m.Blocked.Command != "" {
+			reason = m.Blocked.Command
+		}
+	}
+	if at.IsZero() {
+		at = time.Now().UTC()
+	}
+	m.LastOutcome = &Outcome{State: m.State, Reason: events.Truncate(reason), Question: m.Question,
+		Blocked: m.Blocked, Turn: m.Turns, At: at}
+}
+
+func (s *Store) backfillOutcome(m *Meta) *Outcome {
+	evs, err := events.Read(filepath.Join(s.JobDir(m.ID), "events.jsonl"), 0)
+	if err != nil {
+		return nil
+	}
+	for i := len(evs) - 1; i >= 0; i-- {
+		e := evs[i]
+		if e.Type != events.TypeFinished && e.Type != events.TypeInterrupted {
+			continue
+		}
+		state := StateInterrupted
+		if e.Type == events.TypeFinished {
+			raw, ok := e.Fields["state"].(string)
+			if !ok || !terminalWorkerState(State(raw)) {
+				continue
+			}
+			state = State(raw)
+		}
+		out := &Outcome{State: state, Reason: e.Preview, Turn: m.Turns, At: e.Time}
+		if raw, ok := e.Fields["blocked"]; ok {
+			data, _ := json.Marshal(raw)
+			var blocked BlockedReason
+			if json.Unmarshal(data, &blocked) == nil {
+				out.Blocked = &blocked
+				if blocked.Detail != "" {
+					out.Reason = blocked.Detail
+				}
+			}
+		}
+		if state == StateNeedsInput {
+			for j := i - 1; j >= 0; j-- {
+				if evs[j].Type == events.TypeNeedsInput {
+					out.Question, out.Reason = evs[j].Preview, evs[j].Preview
+					break
+				}
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+func terminalWorkerState(state State) bool {
+	switch state {
+	case StateDone, StateNeedsInput, StateBlocked, StateFailed, StateAuthNeeded, StateInterrupted:
+		return true
+	default:
+		return false
+	}
 }
 
 func (s *Store) cleanTempBestEffort(id string) {

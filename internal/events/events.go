@@ -46,6 +46,7 @@ const (
 	TypeArtifact       = "artifact"   // fields: name, size_bytes
 	TypeCommit         = "commit"     // orchestrator-owned workspace commit
 	TypeCheckpoint     = "checkpoint" // fields: ref, oid
+	TypeReviewVerdict  = "review-verdict"
 )
 
 const previewMax = 200

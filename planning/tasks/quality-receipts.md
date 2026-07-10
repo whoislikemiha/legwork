@@ -57,3 +57,26 @@ receipt exists.
   in this slice.
 
 ## Log
+
+- Terra job `job-172` implemented the first slice; the host full gate and a real
+  Claude/Haiku runner smoke passed. Opus/xhigh `job-176` returned `FIX` and the
+  feature's own first receipt reproduced the primary failure as `parsed:false` on
+  ordinary prose plus fenced JSON. The review also reproduced terminal-result loss
+  on receipt-write failure and trimmed/corrupt review diffs.
+- A fresh Terra job, `job-180`, applied the accepted corrections after the resumed
+  implementer crossed the context-health threshold. The host gate passed again.
+  Focused Opus re-review `job-181` proved the corrected receipt path end-to-end:
+  workspace metadata recorded `parsed:true`, `verdict:FIX`, and exact finding counts.
+  Its remaining medium interrupted-turn receipt defect and three low findings were
+  fixed directly by the orchestrator; focused and full repository gates then passed.
+
+## Friction
+
+- 2026-07-10: `go vet ./...` / `go test ./...` cannot fetch uncached Go modules in
+  the worker sandbox because outbound DNS/network is denied. Focused standard-library
+  package tests can run, but full repository verification needs a warm module cache or
+  host-side execution.
+- 2026-07-10: resuming `job-172` exposed `context_high:true` with a 6.42M context
+  rollup only after dispatch. The turn was cancelled and reseeded into fresh `job-180`;
+  a pre-resume guard would avoid starting work that the health signal already says to
+  abandon.

@@ -128,11 +128,14 @@ One active job per workspace; parallelism = multiple workspaces. `close` refuses
 unreviewed changes without an explicit disposition — that's the review gate, don't
 bypass it reflexively.
 
-Use `legwork ws review <ws>` before landing implementer output. It dispatches a
-read-only reviewer job attached to the workspace and seeded with `legwork diff <ws>`
-(including untracked files), defaults to `--effort high`, and asks for a structured
-`SHIP|FIX` verdict with findings. Pass `--model` for the configured big reviewer
-model; the agent default is used when `--model` is omitted. The verb does not
+Use `legwork ws review <ws>` before landing implementer output. It checkpoints the
+reviewed tree and dispatches a read-only reviewer job seeded with that exact diff
+(including untracked files). Workspace metadata retains the latest parsed receipt
+(reviewer job/model, checkpoint, diff digest, verdict, and finding counts); malformed
+JSON is explicit fail-closed, never a guessed `SHIP`. It defaults to `--effort high`
+and asks for a structured `SHIP|FIX` verdict with findings. Pass `--model` for the
+configured big reviewer model; the agent default is used when `--model` is omitted.
+The verb does not
 auto-fix or auto-merge — you route the verdict.
 
 You own git history — workers never commit (the injected contract forbids it;

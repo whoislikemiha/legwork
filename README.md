@@ -56,7 +56,11 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
 - **Workspaces are review gates**: one worktree + one branch + one diff + one close.
   Workers never commit; the orchestrator reviews the diff directly or dispatches
   `legwork ws review <ws>` for a high-effort read-only reviewer seeded with
-  `legwork diff <ws>` output and asked for a structured `SHIP|FIX` verdict. Then
+  the exact checkpointed `legwork diff <ws>` output and asked for a structured
+  `SHIP|FIX` verdict. Workspace metadata retains the latest review receipt
+  (reviewer job/model, checkpoint, diff digest, verdict, and finding counts);
+  malformed JSON is explicit fail-closed, never a guessed `SHIP`. Closed jobs retain
+  their last worker outcome too. Then
   the orchestrator runs `legwork ws commit <ws> -m <message>` to make an attributed
   non-empty commit and lands it — `legwork close <ws> --merge-into main` performs
   the local `--no-ff` merge and closes in one guarded step: conflicts abort

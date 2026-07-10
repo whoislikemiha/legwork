@@ -219,13 +219,18 @@ are kept by default; the checkout is disposable cache and is removed unless
 `--keep-worktree` is explicit, which also keeps checkpoint refs for inspection.
 Non-preserved `--discard` is the destructive path that deletes the branch.
 
-Independent review is first-class: `legwork ws review <ws>` dispatches a
-read-only workspace job seeded with `legwork diff <ws>` output, so the reviewer
-starts from the change under review instead of rediscovering it. It defaults to
+Independent review is first-class: `legwork ws review <ws>` checkpoints the exact
+tree, dispatches a read-only workspace job seeded with that snapshot's diff, and
+records the latest parsed review receipt in workspace metadata. The receipt names
+the reviewer job/model, checkpoint, diff SHA-256, verdict, and finding counts; its
+job event log remains the detailed historical source. It defaults to
 `--effort high` and the selected agent's default model; pass `--model` for your
 configured big reviewer model. The reviewer prompt asks for a structured
 `{"verdict":"SHIP|FIX","findings":[...]}` report before the normal status block.
-It does not auto-fix, auto-merge, or own the landing decision — route `FIX` with
+Malformed or missing verdict JSON is recorded as unparsed and fail-closed; it never
+becomes a guessed `SHIP`. Closed job metadata likewise retains `last_outcome`, so
+`status` can show the worker's final state and reason after lifecycle state becomes
+`closed`. It does not auto-fix, auto-merge, or own the landing decision — route `FIX` with
 `resume`/a fresh fix job, and land only after your judgment says the diff is ready.
 Scratch/research jobs need no workspace: plain `run` gets a scratch dir;
 `run --dir <path>` works in-place — combine with `--read-only` for plan/research

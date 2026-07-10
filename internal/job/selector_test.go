@@ -3,8 +3,11 @@ package job
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/whoislikemiha/legwork/internal/events"
 )
 
 func TestResolvePrefersExactJobAndAllowsForcedRun(t *testing.T) {
@@ -32,6 +35,73 @@ func TestResolvePrefersExactJobAndAllowsForcedRun(t *testing.T) {
 	}
 	if run.Kind != SelectorRun || len(run.Jobs) != 2 || run.Newest().ID != "job-2" {
 		t.Fatalf("forced run resolution = %+v, want job-2", run)
+	}
+}
+
+func TestLoadMetaBackfillsLegacyClosedOutcome(t *testing.T) {
+	s := &Store{Root: t.TempDir()}
+	m := &Meta{ID: "job-1", Agent: "fake", State: StateClosed, Turns: 2}
+	if err := s.Create(m); err != nil {
+		t.Fatal(err)
+	}
+	log, err := events.Open(filepath.Join(s.JobDir(m.ID), "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(events.Event{Type: events.TypeNeedsInput, Preview: "postgres or sqlite?"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := log.Append(events.Event{Type: events.TypeFinished, Preview: "", Fields: map[string]any{"state": "needs-input"}}); err != nil {
+		t.Fatal(err)
+	}
+	// A newer malformed event must not invent the non-existent state
+	// "finished" or hide the preceding valid turn outcome.
+	if _, err := log.Append(events.Event{Type: events.TypeFinished, Preview: "bad legacy event"}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(filepath.Join(s.JobDir(m.ID), "meta.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.LoadMeta(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastOutcome == nil || got.LastOutcome.State != StateNeedsInput || got.LastOutcome.Question != "postgres or sqlite?" || got.LastOutcome.Reason != "postgres or sqlite?" || got.LastOutcome.Turn != 2 {
+		t.Fatalf("legacy outcome was not backfilled: %+v", got.LastOutcome)
+	}
+	after, err := os.ReadFile(filepath.Join(s.JobDir(m.ID), "meta.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("legacy read rewrote metadata:\nbefore=%s\nafter=%s", before, after)
+	}
+}
+
+func TestSaveTerminalMetaKeepsFullResultAndCompactOutcome(t *testing.T) {
+	s := &Store{Root: t.TempDir()}
+	m := &Meta{ID: "job-1", Agent: "fake", State: StateDone, Turns: 3,
+		Result: strings.Repeat("x", 300)}
+	if err := s.Create(m); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.SaveTerminalMeta(m); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.LoadMeta(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastOutcome == nil {
+		t.Fatal("terminal outcome missing")
+	}
+	if got.Result != m.Result || len(got.LastOutcome.Reason) >= len(got.Result) {
+		t.Fatalf("result/detail compactness lost: %+v", got)
+	}
+	if !got.LastOutcome.At.Equal(got.Updated) {
+		t.Fatalf("outcome time %s != terminal updated %s", got.LastOutcome.At, got.Updated)
 	}
 }
 
@@ -118,5 +188,33 @@ func TestReconcileDoesNotOverwriteNewerTerminalMeta(t *testing.T) {
 	}
 	if persisted.State != StateDone || persisted.Result != "finished" {
 		t.Fatalf("terminal meta was overwritten: %+v", persisted)
+	}
+}
+
+func TestReconcileRefreshesOutcomeAfterPreviousTerminalTurn(t *testing.T) {
+	s := &Store{Root: t.TempDir()}
+	previousAt := time.Date(2026, 7, 10, 10, 0, 0, 0, time.UTC)
+	m := &Meta{ID: "job-1", Agent: "fake", State: StateActive, RunnerPID: 999999,
+		Result: "old answer", Turns: 1, LastOutcome: &Outcome{
+			State: StateNeedsInput, Reason: "postgres or sqlite?", Question: "postgres or sqlite?", At: previousAt,
+		}}
+	if err := s.Create(m); err != nil {
+		t.Fatal(err)
+	}
+	stale, err := s.LoadMeta(m.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.Reconcile(stale) {
+		t.Fatal("expected dead active runner to reconcile")
+	}
+	if stale.State != StateInterrupted || stale.Result != "runner died without finishing the turn" {
+		t.Fatalf("interrupted terminal state was not persisted: %+v", stale)
+	}
+	if stale.LastOutcome == nil || stale.LastOutcome.State != StateInterrupted || stale.LastOutcome.Reason != stale.Result {
+		t.Fatalf("stale prior-turn outcome was not refreshed: %+v", stale.LastOutcome)
+	}
+	if !stale.LastOutcome.At.Equal(stale.Updated) || stale.LastOutcome.At.Equal(previousAt) {
+		t.Fatalf("interrupted outcome time is stale: outcome=%s updated=%s", stale.LastOutcome.At, stale.Updated)
 	}
 }

@@ -97,7 +97,7 @@ func Run(store *job.Store, id string) error {
 		m.State = state
 		m.Result = msg
 		m.RunnerPID = 0
-		_ = store.SaveMeta(m)
+		_ = store.SaveTerminalMeta(m)
 		_, _ = log.Append(events.Event{Type: events.TypeFinished, Actor: "runner",
 			Preview: msg, Fields: map[string]any{"state": string(state)}})
 		finishJob(store, m, string(state), msg)
@@ -229,8 +229,18 @@ func Run(store *job.Store, id string) error {
 	m.Context = result.Context
 	m.State = job.State(result.State)
 	m.RunnerPID = 0
-	if err := store.SaveMeta(m); err != nil {
+	// Terminal job data is durable before any optional workspace rollup work.
+	// A receipt/checkpoint failure cannot rewrite a completed reviewer into an
+	// interrupted job or suppress its normal terminal notification.
+	if err := store.SaveTerminalMeta(m); err != nil {
 		return err
+	}
+	var reviewReceipt *workspace.ReviewReceipt
+	// A review receipt is a workspace rollup, while the reviewer job remains
+	// the detailed historical source. Parse only the strict JSON body left by
+	// the status-block parser; malformed output is explicitly fail-closed.
+	if m.Review != nil && wsStore != nil {
+		reviewReceipt = workspace.ParseReviewReceipt(m)
 	}
 
 	_, _ = log.Append(events.Event{Type: events.TypeUsage, Actor: "runner", Fields: map[string]any{
@@ -243,6 +253,19 @@ func Run(store *job.Store, id string) error {
 		} else {
 			_, _ = log.Append(events.Event{Type: events.TypeProgress, Actor: "runner",
 				Preview: "checkpoint failed: " + cerr.Error()})
+		}
+	}
+	if reviewReceipt != nil {
+		// Checkpoint first: it saves the workspace Meta from the runner's
+		// pointer. Recording the receipt afterwards prevents that save from
+		// clobbering the latest-review rollup.
+		if err := wsStore.RecordReview(m.Workspace, reviewReceipt); err != nil {
+			_, _ = log.Append(events.Event{Type: events.TypeProgress, Actor: "runner",
+				Preview: "review receipt persistence failed: " + err.Error()})
+		} else {
+			_, _ = log.Append(events.Event{Type: events.TypeReviewVerdict, Actor: "runner",
+				Preview: firstNonEmpty(reviewReceipt.Verdict, "unparsed review verdict"),
+				Fields:  map[string]any{"review": reviewReceipt}})
 		}
 	}
 	if result.State == "needs-input" {

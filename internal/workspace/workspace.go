@@ -4,6 +4,9 @@
 package workspace
 
 import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,8 +38,46 @@ type Meta struct {
 	FinalCommit  *CommitInfo `json:"final_commit,omitempty"`
 	MergedInto   string      `json:"merged_into,omitempty"`
 	Retention    string      `json:"retention,omitempty"`
+	// LatestReview is a current rollup. The reviewer job and its event log
+	// remain the historical source of every individual review turn.
+	LatestReview *ReviewReceipt `json:"latest_review,omitempty"`
 	// Setup notes: "ok", "skipped: <why>", captured for observability.
 	Setup string `json:"setup,omitempty"`
+}
+
+// ReviewReceipt records the result of one independent review along with the
+// exact checkpoint and diff digest supplied to that reviewer.
+type ReviewReceipt struct {
+	Job           string        `json:"job"`
+	Agent         string        `json:"agent"`
+	Model         string        `json:"model,omitempty"`
+	State         job.State     `json:"state"`
+	CheckpointRef string        `json:"checkpoint_ref"`
+	CheckpointOID string        `json:"checkpoint_oid"`
+	DiffSHA256    string        `json:"diff_sha256"`
+	Parsed        bool          `json:"parsed"`
+	ParseError    string        `json:"parse_error,omitempty"`
+	Verdict       string        `json:"verdict,omitempty"`
+	Findings      FindingCounts `json:"findings"`
+	CompletedAt   time.Time     `json:"completed_at"`
+}
+
+// FindingCounts keeps the review rollup compact while its job remains the
+// source for individual findings and their details.
+type FindingCounts struct {
+	Total    int `json:"total"`
+	Critical int `json:"critical"`
+	High     int `json:"high"`
+	Medium   int `json:"medium"`
+	Low      int `json:"low"`
+}
+
+// ReviewSnapshot is the immutable input captured at `ws review` dispatch.
+type ReviewSnapshot struct {
+	CheckpointRef string
+	CheckpointOID string
+	Diff          string
+	DiffSHA256    string
 }
 
 // Store manages <root>/workspaces/ws-N/{meta.json,tree/}.
@@ -168,6 +209,19 @@ func git(dir string, args ...string) (string, error) {
 		return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// gitOutput preserves successful command bytes. Review digests bind the exact
+// diff supplied to the agent, including trailing context and its final newline.
+func gitOutput(dir string, args ...string) (string, error) {
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(stderr.String()))
+	}
+	return string(out), nil
 }
 
 // Create makes a workspace: worktree on a namespaced branch, then workstree
@@ -303,11 +357,32 @@ func (s *Store) Diff(m *Meta, stat bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	args := []string{"diff", m.BaseOID, strings.TrimSpace(oid)}
+	return s.diffTree(m, strings.TrimSpace(oid), stat)
+}
+
+func (s *Store) diffTree(m *Meta, oid string, stat bool) (string, error) {
+	args := []string{"diff", m.BaseOID, oid}
 	if stat {
 		args = append(args, "--stat")
 	}
-	return run(args...)
+	return gitOutput(m.Tree, args...)
+}
+
+// ReviewSnapshot checkpoints the exact tree to be reviewed, then renders the
+// diff from that checkpoint rather than from a second live snapshot. A review
+// receipt can therefore name one immutable tree and one exact prompt payload.
+func (s *Store) ReviewSnapshot(m *Meta) (*ReviewSnapshot, error) {
+	ref, oid, err := s.Checkpoint(m)
+	if err != nil {
+		return nil, err
+	}
+	diff, err := s.diffTree(m, oid, false)
+	if err != nil {
+		return nil, err
+	}
+	sum := sha256.Sum256([]byte(diff))
+	return &ReviewSnapshot{CheckpointRef: ref, CheckpointOID: oid, Diff: diff,
+		DiffSHA256: hex.EncodeToString(sum[:])}, nil
 }
 
 // Dirty reports whether the workspace differs from its base.

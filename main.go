@@ -230,6 +230,7 @@ type dispatchOptions struct {
 	FallbackModel string
 	AppendPrompt  string
 	ReadOnly      bool
+	Review        *job.ReviewRequest
 }
 
 func dispatchJob(o dispatchOptions) (*job.Meta, error) {
@@ -266,7 +267,7 @@ func dispatchJob(o dispatchOptions) (*job.Meta, error) {
 	m := &job.Meta{Agent: o.Agent, Task: o.Task, Model: o.Model, Run: o.RunLabel,
 		AppendPrompt: o.AppendPrompt, ReadOnly: o.ReadOnly, Timeout: o.Timeout,
 		Effort: o.Effort, FallbackModel: o.FallbackModel,
-		State: job.StateQueued}
+		Review: o.Review, State: job.StateQueued}
 	if o.Workspace != "" {
 		_, wss, err := openWorkspaces()
 		if err != nil {
@@ -696,6 +697,13 @@ func statusCmd() *cobra.Command {
 				}
 				if m.Blocked.Detail != "" {
 					fmt.Printf(" detail=%q", m.Blocked.Detail)
+				}
+				fmt.Println()
+			}
+			if m.State == job.StateClosed && m.LastOutcome != nil {
+				fmt.Printf("last outcome: %s", m.LastOutcome.State)
+				if m.LastOutcome.Reason != "" {
+					fmt.Printf(" — %s", m.LastOutcome.Reason)
 				}
 				fmt.Println()
 			}

@@ -458,9 +458,20 @@ func TestAckRefusesNonTerminalWithoutForce(t *testing.T) {
 		t.Fatalf("ack refusal should explain force:\n%s", out)
 	}
 	e.legwork(t, "ack", id, "--force")
-	m := e.legwork(t, "status", id, "--json")
-	if !strings.Contains(m, `"state": "closed"`) || strings.Contains(m, `"question"`) {
-		t.Fatalf("forced ack did not close/clear question:\n%s", m)
+	out := e.legwork(t, "status", id, "--json")
+	var m map[string]any
+	if err := json.Unmarshal([]byte(out), &m); err != nil {
+		t.Fatalf("bad forced-ack status json: %v\n%s", err, out)
+	}
+	if m["state"] != "closed" {
+		t.Fatalf("forced ack did not close: %+v", m)
+	}
+	if _, ok := m["question"]; ok {
+		t.Fatalf("forced ack retained live question: %+v", m)
+	}
+	outcome, ok := m["last_outcome"].(map[string]any)
+	if !ok || outcome["state"] != "needs-input" || outcome["question"] != "postgres or sqlite?" {
+		t.Fatalf("forced ack lost durable final question: %+v", m)
 	}
 }
 

@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -9,6 +11,32 @@ import (
 	"testing"
 	"time"
 )
+
+func requireString(t *testing.T, values map[string]any, key string) string {
+	t.Helper()
+	value, ok := values[key]
+	if !ok {
+		t.Fatalf("missing %q in %+v", key, values)
+	}
+	text, ok := value.(string)
+	if !ok {
+		t.Fatalf("%q = %T, want string", key, value)
+	}
+	return text
+}
+
+func requireObject(t *testing.T, values map[string]any, key string) map[string]any {
+	t.Helper()
+	value, ok := values[key]
+	if !ok {
+		t.Fatalf("missing %q in %+v", key, values)
+	}
+	object, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("%q = %T, want object", key, value)
+	}
+	return object
+}
 
 // initRepo creates a git repo with one commit.
 func initRepo(t *testing.T) string {
@@ -101,8 +129,19 @@ func TestWorkspaceLifecycle(t *testing.T) {
 
 	// The workspace's job is closed with it.
 	out := e.legwork(t, "status", id, "--json")
-	if !strings.Contains(out, `"state": "closed"`) {
-		t.Fatalf("job not closed with workspace:\n%s", out)
+	var closed map[string]any
+	if err := json.Unmarshal([]byte(out), &closed); err != nil {
+		t.Fatalf("bad closed job json: %v\n%s", err, out)
+	}
+	if closed["state"] != "closed" {
+		t.Fatalf("job not closed with workspace: %+v", closed)
+	}
+	outcome, ok := closed["last_outcome"].(map[string]any)
+	if !ok || outcome["state"] != "done" || outcome["reason"] != "finished" {
+		t.Fatalf("closed job lost worker outcome: %+v", closed)
+	}
+	if human := e.legwork(t, "status", id); !strings.Contains(human, "last outcome: done — finished") {
+		t.Fatalf("closed job did not show its outcome to humans:\n%s", human)
 	}
 }
 
@@ -244,6 +283,147 @@ func TestWorkspaceReviewDispatchesReadOnlyDiffJob(t *testing.T) {
 	e.waitState(t, id, "done")
 	if evs := e.legwork(t, "events", "pipe", "--run", "--json"); !strings.Contains(evs, id) || !strings.Contains(evs, "queued") {
 		t.Fatalf("run events missing review job:\n%s", evs)
+	}
+}
+
+func TestWorkspaceReviewReceiptsAreStrictAndSnapshotBound(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := requireString(t, ws, "id")
+	tree := requireString(t, ws, "tree")
+	if err := os.WriteFile(filepath.Join(tree, "README.md"), []byte("review receipt target\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	reviewLine, err := json.Marshal(map[string]any{
+		"type": "result", "subtype": "success", "is_error": false, "num_turns": 1, "session_id": "s1",
+		"result": "I found one landing blocker.\n```json\n{\"verdict\":\"FIX\",\"findings\":[{\"file\":\"README.md\",\"line\":1,\"severity\":\"high\",\"detail\":\"missing test\"}]}\n```\nPlease address it.\n\nstate: done",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.writeScript(t, string(reviewLine))
+	id := strings.TrimSpace(e.legwork(t, "ws", "review", wsID, "--agent", "fake"))
+	jm := e.waitState(t, id, "done")
+	request := requireObject(t, jm, "review")
+	if requireString(t, request, "checkpoint_ref") == "" || requireString(t, request, "checkpoint_oid") == "" || len(requireString(t, request, "diff_sha256")) != 64 {
+		t.Fatalf("review job missing immutable dispatch receipt: %+v", jm)
+	}
+	wm := e.wsStatus(t, wsID)
+	receipt := requireObject(t, wm, "latest_review")
+	if receipt["job"] != id || receipt["agent"] != "fake" || receipt["state"] != "done" || receipt["parsed"] != true || receipt["verdict"] != "FIX" || receipt["checkpoint_ref"] != request["checkpoint_ref"] || receipt["checkpoint_oid"] != request["checkpoint_oid"] || receipt["diff_sha256"] != request["diff_sha256"] {
+		t.Fatalf("bad review receipt: %+v", receipt)
+	}
+	counts := requireObject(t, receipt, "findings")
+	if counts["total"] != float64(1) || counts["high"] != float64(1) {
+		t.Fatalf("bad finding counts: %+v", counts)
+	}
+	if evs := e.legwork(t, "events", id, "--json"); !strings.Contains(evs, "review-verdict") {
+		t.Fatalf("review receipt event missing:\n%s", evs)
+	}
+
+	// Prose around a bare JSON object must never be guessed into a SHIP verdict.
+	e.writeScript(t, `{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s2","result":"looks good\n{\"verdict\":\"SHIP\",\"findings\":[]}\n\nstate: done"}`)
+	badID := strings.TrimSpace(e.legwork(t, "ws", "review", wsID, "--agent", "fake"))
+	e.waitState(t, badID, "done")
+	wm = e.wsStatus(t, wsID)
+	receipt = requireObject(t, wm, "latest_review")
+	if receipt["job"] != badID || receipt["parsed"] != false || receipt["verdict"] != nil || receipt["parse_error"] == "" {
+		t.Fatalf("malformed review was not explicit fail-closed: %+v", receipt)
+	}
+}
+
+func TestWorkspaceReviewDigestBindsExactPromptDiff(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	write := func(path, content string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(filepath.Join(repo, "README.md"), "first\ncontext\n\n")
+	commit := exec.Command("git", "-C", repo, "add", "README.md")
+	if out, err := commit.CombinedOutput(); err != nil {
+		t.Fatalf("stage base fixture: %v\n%s", err, out)
+	}
+	commit = exec.Command("git", "-C", repo, "commit", "-m", "blank context")
+	commit.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+	if out, err := commit.CombinedOutput(); err != nil {
+		t.Fatalf("commit base fixture: %v\n%s", err, out)
+	}
+
+	ws := e.wsNew(t, repo)
+	wsID := requireString(t, ws, "id")
+	tree := requireString(t, ws, "tree")
+	write(filepath.Join(tree, "README.md"), "changed\ncontext\n\n")
+	e.writeScript(t, `{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s1","result":"{\"verdict\":\"SHIP\",\"findings\":[]}\n\nstate: done"}`)
+	id := strings.TrimSpace(e.legwork(t, "ws", "review", wsID, "--agent", "fake"))
+	jm := e.waitState(t, id, "done")
+	request := requireObject(t, jm, "review")
+	task := requireString(t, jm, "task")
+	const marker = "Workspace diff from legwork diff "
+	start := strings.Index(task, "```diff\n")
+	if !strings.Contains(task, marker) || start < 0 {
+		t.Fatalf("review prompt missing diff fence:\n%s", task)
+	}
+	start += len("```diff\n")
+	end := strings.LastIndex(task, "\n```")
+	if end < start {
+		t.Fatalf("review prompt has no closing diff fence:\n%s", task)
+	}
+	promptDiff := task[start:end]
+	if !strings.HasSuffix(promptDiff, " \n") {
+		t.Fatalf("prompt diff lost blank context: %q", promptDiff)
+	}
+	sum := sha256.Sum256([]byte(promptDiff))
+	if got, want := requireString(t, request, "diff_sha256"), hex.EncodeToString(sum[:]); got != want {
+		t.Fatalf("digest = %s, want %s for exact prompt diff", got, want)
+	}
+	base := requireString(t, e.wsStatus(t, wsID), "base_oid")
+	oid := requireString(t, request, "checkpoint_oid")
+	direct := exec.Command("git", "-C", tree, "diff", base, oid)
+	out, err := direct.Output()
+	if err != nil {
+		t.Fatalf("render direct checkpoint diff: %v", err)
+	}
+	if promptDiff != string(out) {
+		t.Fatalf("prompt diff differs from checkpoint diff:\nprompt=%q\ndirect=%q", promptDiff, out)
+	}
+	apply := exec.Command("git", "-C", repo, "apply", "--check", "-")
+	apply.Stdin = strings.NewReader(promptDiff)
+	if out, err := apply.CombinedOutput(); err != nil {
+		t.Fatalf("prompt diff is not applyable: %v\n%s", err, out)
+	}
+}
+
+func TestWorkspaceReviewReceiptFailureKeepsTerminalJob(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := requireString(t, ws, "id")
+	tree := requireString(t, ws, "tree")
+	if err := os.WriteFile(filepath.Join(tree, "README.md"), []byte("review receipt failure\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.writeScript(t, "#sleep 500", `{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s1","result":"{\"verdict\":\"SHIP\",\"findings\":[]}\n\nstate: done"}`)
+	id := strings.TrimSpace(e.legwork(t, "ws", "review", wsID, "--agent", "fake"))
+	e.waitState(t, id, "active")
+	metaPath := filepath.Join(e.state, "workspaces", wsID, "meta.json")
+	if err := os.Remove(metaPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(metaPath, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	jm := e.waitState(t, id, "done")
+	if requireString(t, jm, "result") == "" || requireString(t, jm, "state") != "done" {
+		t.Fatalf("receipt failure lost terminal review metadata: %+v", jm)
+	}
+	events := e.legwork(t, "events", id, "--json")
+	if !strings.Contains(events, "review receipt persistence failed") || !strings.Contains(events, "finished") {
+		t.Fatalf("receipt failure did not remain observable and terminal:\n%s", events)
 	}
 }
 
