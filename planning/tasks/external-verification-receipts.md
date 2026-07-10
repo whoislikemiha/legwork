@@ -1,6 +1,6 @@
 # External verification receipts
 
-Status: next · Priority: P1 · Origin: job-146/job-150/job-152 `blocked.kind=verify` dogfood · Depends: quality-receipts · Workspace: —
+Status: next · Priority: P1 · Origin: job-146/job-150/job-152 `blocked.kind=verify` dogfood · Depends: quality-receipts, close-commit-receipts · Workspace: —
 
 ## Goal
 
@@ -24,8 +24,42 @@ legwork verify job-146 -- sh -lc 'gofmt -l . && go vet ./...'
 - A passing receipt makes the workspace reviewable/verified without rewriting the
   historical worker turn from `blocked` to `done`.
 - A failed receipt remains attention-worthy and exposes a copyable retry.
-- Verification is accepted only for `blocked.kind=verify` or an explicit workspace
-  verification request; it cannot resolve provision, decision, auth, or task failure.
+- Verification is accepted only for an exact workspace-attached job with
+  `blocked.kind=verify`; it cannot resolve provision, decision, auth, or task failure.
+
+## Product contract
+
+This slice is exact-job-only. A standalone workspace verification request is deferred;
+the job must be terminal, attached to an open workspace with a present worktree, and
+have `state=blocked` plus `blocked.kind=verify`. Another active job in that workspace
+is a refusal. The worker state, result, blocked detail, last outcome, and turn count are
+historical facts and are never rewritten by verification.
+
+`verify <job> -- <argv...>` executes the argv directly on the host with the workspace
+tree as cwd. Legwork never inserts a shell; pipelines and shell syntax require an
+explicit `sh -lc`. `--timeout` bounds the process, and timeout terminates the process
+group so descendants cannot outlive the receipt. Exit 0 is a passing receipt; any
+other exit or timeout is a completed failing receipt, printed in human/JSON form with
+exit 1 rather than disguised as an internal error.
+
+The job owns the authoritative latest verification rollup. Workspace metadata mirrors
+that receipt for readiness queries, and both job and workspace append-only event logs
+record every attempt with the same receipt ID. A receipt includes job/workspace, argv,
+cwd, pass/fail/timeout, exit code when known, duration, bounded combined output, actor,
+start/completion times, and an optional history warning. Workspace metadata advances
+additively from schema v1 to v2; legacy v0/v1 remains readable and future versions
+still fail closed.
+
+Captured output is bounded at the writer, not only truncated after execution. Legwork
+does not serialize the host environment and redacts values of obvious secret-bearing
+environment variables from captured output. The explicitly supplied argv remains the
+auditable command of record.
+
+Status and the default job list derive attention from the receipt without changing the
+worker state: a passing verification is reviewable/unreviewed work, while a failed or
+timed-out verification remains verify attention and exposes the exact retry argv.
+Verification completion emits an additive `verification` event and a notifier payload
+that distinguishes pass from fail.
 
 ## Acceptance criteria
 
@@ -36,11 +70,14 @@ legwork verify job-146 -- sh -lc 'gofmt -l . && go vet ./...'
 - Status, notifications, and workspace readiness consume the receipt directly.
 - The public event schema evolves additively and the worker's original outcome
   remains reconstructable.
+- Repeated attempts replace only the current rollup; event history retains each receipt
+  with a distinct stable ID.
 
 ## Non-goals
 
 - Automatically executing commands supplied by a worker.
 - A general CI service, build cache, or arbitrary remote executor.
 - Treating verification success as review or merge approval.
+- Standalone `legwork verify <workspace>` or verification of workspace-less jobs.
 
 ## Log
