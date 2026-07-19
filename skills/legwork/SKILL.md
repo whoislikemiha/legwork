@@ -109,6 +109,16 @@ payload (job, event, question, blocked, result, context) on stdin. Subscribe to
 `needs-provision` when you want approval gates to wake the orchestrator. See
 `legwork guide`.
 
+If that notifier needs an opaque return capability from the dispatching session, add
+an exact allowlist such as
+`capture_env = ["HERMES_EXTERNAL_EVENTS_TOKEN_FILE"]`. Legwork snapshots listed
+names once on initial `run`, keeps them out of worker environments and public job
+surfaces, and restores them only for every notifier invocation for that job. Later
+resume/answer/approve/verify callers cannot replace the route. Removing a name from
+current config revokes it. Names are POSIX-style and unique (maximum 32); values are
+limited to 64 KiB. Use this only for notifier-required opaque references, not general
+secret forwarding. Run `legwork doctor` after changing notifier capture config.
+
 ## Workspace flow (reviewable changes)
 
 ```bash

@@ -93,7 +93,7 @@ func verifyCmd() *cobra.Command {
 				return finishErr
 			}
 			if promoted {
-				sendVerificationNotification(m, r)
+				sendVerificationNotification(s, m, r)
 			}
 			out := verifyOutput{OK: promoted && r.Passed, State: "completed", Receipt: r, Retry: verifyRetry(m.ID, r.Argv)}
 			if !promoted {
@@ -480,7 +480,7 @@ func shellCommand(argv []string) string {
 	return strings.Join(quoted, " ")
 }
 
-func sendVerificationNotification(m *job.Meta, receipt *job.VerificationReceipt) {
+func sendVerificationNotification(store *job.Store, m *job.Meta, receipt *job.VerificationReceipt) {
 	cfg, err := notify.Load()
 	if err != nil {
 		return
@@ -489,7 +489,7 @@ func sendVerificationNotification(m *job.Meta, receipt *job.VerificationReceipt)
 	if receipt.Passed {
 		event = "verification-passed"
 	}
-	_ = cfg.Send(notify.Payload{Event: event, Job: m.ID, Run: m.Run, Agent: m.Agent, Task: m.Task,
+	_ = cfg.SendForJob(store.JobDir(m.ID), notify.Payload{Event: event, Job: m.ID, Run: m.Run, Agent: m.Agent, Task: m.Task,
 		Blocked: m.Blocked, Result: events.Truncate(m.Result), CostUSD: m.CostUSD, Context: m.Context,
 		Verification: job.CompactVerificationReceipt(receipt)})
 }

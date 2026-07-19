@@ -51,3 +51,19 @@ capture_env = ["HERMES_EXTERNAL_EVENTS_TOKEN_FILE"]
 - Publish-time routing fields or platform identifiers in notifier payloads.
 - General notifier sandboxing or secret-store integration.
 - Changing the worker status contract or adapter command construction beyond environment scrubbing.
+
+## Friction
+
+- The injected job-local `GOMODCACHE` was empty while a complete read-only host module cache was available, so the first required Go verification attempted blocked network downloads. Prefer exposing the existing module cache read-only while keeping build/temp caches job-local and writable.
+
+## Implementation notes
+
+Implemented as a generic, versioned `.notify-origin.json` sidecar owned by each job. Initial dispatch captures exact configured names once; detached runner and worker environments scrub the union of configured and snapshotted names; notifier calls restore only the current-config intersection. Legacy, revoked, absent, and corrupt cases fail closed. The notifier payload and public event schema are unchanged.
+
+Host verification passed: `gofmt`, `go vet ./...`, and `go test ./... -count=1`, including the full E2E package.
+
+## Review verdict
+
+**SHIP** — Opus 4.8/high review at checkpoint `refs/legwork/ws-84/ckpt-2` found no landing blockers. Review digest: `6e189b1b7c1e5603e0a9f99d4f829aba54f2780acf62f1d9fe36560cd5ffc031`.
+
+Non-blocking notes accepted: malformed notifier configuration now intentionally fails startup at the scrub boundary; origin sidecars share normal job-state retention; and one doctor comment references the older tolerant send path.

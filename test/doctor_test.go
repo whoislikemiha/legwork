@@ -149,3 +149,30 @@ func TestDoctorNotifierPayload(t *testing.T) {
 		t.Fatalf("payload event = %v, want doctor\n%s", p["event"], data)
 	}
 }
+
+func TestDoctorNotifierUsesTransientCaptureAndValidatesConfig(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t, resultDone)
+	sink := filepath.Join(t.TempDir(), "doctor-route.txt")
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	cfg := "[notify]\ncommand = '''printf '%s' \"${DOCTOR_ROUTE-absent}\" > " + sink + "'''\ncapture_env = [\"DOCTOR_ROUTE\"]\n"
+	if err := os.WriteFile(cfgPath, []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := e.doctor([]string{"LEGWORK_CONFIG=" + cfgPath, "DOCTOR_ROUTE=caller-origin"},
+		"--agent", "fake", "--dir", t.TempDir())
+	if code != 0 {
+		t.Fatalf("doctor capture failed (%d):\n%s", code, out)
+	}
+	if got := mustReadString(t, sink); got != "caller-origin" {
+		t.Fatalf("doctor notifier route = %q", got)
+	}
+
+	if err := os.WriteFile(cfgPath, []byte("[notify]\ncommand = \"true\"\ncapture_env = [\"BAD-NAME\"]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code = e.doctor([]string{"LEGWORK_CONFIG=" + cfgPath}, "--agent", "fake", "--dir", t.TempDir(), "--json")
+	if code != 1 || !strings.Contains(out, "invalid environment name") {
+		t.Fatalf("invalid capture config was not diagnosed (%d):\n%s", code, out)
+	}
+}

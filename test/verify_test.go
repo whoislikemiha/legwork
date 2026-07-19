@@ -118,6 +118,34 @@ func TestVerifyPassRecordsReceiptWithoutRewritingWorker(t *testing.T) {
 	t.Fatal("verification pass did not notify")
 }
 
+func TestVerificationNotifierUsesInitialDispatchOrigin(t *testing.T) {
+	e := newEnv(t)
+	ws := e.wsNew(t, initRepo(t))
+	sink := filepath.Join(t.TempDir(), "verification-routes.jsonl")
+	e.config = filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(e.config, []byte(routeNotifyConfig(sink, "blocked", "verification-passed")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	e.writeScript(t, resultBlockedVerify)
+	out, err := commandWithEnvironment(e, map[string]string{"LEGWORK_TEST_ROUTE": "dispatch-A"}, nil,
+		"run", "--agent", "fake", "--workspace", ws["id"].(string), "verify route")
+	if err != nil {
+		t.Fatalf("run: %v\n%s", err, out)
+	}
+	id := strings.TrimSpace(out)
+	e.waitState(t, id, "blocked")
+	out, err = commandWithEnvironment(e, map[string]string{"LEGWORK_TEST_ROUTE": "verifier-B"}, nil,
+		"verify", id, "--", "true")
+	if err != nil {
+		t.Fatalf("verify: %v\n%s", err, out)
+	}
+	for _, notification := range waitRoutedNotifications(t, sink, 2) {
+		if notification.Route != "dispatch-A" {
+			t.Fatalf("verification changed notifier origin to %q", notification.Route)
+		}
+	}
+}
+
 func TestVerifyFailureAndTimeoutRemainAttentionWithRetry(t *testing.T) {
 	e, id, ws := blockedVerifyWorkspace(t)
 	out, err := e.legworkErr("verify", id, "--json", "--", "sh", "-lc", "printf fail; exit 7")

@@ -39,7 +39,7 @@ func finishJob(store *job.Store, m *job.Meta, state string, preview string) {
 		if m.Blocked != nil && m.Blocked.Kind == "provision" {
 			event = events.TypeNeedsProvision
 		}
-		_ = cfg.Send(notify.Payload{
+		_ = cfg.SendForJob(store.JobDir(m.ID), notify.Payload{
 			Event: event, Job: m.ID, Run: m.Run, Agent: m.Agent,
 			Task: m.Task, Question: m.Question, Result: events.Truncate(m.Result),
 			Blocked: m.Blocked, CostUSD: m.CostUSD, Context: m.Context,
@@ -66,7 +66,15 @@ func Spawn(store *job.Store, m *job.Meta) error {
 	cmd.Stdout = logf
 	cmd.Stderr = logf
 	cmd.Stdin = nil
-	cmd.Env = os.Environ()
+	cfg, err := notify.Load()
+	if err != nil {
+		return err
+	}
+	scrubNames, err := cfg.JobScrubNames(store.JobDir(m.ID))
+	if err != nil {
+		return err
+	}
+	cmd.Env = notify.ScrubEnvironment(os.Environ(), scrubNames)
 	// New session: survives the CLI exiting and the ssh connection dropping.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 	if err := cmd.Start(); err != nil {
@@ -150,6 +158,15 @@ func Run(store *job.Store, id string) error {
 		return fail(job.StateFailed, "command: %v", err)
 	}
 	cmd.Env = tmp.ApplyEnv(cmd.Env, m.Agent)
+	if cfg, loadErr := notify.Load(); loadErr == nil {
+		if scrubNames, scrubErr := cfg.JobScrubNames(dir); scrubErr == nil {
+			cmd.Env = notify.ScrubEnvironment(cmd.Env, scrubNames)
+		} else {
+			return fail(job.StateFailed, "notifier origin: %v", scrubErr)
+		}
+	} else {
+		return fail(job.StateFailed, "notifier config: %v", loadErr)
+	}
 
 	transcript, err := os.OpenFile(filepath.Join(dir, "transcript.jsonl"),
 		os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)

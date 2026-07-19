@@ -309,9 +309,13 @@ func checkNotifier(ad adapter.Adapter) Check {
 	// Send only fires for subscribed events; force delivery of the doctor
 	// probe regardless of the configured event list.
 	cfg.Notify.Events = []string{"doctor"}
-	if err := cfg.Send(notify.Payload{
+	origin, err := notify.CaptureCurrent(cfg.Notify.CaptureEnv)
+	if err != nil {
+		return Check{"notifier", StatusFail, "capture environment: " + err.Error()}
+	}
+	if err := cfg.SendWithOrigin(notify.Payload{
 		Event: "doctor", Job: "doctor", Agent: ad.Name(), Task: "doctor preflight",
-	}); err != nil {
+	}, origin); err != nil {
 		return Check{"notifier", StatusFail, "command failed: " + err.Error()}
 	}
 	return Check{"notifier", StatusOK, `command exited 0 (event "doctor" sent)`}

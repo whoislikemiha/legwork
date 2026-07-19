@@ -9,6 +9,8 @@
 //	#sleep <ms>            pause (readiness/watch/cancel tests)
 //	#die                   exit 1 mid-turn (interrupted-state tests)
 //	#write <path> <text>   write a file relative to the cwd (workspace tests)
+//	#require-env NAME=VAL  fail unless the worker sees this unrelated env value
+//	#require-env-absent N  fail if the worker sees the named environment value
 //
 // Any other non-empty line is emitted verbatim.
 package fakeagent
@@ -57,6 +59,17 @@ func Replay(w io.Writer) error {
 				if err := os.WriteFile(parts[0], []byte(parts[1]+"\n"), 0o644); err != nil {
 					return err
 				}
+			}
+		case strings.HasPrefix(line, "#require-env-absent "):
+			name := strings.TrimSpace(strings.TrimPrefix(line, "#require-env-absent "))
+			if _, present := os.LookupEnv(name); present {
+				return fmt.Errorf("environment %s unexpectedly present", name)
+			}
+		case strings.HasPrefix(line, "#require-env "):
+			assignment := strings.TrimSpace(strings.TrimPrefix(line, "#require-env "))
+			name, want, ok := strings.Cut(assignment, "=")
+			if !ok || os.Getenv(name) != want {
+				return fmt.Errorf("environment %s did not match", name)
 			}
 		case strings.TrimSpace(line) == "":
 		default:

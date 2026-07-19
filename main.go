@@ -27,6 +27,7 @@ import (
 	"github.com/whoislikemiha/legwork/internal/gc"
 	"github.com/whoislikemiha/legwork/internal/guide"
 	"github.com/whoislikemiha/legwork/internal/job"
+	"github.com/whoislikemiha/legwork/internal/notify"
 	"github.com/whoislikemiha/legwork/internal/runner"
 	"github.com/whoislikemiha/legwork/internal/workspace"
 )
@@ -265,6 +266,14 @@ func dispatchJob(o dispatchOptions) (*job.Meta, error) {
 	if err != nil {
 		return nil, err
 	}
+	notifyConfig, err := notify.Load()
+	if err != nil {
+		return nil, fmt.Errorf("notifier config: %w", err)
+	}
+	origin, err := notify.CaptureCurrent(notifyConfig.Notify.CaptureEnv)
+	if err != nil {
+		return nil, err
+	}
 	m := &job.Meta{Agent: o.Agent, Task: o.Task, Model: o.Model, Run: o.RunLabel,
 		AppendPrompt: o.AppendPrompt, ReadOnly: o.ReadOnly, Timeout: o.Timeout,
 		Effort: o.Effort, FallbackModel: o.FallbackModel,
@@ -303,6 +312,9 @@ func dispatchJob(o dispatchOptions) (*job.Meta, error) {
 	m.ID = id
 	if err := s.Create(m); err != nil {
 		return nil, err
+	}
+	if err := notify.SaveOrigin(s.JobDir(id), origin); err != nil {
+		return nil, fmt.Errorf("persist notifier origin: %w", err)
 	}
 	log, err := events.Open(filepath.Join(s.JobDir(id), "events.jsonl"))
 	if err != nil {

@@ -80,7 +80,13 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   workspace cache. Both `ack` and workspace `close` best-effort remove each closed
   job's per-job temp/cache tree while preserving events, transcripts, and artifacts.
 - **Wake-on-event**: a configurable notifier command receives JSON payloads — point
-  it at ntfy for your phone, or at whatever re-invokes your orchestrator.
+  it at ntfy for your phone, or at whatever re-invokes your orchestrator. Optional
+  `[notify] capture_env = ["NAME"]` snapshots an exact, bounded POSIX-name allowlist
+  at initial dispatch and restores it only for that job's notifier calls. This keeps
+  an opaque return capability stable across resume/verify from another session while
+  excluding it from workers, metadata, events, transcripts, and notifier JSON;
+  removing a configured name revokes it immediately. See `legwork guide` for limits
+  and the recommended preflight.
 - **A presentation layer that finds the story**: `runs` rolls a whole pipeline up
   to one line per `--run` label (state, cost, context health, latest note); `tail`
   is `tail -f` across every job and run log, worker events and your notes

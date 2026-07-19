@@ -24,8 +24,9 @@ import (
 //	events  = ["needs-input", "needs-provision", "done", "blocked", "failed", "auth-required", "interrupted", "verification-passed", "verification-failed"]
 type Config struct {
 	Notify struct {
-		Command string   `toml:"command"`
-		Events  []string `toml:"events"`
+		Command    string   `toml:"command"`
+		Events     []string `toml:"events"`
+		CaptureEnv []string `toml:"capture_env"`
 	} `toml:"notify"`
 }
 
@@ -42,6 +43,9 @@ func Load() (*Config, error) {
 	}
 	if len(cfg.Notify.Events) == 0 {
 		cfg.Notify.Events = DefaultEvents
+	}
+	if err := ValidateCaptureEnv(cfg.Notify.CaptureEnv); err != nil {
+		return nil, err
 	}
 	return &cfg, nil
 }
@@ -64,6 +68,32 @@ type Payload struct {
 // Send fires the notifier if the event is subscribed. Failures are returned
 // for logging but must never fail the job.
 func (c *Config) Send(p Payload) error {
+	return c.send(p, nil)
+}
+
+// SendForJob invokes the notifier with the immutable origin captured for jobDir.
+// A missing legacy snapshot fails closed by removing every currently configured
+// capture name. A corrupt snapshot is returned as an error and never falls back
+// to the caller's value.
+func (c *Config) SendForJob(jobDir string, p Payload) error {
+	env, err := c.JobNotifierEnv(jobDir, os.Environ())
+	if err != nil {
+		return err
+	}
+	return c.send(p, env)
+}
+
+// SendWithOrigin is used by doctor: its probe gets a transient snapshot of the
+// current caller without writing any job state.
+func (c *Config) SendWithOrigin(p Payload, origin *Origin) error {
+	env := os.Environ()
+	if len(c.Notify.CaptureEnv) > 0 {
+		env = OverlayEnvironment(env, origin, c.Notify.CaptureEnv)
+	}
+	return c.send(p, env)
+}
+
+func (c *Config) send(p Payload, env []string) error {
 	if c.Notify.Command == "" {
 		return nil
 	}
@@ -83,6 +113,9 @@ func (c *Config) Send(p Payload) error {
 	}
 	cmd := exec.Command("sh", "-c", c.Notify.Command)
 	cmd.Stdin = bytes.NewReader(data)
+	if env != nil {
+		cmd.Env = env
+	}
 	done := make(chan error, 1)
 	if err := cmd.Start(); err != nil {
 		return err

@@ -161,11 +161,26 @@ Configure the notifier in `~/.config/legwork/config.toml` (or `$LEGWORK_CONFIG`)
 [notify]
 command = "<any shell command>"   # receives a JSON payload on stdin
 events  = ["needs-input", "needs-provision", "done", "blocked", "failed", "auth-required", "interrupted", "verification-passed", "verification-failed"]
+# Optional opaque return capability captured once at initial dispatch:
+capture_env = ["HERMES_EXTERNAL_EVENTS_TOKEN_FILE"]
 ```
 
 The payload: `{"event", "job", "run", "agent", "task", "question", "blocked", "result",
 "cost_usd", "context", "verification"}` — verification completion uses
 `verification-passed` or `verification-failed`, with its receipt in `verification`.
+
+`capture_env` is an exact environment-name allowlist for notifier routing context.
+At initial `run`, legwork snapshots whether each listed name is set and, if set, its
+value. The private per-job snapshot is reused for every later notification, including
+after `resume`, `answer`, `approve`, or `verify` from another shell/session. Captured
+names are removed from detached runner and worker environments; they are restored only
+for the notifier command. Removing a name from the current config revokes it
+immediately, and legacy jobs without snapshots notify with configured names absent.
+Names must use POSIX syntax, be unique, and are limited to 32 names with values up to
+64 KiB each. Capture only opaque references/capabilities specifically required by the
+notifier; do not use this as a general secret-forwarding mechanism. Values never enter
+the notifier JSON, job metadata, events, or transcripts. `doctor` validates the list
+and probes the notifier with a transient snapshot of its caller environment.
 
 - **Human notifications**: `command = "jq -r '\"legwork \" + .job + \": \" + .event' | xargs -I{} ntfy publish mytopic {}"`
   (or any Telegram/webhook one-liner).

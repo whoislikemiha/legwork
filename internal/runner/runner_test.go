@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/whoislikemiha/legwork/internal/notify"
 )
 
 func TestPrepareJobTempAndEnv(t *testing.T) {
@@ -41,6 +43,30 @@ func TestPrepareJobTempAndEnv(t *testing.T) {
 	}
 	if got := envValue(claudeEnv, "GOCACHE"); got != "" {
 		t.Fatalf("claude should not get codex Go cache env, got %q", got)
+	}
+}
+
+func TestWorkerEnvironmentScrubsNotifierOrigin(t *testing.T) {
+	dir := t.TempDir()
+	origin, err := notify.CaptureOrigin([]string{"ROUTE", "ABSENT"}, []string{"ROUTE=session-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := notify.SaveOrigin(dir, origin); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &notify.Config{}
+	cfg.Notify.CaptureEnv = []string{"ROUTE", "ABSENT"}
+	names, err := cfg.JobScrubNames(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := notify.ScrubEnvironment([]string{"ROUTE=session-b", "ABSENT=session-b", "UNRELATED=kept"}, names)
+	if envValue(got, "ROUTE") != "" || envValue(got, "ABSENT") != "" {
+		t.Fatalf("captured names reached worker: %#v", got)
+	}
+	if envValue(got, "UNRELATED") != "kept" {
+		t.Fatalf("unrelated variable removed: %#v", got)
 	}
 }
 

@@ -291,6 +291,12 @@ disagree):
    "something happened". Per-subscriber granularity: human takes
    needs-decision/done/failed; **orchestrator takes everything — wake-on-event** is
    what makes long pipelines cheap (idle between checkpoints, full context at them).
+   A notifier may opt into an exact environment-name allowlist captured once at job
+   dispatch. That private, versioned origin is scrubbed from runners/workers and
+   overlaid only onto notifier processes; later control-plane callers cannot replace
+   it, and the current allowlist can revoke it. Core treats values as opaque data:
+   platform/session parsing and publish-time routing fields stay outside legwork, so
+   notifier payload and event schemas remain unchanged.
 2. **`legwork ls`** — one-glance dashboard; also the passive nag surface (unclosed
    jobs, disk, expired sessions).
 3. **`legwork watch`** / **`dashboard`** (TUI, v1.x) — merged live timeline: worker
