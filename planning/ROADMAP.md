@@ -21,7 +21,9 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-None.
+- [ ] [Durable notifier origin environment](tasks/durable-notifier-origin.md) — **P1.** Capture an
+  immutable, private notifier environment at initial dispatch so detached jobs can wake their
+  originating orchestrator without platform coupling or leaking routing authority to workers.
 
 ## Next
 
