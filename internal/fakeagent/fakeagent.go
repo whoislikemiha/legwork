@@ -9,6 +9,9 @@
 //	#sleep <ms>            pause (readiness/watch/cancel tests)
 //	#die                   exit 1 mid-turn (interrupted-state tests)
 //	#write <path> <text>   write a file relative to the cwd (workspace tests)
+//	#write-temp <path> <text>
+//	                       write a sidecar fixture relative to the adapter's
+//	                       tool-owned per-turn temp directory
 //	#require-env NAME=VAL  fail unless the worker sees this unrelated env value
 //	#require-env-absent N  fail if the worker sees the named environment value
 //
@@ -20,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +32,10 @@ import (
 // ScriptEnv names the script file; without it Replay plays a minimal happy
 // path ending in state: done.
 const ScriptEnv = "LEGWORK_FAKE_SCRIPT"
+
+// TempDirEnv carries TurnRequest.TempDir to the fake process. It is a
+// test-only transport used by #write-temp sidecar fixtures.
+const TempDirEnv = "LEGWORK_FAKE_TEMP_DIR"
 
 // Replay writes the scripted stream to w.
 func Replay(w io.Writer) error {
@@ -59,6 +67,22 @@ func Replay(w io.Writer) error {
 				if err := os.WriteFile(parts[0], []byte(parts[1]+"\n"), 0o644); err != nil {
 					return err
 				}
+			}
+		case strings.HasPrefix(line, "#write-temp "):
+			parts := strings.SplitN(strings.TrimPrefix(line, "#write-temp "), " ", 2)
+			if len(parts) != 2 || !filepath.IsLocal(parts[0]) {
+				return fmt.Errorf("invalid #write-temp directive")
+			}
+			root := os.Getenv(TempDirEnv)
+			if root == "" {
+				return fmt.Errorf("%s is not set", TempDirEnv)
+			}
+			path := filepath.Join(root, parts[0])
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				return err
+			}
+			if err := os.WriteFile(path, []byte(parts[1]+"\n"), 0o600); err != nil {
+				return err
 			}
 		case strings.HasPrefix(line, "#require-env-absent "):
 			name := strings.TrimSpace(strings.TrimPrefix(line, "#require-env-absent "))

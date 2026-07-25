@@ -88,7 +88,9 @@ New `internal/adapter/hermes.go`:
 - **Unit**: command construction (resume, model, readonly rejection, env override,
   accept-hooks always present); parser finalize against fixture sidecars — success,
   failed:true, auth markers, missing sidecar, empty stdout; session chaining; the
-  "never parse status block from error text" rule; cost gating on `cost_status`.
+  "never parse status block from error text" rule; cost gating on `cost_status`;
+  doctor surfaces a concrete finalization error rather than the generic
+  "agent exited without a result" diagnostic (carried from Opus job-222).
 - **Fake seam + e2e** (`test/hermes_e2e_test.go`): via the final-only fake path —
   happy (`state: done` in final text + sidecar), needs-input → answer resume loop
   (verify the persisted session_id is the second turn's), provider failure

@@ -53,9 +53,6 @@ stream-json`; claude-shaped surface, fixtures never assumed):
 stdout, sidecar telemetry, no sandbox — live probes done 2026-07-25, evidence in the
 adapter task):
 
-- [ ] [Final-only parser seam](tasks/hermes-parser-finalize.md) — **P2.** EOF
-  finalization in the Parser contract; runner + doctor call sites; fake-agent
-  support. Substrate change, no behavior change for shipped adapters.
 - [ ] [Hermes adapter](tasks/hermes-adapter.md) — **P2.** Oneshot invocation, sidecar
   truth (exit code lies), session-ID chaining, read-only dispatch rejection, unit +
   e2e. Depends: parser seam.

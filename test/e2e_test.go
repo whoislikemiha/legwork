@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 type env struct {
 	state  string
 	script string
-	parser string // LEGWORK_FAKE_PARSER: "" (claude) or "codex"
+	parser string // LEGWORK_FAKE_PARSER: "", "codex", "final-only", or "finalize-error"
 	config string // LEGWORK_CONFIG path; "" leaves it unset
 }
 
@@ -500,6 +500,58 @@ func TestMidTurnDeath(t *testing.T) {
 	)
 	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "doomed"))
 	e.waitState(t, id, "interrupted")
+}
+
+func TestFinalOnlyResultAtEOF(t *testing.T) {
+	e := newEnv(t)
+	e.parser = "final-only"
+	e.writeScript(t, "plain final response", "", "state: done")
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "final-only turn"))
+	m := e.waitState(t, id, "done")
+	if m["result"] != "plain final response" {
+		t.Fatalf("finalized result = %q", m["result"])
+	}
+}
+
+func TestFinalOnlyMidTurnDeath(t *testing.T) {
+	e := newEnv(t)
+	e.parser = "final-only"
+	e.writeScript(t, "#die")
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "doomed final-only turn"))
+	e.waitState(t, id, "interrupted")
+}
+
+func TestFinalizeErrorDiagnostic(t *testing.T) {
+	e := newEnv(t)
+	e.parser = "finalize-error"
+	e.writeScript(t, "plain final response")
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "broken finalization"))
+	m := e.waitState(t, id, "interrupted")
+	got := m["result"].(string)
+	if !strings.Contains(got, "agent result finalization failed: scripted finalize failure") {
+		t.Fatalf("interruption did not surface finalize error: %q", got)
+	}
+	if strings.Contains(got, "agent exited without a result (<nil>)") {
+		t.Fatalf("process wait error masked finalize error: %q", got)
+	}
+}
+
+func TestFakeAgentWritesTempSidecarFixture(t *testing.T) {
+	e := newEnv(t)
+	e.parser = "final-only"
+	e.writeScript(t,
+		`#write-temp fixtures/usage.json {"completed":true}`,
+		"state: done",
+	)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "sidecar fixture"))
+	e.waitState(t, id, "done")
+	data, err := os.ReadFile(filepath.Join(e.state, "jobs", id, "tmp", "fixtures", "usage.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(data)); got != `{"completed":true}` {
+		t.Fatalf("sidecar = %q", got)
+	}
 }
 
 // Missing status block: never assume done.
