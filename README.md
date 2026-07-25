@@ -3,7 +3,7 @@
 > Delegate the legwork; keep the judgment.
 
 legwork is a CLI for dispatching and supervising **headless coding-agent jobs**
-(Claude Code and Codex) — built so that *another agent* can be the one
+(Claude Code, Codex, and Hermes) — built so that *another agent* can be the one
 driving. An orchestrator (or you) runs tasks as detached jobs, reads structured
 events, reviews diffs behind a gate, answers the worker's questions, and closes the
 work when it lands. Workspace-less read-only jobs can be acknowledged with `ack`
@@ -31,7 +31,8 @@ Orchestrating coding agents by scraping their TUIs breaks constantly, and every
 agent CLI speaks a different dialect. legwork normalizes them behind one contract:
 
 - **Headless-only**: agents run via their native non-interactive modes
-  (`claude -p --output-format stream-json`, `codex exec --json`); readiness is
+  (`claude -p --output-format stream-json`, `codex exec --json`, or
+  `hermes -z … --usage-file <file>`); readiness is
   process state, results are structured output. No terminal scraping, no tmux
   control, no MCP required.
 - **Per-agent, not lowest-common-denominator**: `--agent claude` uses a permission
@@ -44,7 +45,18 @@ agent CLI speaks a different dialect. legwork normalizes them behind one contrac
   exception, so temp-writing suites may need workspace-write verification. codex's
   subscription auth reports cost as 0 — watch `context` for health. Agent-specific passthroughs stay explicit: `--effort`
   reaches both claude and codex (codex clamps `xhigh`/`max` to its `high` ceiling),
-  while `--fallback-model` is claude-only and rejected for codex rather than dropped.
+  while `--fallback-model` is claude-only and rejected for codex or Hermes rather
+  than dropped.
+- **Hermes capabilities are intentionally weaker and explicit**: Hermes has no
+  harness sandbox or plan mode, so `--read-only` jobs are rejected; use claude or
+  codex for plan, review, research, and hostile-input work such as web research.
+  Mutating Hermes turns are contained only by the worktree blast radius and injected
+  rules. Its stdout is final-only, so `watch` and `events` remain quiet until the
+  turn ends. Tokens, completion/failure, and the latest chained resume session ID
+  come from the usage sidecar. Subscription `cost_status: included` claims no dollar
+  cost, and a heavy baseline (about 18k tokens before repository context) is normal.
+  Hermes rejects `--effort` and `--fallback-model`. For auth, run `hermes portal`
+  for subscription access or configure provider API keys.
 - **Jobs are detached**: `run` returns an ID immediately; the runner survives your
   ssh session dropping. State is append-only JSONL files you can `tail -f | jq`.
 - **Every turn ends in a machine-parsed state**: `done`, `needs-input` (with the
@@ -204,7 +216,7 @@ multi-line UTF-8 text from a file/stdin.
 
 ## Status
 
-Early. Implemented: jobs, detached runner, claude + codex + fake adapters, status-block
+Early. Implemented: jobs, detached runner, claude + codex + hermes + fake adapters, status-block
 contract, workspaces/checkpoints/diff/review/commit/close, runs + narration/artifacts,
 the `runs`/`tail`/`dashboard`/`serve` presentation layer, notifier, context tracking,
 structured blocked reasons, needs-provision approval, job `result`/`wait`/`ack`, timeouts,

@@ -92,6 +92,22 @@ missing-block→blocked direction is correct). Give it a tiny real task instead:
 )
 ```
 
+For hermes (use `hermes portal` for subscription auth, or configure provider keys),
+cost is also 0 when the sidecar says `cost_status: included`; check `context`.
+Use a task-shaped prompt for the same status-contract reason as codex. Hermes starts
+slowly under Python and has a heavy prompt baseline: the authenticated 2026-07-25
+smoke reached `done` with context `124730`, no subscription dollar cost, and a new
+sidecar session ID. The 60-second wait below is the calibrated conservative window.
+
+```bash
+(
+  export LEGWORK_STATE_DIR=$(mktemp -d)
+  go build -o /tmp/lw . && /tmp/lw doctor --agent hermes   # auth guard
+  /tmp/lw run --agent hermes "Create a file named smoke.txt containing the single word ok."
+  sleep 60 && /tmp/lw status job-1        # expect: state done, context > 15000
+)
+```
+
 ## Hard rules (from DESIGN.md — do not erode)
 
 - **No database, no daemon.** State is files; jobs survive via the detached runner.

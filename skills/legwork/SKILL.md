@@ -1,6 +1,6 @@
 ---
 name: legwork
-description: Dispatch and supervise headless coding-agent jobs (Claude Code, Codex) via the legwork CLI — locally or over ssh. Use when delegating coding/research tasks to worker agents, orchestrating plan/implement/review pipelines, checking on running jobs, answering worker questions, reviewing workspace diffs, or when the user mentions legwork.
+description: Dispatch and supervise headless coding-agent jobs (Claude Code, Codex, Hermes) via the legwork CLI — locally or over ssh. Use when delegating coding/research tasks to worker agents, orchestrating plan/implement/review pipelines, checking on running jobs, answering worker questions, reviewing workspace diffs, or when the user mentions legwork.
 ---
 
 # legwork — orchestrating headless agent workers
@@ -50,13 +50,23 @@ skill reload/rescan command; running sessions may keep the old skill text.
 - **Mutating work goes in a workspace.** Plain `run` = scratch dir;
   `--dir` = in-place (combine with `--read-only` for research); `--workspace` = the
   reviewable-diff flow.
-- **Pick the agent with `--agent`** (`claude` | `codex`). claude uses a permission
+- **Pick the agent with `--agent`** (`claude` | `codex` | `hermes`). claude uses a permission
   mode; codex runs in a kernel sandbox (`--read-only` → read-only sandbox, else
   workspace-write). Loop, states, resume, status block are identical. On codex's
   subscription auth, cost is reported as 0 — watch `context` for health. Every job
   gets a per-job `TMPDIR`; in codex workspace-write turns it is a writable sandbox
   root with per-job Go cache dirs. Codex read-only has no writable-root exception,
   so temp-writing suites may need workspace-write verification.
+- **Hermes is final-only and the least-contained worker.** It runs as
+  `hermes -z … --usage-file`, has no sandbox or plan mode, and relies only on the
+  worktree boundary plus injected rules. Keep hostile-input/web research off Hermes.
+  Read-only jobs are rejected; use claude or codex for plan, review, and research.
+  `watch`/`events` stay quiet until the turn ends because Hermes has no mid-turn
+  event stream. Usage, completion/failure, and the latest chained resume session ID
+  come from the sidecar. Subscription `cost_status: included` reports no dollar
+  charge. Its own prompt creates a heavy context baseline (about 18k tokens before
+  repository context), so five-digit `context` is normal. Hermes rejects `--effort`
+  and `--fallback-model`.
 
 ## Preflight
 
@@ -100,7 +110,8 @@ Act on `state`:
   call.
 - `failed` — read `legwork events "$job"`; fix and resume, or start a fresh job.
 - `auth-required` — tell the human to log the agent in on that machine
-  (`claude /login`, `codex login`).
+  (`claude /login`, `codex login`, `hermes portal` for subscription auth, or
+  configure Hermes provider keys).
 - `interrupted` — turn died (crash/cancel); session survives, `resume` continues.
 
 Wake-on-event instead of polling: set `[notify] command` in
@@ -350,9 +361,11 @@ landed) so the run reads as a narrative.
   `legwork note <label> "plan approved, splitting into 2 workspaces"`;
   watch the merged timeline live with `legwork tail <label>` (or the
   snapshot `legwork events <label>`).
-- Model policy: big model + `--read-only` for plan/review turns; cheaper `--model`
+- Model policy: big model + `--read-only` for plan/review turns (claude/codex only);
+  cheaper `--model`
   for mechanical implementation of an approved plan. Dial reasoning with `--effort`
   (`low` for mechanical edits, `high`/`max` for hard design work; codex clamps
   `xhigh`/`max` to its `high` ceiling). On claude, set `--fallback-model` to survive
-  overload without failing the turn.
+  overload without failing the turn. Hermes rejects both `--effort` and
+  `--fallback-model`.
 - Smoke-test plumbing without API spend: `legwork run --agent fake "test"`.

@@ -1,6 +1,6 @@
 # legwork — orchestrator guide
 
-legwork runs headless coding-agent turns (claude, codex, fake) as supervised
+legwork runs headless coding-agent turns (claude, codex, hermes, fake) as supervised
 **jobs**: you dispatch a task, the agent works detached, you read structured events
 and a final state, you steer with new turns. Locally or over ssh — every command
 below works as `ssh host legwork ...`. All verbs take `--json`.
@@ -53,7 +53,30 @@ Agents differ; legwork normalizes them, it doesn't pretend they're identical.
 `--agent claude` uses a permission mode; `--agent codex` runs in a kernel sandbox
 (`--read-only` → codex's read-only sandbox, otherwise workspace-write) and both
 fork sessions and run subagents. The loop, states, resume, and status block are
-identical across agents. Every turn gets a per-job `TMPDIR`; in codex
+identical across agents. `--agent hermes` runs headlessly as
+`hermes -z <prompt> --usage-file <file> --accept-hooks`. It has no harness sandbox
+or plan mode: oneshot approvals are auto-bypassed, so containment is the worktree
+blast radius plus injected rules only. Keep hostile-input work such as web research
+off hermes, and route plan, review, research, and other read-only turns to claude or
+codex. The dispatch error is deliberately explicit:
+`--agent hermes has no harness-enforced read-only mode; use claude or codex for --read-only jobs`.
+
+Hermes stdout contains only the final response, so it produces no mid-turn activity
+events. `watch` and `events` are quiet until the turn ends; that is honest
+final-only behavior, not a stuck runner. Usage and truth come from its
+`--usage-file` sidecar, including tokens, provider/model, completion/failure, and
+the latest session ID. Each resume mints a new Hermes session ID, so `status` and
+job metadata show the newest ID in the chain. `cost_status: included` (subscription
+auth) means legwork reports no dollar charge; it never presents the sidecar's
+estimate as metered spend. Even a trivial Hermes turn starts with a heavy context
+baseline (about 18k input tokens from Hermes's own system prompt, and potentially
+more with repository context), so a five-digit health line is expected. Hermes
+uses its normal user config and repository rules/memory in addition to legwork's
+injected contract; audit that local context when reproducibility matters.
+`--effort` and `--fallback-model` have no Hermes equivalent and are rejected rather
+than silently ignored.
+
+Every turn gets a per-job `TMPDIR`; in codex
 workspace-write turns that temp tree is added as a writable sandbox root, and
 codex also gets per-job `GOCACHE`, `GOMODCACHE`, and `GOTMPDIR` there so
 build/test caches stay out of reviewed worktrees. Codex read-only is stricter:
@@ -80,7 +103,8 @@ legwork status <selector> --json         -> job IDs win; a run selects its newes
   needs-input  legwork answer <job> "<decision>"   (same session continues)
   blocked      inspect status.blocked; approve provision, verify outside, or escalate
   failed       read events; retry as a fresh job or escalate
-  auth-required tell the human: agent login needed on this machine (claude /login, codex login)
+  auth-required tell the human: agent login needed on this machine (claude /login, codex login,
+                hermes portal for subscription auth, or configure Hermes provider keys)
   interrupted  the turn died mid-flight (crash/cancel); session survives -> resume
 legwork result <selector>                -> print the final report, raw
 legwork resume <job> "next instruction"  -> another turn in the same session
@@ -91,7 +115,8 @@ legwork verify <job> [--timeout 30m] -- <argv...>
 
 Dispatch options stick for the job's lifetime: `--read-only`, `--append-prompt`
 (or `--append-prompt-file`), `--timeout`, `--effort`, and the claude-only
-`--fallback-model` are recorded in the job and apply to every resumed turn too.
+`--fallback-model` are recorded in the job and apply to every resumed turn too
+when the selected agent supports them.
 `--append-prompt-file` reads UTF-8 text from a file, or stdin with `-`, rejects
 empty/binary input, and stores the text rather than the path. It is mutually
 exclusive with `--append-prompt`. The job record also keeps the original dispatch
@@ -99,7 +124,8 @@ prompt (`initial_task` once resumed) and the model — `status --json`
 reconstructs any job cold. `--effort` (`low|medium|high|xhigh|max`)
 reaches both claude and codex, but codex's reasoning scale tops out at `high`, so
 `xhigh` and `max` clamp there. `--fallback-model` is claude-specific; passing it
-to `--agent codex` is rejected at dispatch.
+to `--agent codex` or `--agent hermes` is rejected at dispatch. Hermes also rejects
+`--effort`.
 
 Never trust `done` blindly: verify the diff is non-empty and tests ran (visible as
 tool-call events) before building on it. A missing/unparseable status block surfaces

@@ -1,7 +1,7 @@
 # Hermes docs + live smoke — surface the fourth dialect honestly
 
-Status: next · Priority: P2 · Umbrella: **Hermes agent support** · Origin: 2026-07-25
-agent-roster design (ws-85) · Depends: hermes-adapter · Workspace: —
+Status: done · Priority: P2 · Umbrella: **Hermes agent support** · Origin: 2026-07-25
+agent-roster design (ws-85) · Depends: hermes-adapter · Workspace: ws-88
 
 ## Goal
 
@@ -63,3 +63,44 @@ Docs travel in threes (+ the contributor file); the guide is canonical:
   the worker dialect).
 
 ## Log
+
+- 2026-07-25 documentation implementation (job-225): added Hermes to the canonical
+  guide and synchronized the skill, README, and contributor smoke recipe. The docs
+  record final-only observation, sidecar-authoritative telemetry/session chaining,
+  subscription cost semantics, the heavy context baseline, unsupported flags,
+  auth fix-its, and the no-sandbox/no-read-only threat model.
+- Per the orchestrator instruction, no additional provider turn was spent. Reused
+  the authenticated live receipt already verified in `planning/done/hermes-adapter.md`
+  (job-223). The relevant `status --json` fields from normal smoke `job-1` were:
+  `{"id":"job-1","agent":"hermes","state":"done","session_id":"20260725_030708_27a336","context":124730}`.
+  The cost field was omitted rather than presented as metered spend. The
+  resume receipt was `job-2`: session advanced from
+  `20260725_030750_109ecb` to `20260725_030758_431769` and the answered turn ended
+  `done`.
+- Verification in job-225: `gofmt -l .` and `git diff --check` were clean;
+  `go vet ./...` passed using the host's already-populated read-only module cache;
+  `TestSkillInstallAllUsesCanonicalEmbeddedSkill` passed, confirming the Hermes
+  install target receives the updated roster text. The full suite passed every
+  package except the already-tracked `TestCodexPassthroughs` detached-runner
+  `t.TempDir` cleanup race, which reproduced on the full rerun and two focused
+  reruns (`unlinkat .../jobs/job-1: directory not empty`). The first unisolated run
+  also inherited the worker job's notifier config; with `LEGWORK_CONFIG=/dev/null`,
+  all affected doctor tests passed.
+
+## Friction
+
+- The injected per-job Go module cache began empty while worker network access was
+  denied, so verification required pointing Go at the host's existing read-only
+  module cache. A read-through shared module cache would make the isolated default
+  work without a manual override.
+- E2E subprocesses inherited the worker's default notifier configuration, making
+  otherwise healthy doctor tests attempt an unavailable supervised-job callback.
+  The test harness would be more hermetic if its baseline environment cleared
+  `LEGWORK_CONFIG` unless a test explicitly supplies one.
+
+### Review verdict
+
+- Opus/high job-226: `SHIP`. Guide, SKILL, README, AGENTS smoke, adapter behavior,
+  and authenticated receipts are mutually consistent.
+- The empty Hermes umbrella remainder on ROADMAP was removed during closeout.
+- Host receipt `verification:job-225:1784958749490478519` passed the complete suite.
