@@ -82,6 +82,22 @@ func TestDoctorFinalOnlyProbe(t *testing.T) {
 	}
 }
 
+func TestDoctorFinalizeErrorIsConcrete(t *testing.T) {
+	e := newEnv(t)
+	e.parser = "finalize-error"
+	e.writeScript(t, "plain final response")
+	out, code := e.doctor(nil, "--agent", "fake", "--dir", t.TempDir(), "--json")
+	if code != 1 {
+		t.Fatalf("want exit 1, got %d\n%s", code, out)
+	}
+	if !strings.Contains(out, "agent result finalization failed: scripted finalize failure") {
+		t.Fatalf("finalization diagnostic not surfaced:\n%s", out)
+	}
+	if strings.Contains(out, "agent exited without a result") {
+		t.Fatalf("generic no-result diagnostic masked finalization error:\n%s", out)
+	}
+}
+
 func TestDoctorProbeFailure(t *testing.T) {
 	e := newEnv(t)
 	// A result line that errors with an auth marker -> probe must fail.

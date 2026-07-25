@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/whoislikemiha/legwork/internal/events"
@@ -16,7 +17,9 @@ import (
 // pipeline — spawn, detach, tee, parse, status block — is exercised for real
 // with zero API spend, including misbehavior (mid-turn death, missing status
 // block) that a live agent can't produce on demand.
-type Fake struct{}
+type Fake struct {
+	tempDir string
+}
 
 func (f *Fake) Name() string { return "fake" }
 
@@ -28,7 +31,7 @@ func (f *Fake) Bin() string {
 }
 
 func (f *Fake) Caps() Caps {
-	return Caps{Fork: false, OSSandbox: false, StructuredStatus: "convention", Subagents: false}
+	return Caps{Fork: false, OSSandbox: false, StructuredStatus: "convention", Subagents: false, ReadOnly: true}
 }
 
 func (f *Fake) Command(req TurnRequest) (*exec.Cmd, error) {
@@ -39,6 +42,7 @@ func (f *Fake) Command(req TurnRequest) (*exec.Cmd, error) {
 	cmd := exec.Command(self, "_fake-agent")
 	cmd.Dir = req.WorkDir
 	cmd.Env = append(os.Environ(), fakeagent.TempDirEnv+"="+req.TempDir)
+	f.tempDir = req.TempDir
 	return cmd, nil
 }
 
@@ -54,6 +58,8 @@ func (f *Fake) Parser() Parser {
 		return &finalOnlyFakeParser{}
 	case "finalize-error":
 		return &finalOnlyFakeParser{finalizeErr: errors.New("scripted finalize failure")}
+	case "hermes":
+		return &hermesParser{usagePath: filepath.Join(f.tempDir, hermesUsageFile)}
 	}
 	return &claudeParser{}
 }

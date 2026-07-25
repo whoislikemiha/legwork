@@ -17,6 +17,7 @@ type Caps struct {
 	OSSandbox        bool   // kernel-enforced sandbox (codex)
 	StructuredStatus string // "enforced" | "convention"
 	Subagents        bool
+	ReadOnly         bool // harness-enforced read-only mode
 }
 
 // TurnRequest describes one headless turn.
@@ -116,10 +117,12 @@ func New(name string) (Adapter, error) {
 		return &Claude{}, nil
 	case "codex":
 		return &Codex{}, nil
+	case "hermes":
+		return &Hermes{}, nil
 	case "fake":
 		return &Fake{}, nil
 	default:
-		return nil, fmt.Errorf("unknown agent %q (available: claude, codex, fake)", name)
+		return nil, fmt.Errorf("unknown agent %q (available: claude, codex, hermes, fake)", name)
 	}
 }
 

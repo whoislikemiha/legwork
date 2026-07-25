@@ -26,7 +26,7 @@ func (c *Codex) Bin() string {
 }
 
 func (c *Codex) Caps() Caps {
-	return Caps{Fork: true, OSSandbox: true, StructuredStatus: "convention", Subagents: true}
+	return Caps{Fork: true, OSSandbox: true, StructuredStatus: "convention", Subagents: true, ReadOnly: true}
 }
 
 // Command builds one codex turn. codex exec is non-interactive (no approval

@@ -225,7 +225,7 @@ func wsCmd() *cobra.Command {
 			return nil
 		},
 	}
-	reviewCmd.Flags().StringVar(&reviewAgent, "agent", "claude", "reviewer agent adapter (claude, codex, fake)")
+	reviewCmd.Flags().StringVar(&reviewAgent, "agent", "claude", "reviewer agent adapter (claude, codex, hermes, fake)")
 	reviewCmd.Flags().StringVar(&reviewModel, "model", "", "reviewer model override (default: agent default)")
 	reviewCmd.Flags().StringVar(&reviewEffort, "effort", "high", "reviewer reasoning effort (low|medium|high|xhigh|max); codex clamps xhigh/max to high")
 	reviewCmd.Flags().StringVar(&reviewFallbackModel, "fallback-model", "", "claude only: reviewer model to retry with when overloaded")

@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 type env struct {
 	state  string
 	script string
-	parser string // LEGWORK_FAKE_PARSER: "", "codex", "final-only", or "finalize-error"
+	parser string // LEGWORK_FAKE_PARSER: "", "codex", "hermes", "final-only", or "finalize-error"
 	config string // LEGWORK_CONFIG path; "" leaves it unset
 }
 

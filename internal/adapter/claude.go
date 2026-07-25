@@ -16,7 +16,7 @@ func (c *Claude) Name() string { return "claude" }
 func (c *Claude) Bin() string { return "claude" }
 
 func (c *Claude) Caps() Caps {
-	return Caps{Fork: true, OSSandbox: false, StructuredStatus: "convention", Subagents: true}
+	return Caps{Fork: true, OSSandbox: false, StructuredStatus: "convention", Subagents: true, ReadOnly: true}
 }
 
 func (c *Claude) Command(req TurnRequest) (*exec.Cmd, error) {

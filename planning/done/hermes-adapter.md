@@ -1,7 +1,7 @@
 # Hermes adapter — oneshot worker turns with sidecar telemetry
 
-Status: next · Priority: P2 · Umbrella: **Hermes agent support** · Origin: 2026-07-25
-agent-roster design (ws-85) · Depends: hermes-parser-finalize · Workspace: —
+Status: done · Priority: P2 · Umbrella: **Hermes agent support** · Origin: 2026-07-25
+agent-roster design (ws-85) · Depends: hermes-parser-finalize · Workspace: ws-87
 
 ## Goal
 
@@ -117,3 +117,51 @@ New `internal/adapter/hermes.go`:
 - Transient/quota failure taxonomy (transient-provider-recovery task owns it).
 
 ## Log
+
+- 2026-07-25 implementation (job-223): added the Hermes oneshot adapter, argv
+  prompt composition, environment-overridable binary, per-turn sidecar cleanup and
+  finalization, latest-session chaining, sidecar-authoritative failure/auth handling,
+  cost-status gating, truthful caps/read-only dispatch rejection, CLI wiring, and a
+  final-only fake seam. Kept Hermes's normal user config and repo rules/memory
+  injection; prompts use argv because `-z/--oneshot` requires a value (normal
+  rules+task remain well below ARG_MAX).
+- Deterministic evidence: adapter unit fixtures and `test/hermes_e2e_test.go` cover
+  success, subscription/metered telemetry, needs-input→answer with the second
+  session ID persisted, exit-0 provider failure, auth-required, missing/malformed
+  sidecars, empty output, stale-sidecar prevention, mid-turn death, no invented
+  tool events, unsupported model controls, and read-only refusal. `gofmt -l .`,
+  `go vet ./...`, and `go test ./... -count=1` passed (the first full run hit the
+  already-tracked `TestCodexPassthroughs` teardown race; the exact rerun passed).
+- Worker-sandbox live evidence: Hermes 0.18.2 was found and invoked through both
+  direct oneshot and `legwork doctor --agent hermes`. A writable temporary Hermes
+  home was needed there; the adapter correctly surfaced `failed: API call failed
+  after 3 retries: Connection error.` from the finalized sidecar/stdout, but outbound
+  provider access was unavailable.
+- Orchestrator live evidence with workspace-built `/tmp/lw-hermes-ws87`:
+  - `doctor --agent hermes --json`: `ok: true`; live probe `state done`.
+  - Normal real turn `job-1`: `state done`, sidecar session
+    `20260725_030708_27a336`, `context: 124730`, subscription cost omitted.
+  - Resume real turn `job-2`: first turn reached `needs-input` with question
+    "Should the final marker be alpha or beta?" and session
+    `20260725_030750_109ecb`; `answer` with alpha reached `done`, result `alpha`,
+    turn count 2, and persisted the new session `20260725_030758_431769`.
+  - Session advancement assertion passed.
+- Host checkpoint receipt `verification:job-223:1784941579010127490` passed the
+  complete formatting, vet, and full-suite gate on the reviewed tree.
+
+## Friction
+
+- Live Hermes probes need to write their own logs/session store under
+  `~/.hermes`; the worker sandbox makes that tree read-only even though the task
+  explicitly requires a real-agent smoke. A first-class writable agent-state mount
+  (plus network for explicitly required live probes) would avoid copying a minimal
+  config/auth home into the job temp directory.
+
+### Review verdict
+
+- Opus/high job-224: `SHIP`. Deterministic and authenticated live evidence accepted.
+- Premature Cursor wording in the read-only alternative was corrected during
+  closeout; Cursor can be added back once its adapter actually lands.
+- Auth-marker precision is non-blocking and belongs with the existing
+  transient-provider-recovery taxonomy work; argv/`ARG_MAX` remains a documented
+  oneshot CLI limitation.
