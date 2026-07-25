@@ -1,7 +1,7 @@
 # Final-only stream support — EOF finalization in the parser contract
 
-Status: next · Priority: P2 · Umbrella: **Hermes agent support** · Origin: 2026-07-25
-agent-roster design (ws-85) · Depends: — · Workspace: —
+Status: done · Priority: P2 · Umbrella: **Hermes agent support** · Origin: 2026-07-25
+agent-roster design (ws-85) · Depends: — · Workspace: ws-86
 
 ## Goal
 
@@ -69,3 +69,64 @@ would land `interrupted`/probe-fail.
 - Synthesizing mid-turn activity events for final-only agents — quiet is honest.
 
 ## Log
+
+### 2026-07-25 — implementation (ws-86)
+
+- Added the optional `adapter.Finalizer` contract and guarded
+  `FinalizeIfNeeded` helper. The contract documents exactly-one result across
+  `Line`/`Finalize`, EOF-only invocation, nil-result interruption, sidecar use
+  under `TurnRequest.TempDir`, and no required changes for streaming parsers.
+- Runner and doctor now finalize after stdout EOF when no line result exists.
+  Doctor supplies a tool-owned per-probe temp directory, matching the runner's
+  existing per-job `TempDir` seam.
+- Fake supports `LEGWORK_FAKE_PARSER=final-only` for plain-text scripts and
+  `#write-temp <relative-path> <text>` for sidecar fixtures. `#die` remains an
+  interruption because an empty final-only stream finalizes to nil.
+- Added unit and e2e coverage for EOF results, nil finalization, suppression
+  after a line result, doctor probing, mid-turn death, and sidecar writes.
+- Verification:
+  - `go test ./internal/adapter ./internal/fakeagent -count=1` — pass.
+  - relevant e2e selection (`TestFinalOnly*`,
+    `TestFakeAgentWritesTempSidecarFixture`, `TestDoctorFinalOnlyProbe`) — pass.
+  - `go vet ./...`, `gofmt -l .`, and `git diff --check` — pass.
+  - `go test ./... -count=1` — all unit packages pass; e2e is blocked only by
+  the pre-existing ROADMAP-listed `TestCodexPassthroughs` tempdir teardown
+  race (`TempDir RemoveAll ... jobs/job-1: directory not empty`), reproduced
+  on two runs. No final-only test failed.
+
+### 2026-07-25 — Opus review corrections (job-220)
+
+- Doctor now records whether the probe deadline elapsed before cancellation
+  and refuses EOF finalization after a watchdog kill, preventing a buffered
+  complete-looking response from masking the timeout.
+- Runner interruptions caused by `Finalize` errors now persist the finalize
+  diagnostic (and the process wait error too, when present) instead of
+  reporting only that the process exited without a result.
+- Added focused e2e regressions for both cases.
+- Verification:
+  - focused regressions
+    (`TestDoctorProbeTimeoutCannotBeMaskedByFinalize`,
+    `TestFinalizeErrorDiagnostic`) — pass.
+  - `gofmt -l .`, `git diff --check`, `go vet ./...`, and relevant package
+    tests — pass.
+  - `go test ./... -count=1` — pass with an empty verification notifier
+    config and the existing host module cache. The preceding run reproduced
+    the already-recorded `TestCodexPassthroughs` tempdir cleanup race; the
+    immediate full rerun passed.
+
+## Friction
+
+- The worker's injected `GOMODCACHE` was empty while the host module cache was
+  populated, so the first test run attempted forbidden network downloads.
+  Verification worked after explicitly pointing `GOMODCACHE` at the existing
+  read-only host cache; legwork should reuse an available cache automatically.
+
+### Review verdict
+
+- Opus/high job-220: `FIX` — timeout finalization could mask a doctor deadline;
+  runner discarded finalization diagnostics. Both corrected with regressions.
+- Opus/high job-222: `SHIP` — complete corrected diff accepted. One non-blocking
+  doctor diagnostic-parity observation is carried into `hermes-adapter.md`, where
+  the real finalizer supplies the concrete error path.
+- Host gate after corrections: `gofmt -l . && go vet ./... && go test ./... -count=1`
+  passed with notifier routing isolated from the test environment.

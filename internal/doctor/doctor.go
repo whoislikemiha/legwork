@@ -199,11 +199,16 @@ func checkProbe(ad adapter.Adapter, model string) Check {
 	}
 	defer os.RemoveAll(workDir)
 
+	tempDir := filepath.Join(workDir, "tmp")
+	if err := os.MkdirAll(tempDir, 0o700); err != nil {
+		return Check{"probe", StatusFail, "temp dir: " + err.Error()}
+	}
 	cmd, err := ad.Command(adapter.TurnRequest{
 		Task:         "Reply with just: ok",
 		SystemPrompt: rules.Compose(""),
 		Model:        model,
 		WorkDir:      workDir,
+		TempDir:      tempDir,
 	})
 	if err != nil {
 		return Check{"probe", StatusFail, "command: " + err.Error()}
@@ -248,10 +253,18 @@ func checkProbe(ad adapter.Adapter, model string) Check {
 		}
 	}
 	_ = cmd.Wait()
+	probeTimedOut := ctx.Err() == context.DeadlineExceeded
 	cancel()
+	// Final-only parsers turn buffered stdout into a result at EOF. A watchdog
+	// kill also creates EOF, so never let finalization turn a timed-out probe
+	// into a successful one.
+	if !probeTimedOut {
+		_, result, _ = adapter.FinalizeIfNeeded(parser, result)
+	}
 
-	// A completed turn is reported by its result regardless of timing; the
-	// timeout only explains a missing result.
+	// A streaming parser may have produced a complete result before a slow
+	// process teardown crossed the deadline. Only EOF finalization is barred
+	// after timeout.
 	if result != nil {
 		switch result.State {
 		case "auth-required":
@@ -263,7 +276,7 @@ func checkProbe(ad adapter.Adapter, model string) Check {
 				fmt.Sprintf("live turn completed: state %s, model accepted ($%.4f)", result.State, result.CostUSD)}
 		}
 	}
-	if ctx.Err() == context.DeadlineExceeded {
+	if probeTimedOut {
 		return Check{"probe", StatusFail, fmt.Sprintf("timed out after %s", timeout)}
 	}
 	detail := "agent exited without a result"

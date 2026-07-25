@@ -75,12 +75,38 @@ type Adapter interface {
 	Parser() Parser
 }
 
-// Parser consumes raw stdout lines and produces normalized index events and,
-// on the final line, a TurnResult.
+// Parser consumes raw stdout lines and produces normalized index events. A
+// complete turn produces exactly one TurnResult across Line and, for a parser
+// that additionally implements Finalizer, Finalize. Streaming parsers return
+// that result from Line, normally on the turn's terminal line.
 type Parser interface {
 	// Line parses one raw line. Returned events are appended to the index;
-	// result is non-nil exactly once, on the turn's final line.
+	// result is non-nil at most once.
 	Line(raw []byte) (evs []events.Event, result *TurnResult, err error)
+}
+
+// Finalizer is the optional EOF extension for final-only agent streams. After
+// stdout reaches EOF, a consumer calls Finalize exactly once, and only if Line
+// never returned a result. Finalize may assemble events and a result from state
+// accumulated by Line and adapter-owned sidecars under TurnRequest.TempDir. A
+// nil result means the turn died before producing a complete result and is
+// handled as interrupted. Streaming parsers need not implement this interface.
+type Finalizer interface {
+	Finalize() (evs []events.Event, result *TurnResult, err error)
+}
+
+// FinalizeIfNeeded applies the Parser/Finalizer contract at EOF. Consumers pass
+// the result already produced by Line; finalization is skipped when it is
+// non-nil or when the parser is streaming-only.
+func FinalizeIfNeeded(p Parser, result *TurnResult) ([]events.Event, *TurnResult, error) {
+	if result != nil {
+		return nil, result, nil
+	}
+	f, ok := p.(Finalizer)
+	if !ok {
+		return nil, nil, nil
+	}
+	return f.Finalize()
 }
 
 // New returns the adapter for name.

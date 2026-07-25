@@ -18,6 +18,9 @@ func (e *env) doctor(extraEnv []string, args ...string) (string, int) {
 		"LEGWORK_STATE_DIR="+e.state,
 		"LEGWORK_FAKE_SCRIPT="+e.script,
 	)
+	if e.parser != "" {
+		cmd.Env = append(cmd.Env, "LEGWORK_FAKE_PARSER="+e.parser)
+	}
 	cmd.Env = append(cmd.Env, extraEnv...)
 	out, err := cmd.CombinedOutput()
 	code := 0
@@ -66,6 +69,19 @@ func TestDoctorHealthy(t *testing.T) {
 	}
 }
 
+func TestDoctorFinalOnlyProbe(t *testing.T) {
+	e := newEnv(t)
+	e.parser = "final-only"
+	e.writeScript(t, "ok", "state: done")
+	out, code := e.doctor(nil, "--agent", "fake", "--dir", t.TempDir(), "--json")
+	if code != 0 {
+		t.Fatalf("want exit 0, got %d\n%s", code, out)
+	}
+	if !strings.Contains(out, "live turn completed: state done") {
+		t.Fatalf("final-only probe did not finalize:\n%s", out)
+	}
+}
+
 func TestDoctorProbeFailure(t *testing.T) {
 	e := newEnv(t)
 	// A result line that errors with an auth marker -> probe must fail.
@@ -109,6 +125,27 @@ func TestDoctorProbeTimeout(t *testing.T) {
 	}
 	if !strings.Contains(out, `"name": "probe"`) || !strings.Contains(out, "timed out") {
 		t.Fatalf("probe timeout not surfaced:\n%s", out)
+	}
+}
+
+func TestDoctorProbeTimeoutCannotBeMaskedByFinalize(t *testing.T) {
+	e := newEnv(t)
+	e.parser = "final-only"
+	// The complete-looking response is buffered before the agent hangs. Killing
+	// the probe creates EOF, but that must not authorize finalization after the
+	// deadline.
+	e.writeScript(t,
+		"ok",
+		"state: done",
+		"#sleep 5000",
+	)
+	out, code := e.doctor([]string{"LEGWORK_DOCTOR_PROBE_TIMEOUT=300ms"},
+		"--agent", "fake", "--dir", t.TempDir(), "--json")
+	if code != 1 {
+		t.Fatalf("want exit 1, got %d\n%s", code, out)
+	}
+	if !strings.Contains(out, `"name": "probe"`) || !strings.Contains(out, "timed out") {
+		t.Fatalf("EOF finalization masked probe timeout:\n%s", out)
 	}
 }
 

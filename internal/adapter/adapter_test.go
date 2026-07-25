@@ -7,6 +7,53 @@ import (
 	"github.com/whoislikemiha/legwork/internal/events"
 )
 
+type toyFinalParser struct {
+	finalizeCalls int
+	lineResult    *TurnResult
+	finalResult   *TurnResult
+}
+
+func (p *toyFinalParser) Line([]byte) ([]events.Event, *TurnResult, error) {
+	return nil, p.lineResult, nil
+}
+
+func (p *toyFinalParser) Finalize() ([]events.Event, *TurnResult, error) {
+	p.finalizeCalls++
+	return []events.Event{{Type: events.TypeText}}, p.finalResult, nil
+}
+
+func TestFinalizeIfNeeded(t *testing.T) {
+	t.Run("final-only result at EOF", func(t *testing.T) {
+		want := &TurnResult{State: "done", Result: "complete"}
+		p := &toyFinalParser{finalResult: want}
+		evs, got, err := FinalizeIfNeeded(p, nil)
+		if err != nil || got != want || len(evs) != 1 || p.finalizeCalls != 1 {
+			t.Fatalf("evs=%v result=%+v err=%v calls=%d", evs, got, err, p.finalizeCalls)
+		}
+	})
+
+	t.Run("nil finalize stays incomplete", func(t *testing.T) {
+		p := &toyFinalParser{}
+		_, got, err := FinalizeIfNeeded(p, nil)
+		if err != nil || got != nil || p.finalizeCalls != 1 {
+			t.Fatalf("result=%+v err=%v calls=%d", got, err, p.finalizeCalls)
+		}
+	})
+
+	t.Run("line result suppresses finalize", func(t *testing.T) {
+		want := &TurnResult{State: "done"}
+		p := &toyFinalParser{lineResult: want}
+		_, lineResult, err := p.Line([]byte("terminal"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, got, err := FinalizeIfNeeded(p, lineResult)
+		if err != nil || got != want || p.finalizeCalls != 0 {
+			t.Fatalf("result=%+v err=%v calls=%d", got, err, p.finalizeCalls)
+		}
+	})
+}
+
 func TestParseStatusBlock(t *testing.T) {
 	cases := []struct {
 		in                 string

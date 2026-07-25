@@ -225,6 +225,17 @@ func Run(store *job.Store, id string) error {
 	if timedOut {
 		return fail(job.StateInterrupted, "turn exceeded --timeout %s; session survives, resume or restart fresh", m.Timeout)
 	}
+	finalEvents, finalResult, finalErr := adapter.FinalizeIfNeeded(parser, result)
+	if finalErr != nil {
+		if waitErr != nil {
+			return fail(job.StateInterrupted, "agent result finalization failed: %v; process wait: %v", finalErr, waitErr)
+		}
+		return fail(job.StateInterrupted, "agent result finalization failed: %v", finalErr)
+	}
+	for _, e := range finalEvents {
+		_, _ = log.Append(e)
+	}
+	result = finalResult
 	if result == nil {
 		// Mid-turn death: process ended without a result line.
 		return fail(job.StateInterrupted, "agent exited without a result (%v)", waitErr)
