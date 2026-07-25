@@ -49,13 +49,6 @@ stream-json`; claude-shaped surface, fixtures never assumed):
 - [ ] [Cursor docs + smoke](tasks/cursor-docs-smoke.md) — **P2.** Guide/SKILL/README
   trio + AGENTS.md smoke recipe + live receipts. Depends: adapter.
 
-**Hermes agent support** — `--agent hermes` (`hermes -z … --usage-file`; final-only
-stdout, sidecar telemetry, no sandbox — live probes done 2026-07-25, evidence in the
-adapter task):
-
-- [ ] [Hermes docs + smoke](tasks/hermes-docs-smoke.md) — **P2.** Docs trio +
-  AGENTS.md smoke + live receipts. Depends: adapter.
-
 ## Later
 
 - [ ] [Orchestrator profiles](tasks/orchestrator-profiles.md) — **P1.** Named, inspectable presets
