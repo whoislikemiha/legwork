@@ -113,7 +113,7 @@ func doctorCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter to validate (claude, codex, fake)")
+	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter to validate (claude, codex, hermes, fake)")
 	c.Flags().StringVar(&model, "model", "", "model to validate (default: agent default)")
 	c.Flags().StringVar(&dir, "dir", "", "repo to check for the worktree.toml/workstree pairing (default: cwd)")
 	c.Flags().BoolVar(&noProbe, "no-probe", false, "skip the paid live-turn check (static checks only, offline-safe)")
@@ -249,8 +249,8 @@ func dispatchJob(o dispatchOptions) (*job.Meta, error) {
 	// --effort reaches both claude and codex (codex clamps xhigh/max to its
 	// "high" ceiling). --fallback-model is claude-specific — codex has no
 	// such flag — so reject it loudly rather than silently dropping it.
-	if o.Agent == "codex" && o.FallbackModel != "" {
-		return nil, fmt.Errorf("--fallback-model is claude-specific; not supported by --agent codex")
+	if (o.Agent == "codex" || o.Agent == "hermes") && o.FallbackModel != "" {
+		return nil, fmt.Errorf("--fallback-model is claude-specific; not supported by --agent %s", o.Agent)
 	}
 	if o.Effort != "" && !validEffort(o.Effort) {
 		return nil, fmt.Errorf("--effort: %q not in low|medium|high|xhigh|max", o.Effort)
@@ -258,8 +258,15 @@ func dispatchJob(o dispatchOptions) (*job.Meta, error) {
 	if o.Dir != "" && o.Workspace != "" {
 		return nil, fmt.Errorf("--dir and --workspace are mutually exclusive")
 	}
-	if _, err := adapter.New(o.Agent); err != nil {
+	ad, err := adapter.New(o.Agent)
+	if err != nil {
 		return nil, err
+	}
+	if o.ReadOnly && !ad.Caps().ReadOnly {
+		return nil, fmt.Errorf("--agent %s has no harness-enforced read-only mode; use claude or codex for --read-only jobs", o.Agent)
+	}
+	if o.Agent == "hermes" && o.Effort != "" {
+		return nil, fmt.Errorf("--effort is not supported by --agent hermes")
 	}
 
 	s, err := openStore()
@@ -367,7 +374,7 @@ func runCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter (claude, codex, fake)")
+	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter (claude, codex, hermes, fake)")
 	c.Flags().StringVar(&dir, "dir", "", "run in-place in this directory (default: scratch dir)")
 	c.Flags().StringVar(&wsID, "workspace", "", "attach the job to a workspace (see: legwork ws new)")
 	c.Flags().StringVar(&runLabel, "run", "", "group the job under a run label")

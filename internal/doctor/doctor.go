@@ -252,14 +252,15 @@ func checkProbe(ad adapter.Adapter, model string) Check {
 			result = res
 		}
 	}
-	_ = cmd.Wait()
+	waitErr := cmd.Wait()
 	probeTimedOut := ctx.Err() == context.DeadlineExceeded
 	cancel()
 	// Final-only parsers turn buffered stdout into a result at EOF. A watchdog
 	// kill also creates EOF, so never let finalization turn a timed-out probe
 	// into a successful one.
+	var finalizeErr error
 	if !probeTimedOut {
-		_, result, _ = adapter.FinalizeIfNeeded(parser, result)
+		_, result, finalizeErr = adapter.FinalizeIfNeeded(parser, result)
 	}
 
 	// A streaming parser may have produced a complete result before a slow
@@ -278,6 +279,13 @@ func checkProbe(ad adapter.Adapter, model string) Check {
 	}
 	if probeTimedOut {
 		return Check{"probe", StatusFail, fmt.Sprintf("timed out after %s", timeout)}
+	}
+	if finalizeErr != nil {
+		detail := "agent result finalization failed: " + finalizeErr.Error()
+		if waitErr != nil {
+			detail += "; process wait: " + waitErr.Error()
+		}
+		return Check{"probe", StatusFail, detail}
 	}
 	detail := "agent exited without a result"
 	if s := oneline(stderr.String()); s != "" {

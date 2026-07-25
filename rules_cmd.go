@@ -41,7 +41,7 @@ func rulesCmd() *cobra.Command {
 			return err
 		},
 	}
-	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter (claude, codex, fake)")
+	c.Flags().StringVar(&agent, "agent", "claude", "agent adapter (claude, codex, hermes, fake)")
 	c.Flags().StringVar(&dir, "dir", "", "show rules for an in-place job shape")
 	c.Flags().StringVar(&wsID, "workspace", "", "show rules for a workspace job shape")
 	c.Flags().BoolVar(&readOnly, "read-only", false, "show rules for a read-only turn")

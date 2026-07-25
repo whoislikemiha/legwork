@@ -53,9 +53,6 @@ stream-json`; claude-shaped surface, fixtures never assumed):
 stdout, sidecar telemetry, no sandbox — live probes done 2026-07-25, evidence in the
 adapter task):
 
-- [ ] [Hermes adapter](tasks/hermes-adapter.md) — **P2.** Oneshot invocation, sidecar
-  truth (exit code lies), session-ID chaining, read-only dispatch rejection, unit +
-  e2e. Depends: parser seam.
 - [ ] [Hermes docs + smoke](tasks/hermes-docs-smoke.md) — **P2.** Docs trio +
   AGENTS.md smoke + live receipts. Depends: adapter.
 
