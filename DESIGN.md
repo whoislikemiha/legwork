@@ -193,8 +193,45 @@ the corrected JSON".
 ### Capability flags per adapter
 
 Adapters are honest about differences, never pretend the CLIs are identical:
-`fork: yes|no`, `sandbox: os|policy`, `structured-status: enforced|convention`,
-`subagents: native|none`, `mid-turn-tools: yes|no`. The skill keys guidance off these.
+`fork: yes|no`, `sandbox: os|policy|none`, `structured-status: enforced|convention`,
+`subagents: native|none`, `mid-turn-tools: yes|no`, `readonly: harness|none`,
+`stream: events|final-only`. The skill keys guidance off these. **A job that
+requires a capability the agent lacks is rejected at dispatch with a clear error,
+never silently degraded** — e.g. `--read-only` on an agent with `readonly: none`.
+
+### Agent roster (accepted 2026-07-25)
+
+Four worker dialects. claude and codex are shipped; cursor and hermes are accepted
+architecture (tasks under `planning/tasks/`, umbrellas on the ROADMAP):
+
+| agent | headless invocation | stream | readonly | sandbox | resume | telemetry |
+|---|---|---|---|---|---|---|
+| claude | `claude -p --output-format stream-json` | events | harness (plan mode) | policy (hooks) | `--resume <sid>`, stable sid | in-stream usage/cost |
+| codex | `codex exec --json`, prompt on stdin | events | harness (read-only sandbox) | os (Landlock/seatbelt) | `exec resume <tid>` | in-stream usage |
+| cursor | `cursor-agent -p --output-format stream-json` | events (claude-shaped; fixtures captured, never assumed) | harness (`--mode plan`) | none until capture verifies `--sandbox` on Linux | `--resume <chatId>` | in-stream (verify at capture) |
+| hermes | `hermes -z <prompt> --usage-file <f>` | **final-only** (stdout = final text) | **none → read-only jobs rejected** | none (worktree blast radius only) | `--resume <sid>`; each turn mints a NEW session id — persist the latest from the sidecar | **sidecar** `--usage-file` JSON (tokens, model, provider, session_id, cost_status, completed/failed) |
+
+Structural novelties the two new dialects introduce (adapter-substrate changes,
+each an explicit task — the interface, not the roster, is the real change):
+
+- **Final-only streams (hermes).** The Parser contract gains an EOF finalization
+  hook: when the process exits without the parser having produced a result, the
+  runner (and doctor's probe loop) give the parser one `Finalize()` call to
+  assemble it — from accumulated stdout plus any sidecar file. Existing adapters
+  get a no-op. Mid-turn activity events simply don't exist for such agents;
+  `watch`/`events` stay honest (quiet), never synthesized.
+- **Sidecar telemetry (hermes `--usage-file`).** `TurnRequest` carries a
+  tool-chosen sidecar path inside the job dir; the adapter owns writing the flag
+  and reading the file back. The sidecar is written even on failure — pipelines
+  can always account for spend.
+- **Exit code is not truth (hermes).** A provider failure can exit 0 with the
+  error text as the "response" and `failed: true` only in the sidecar. Result
+  state derives from sidecar `completed`/`failed` plus marker classification
+  (auth vs quota vs transport), then the status block — never from exit code
+  alone, and never parse a status block out of error text.
+- **Hermes is both roles.** The thesis names Hermes as an orchestrator; the
+  worker adapter is independent of that. Same binary, different seat — nothing
+  in the contract changes.
 
 ### Exit codes
 
@@ -381,6 +418,17 @@ namespace, one branch) — cleanup is closed-form, no "scan the system".
     Landlock/seatbelt — *stronger*; never use codex's full bypass flag). Asymmetry
     documented in capability flags: codex containment is kernel-level, claude's is
     hooks + worktree discipline.
+  - Cursor: read-only jobs use `--mode plan` (harness read-only); mutating turns use
+    `-f` (force-allow commands) inside the worktree. `--sandbox enabled` is layered on
+    if the capture task verifies it actually contains on Linux — until verified, caps
+    say `sandbox: none` and containment is worktree discipline, like claude without
+    hooks.
+  - Hermes: **no harness sandbox, no plan mode, oneshot auto-bypasses approvals** —
+    the weakest containment in the roster, and the caps say so (`sandbox: none`,
+    `readonly: none`). Read-only jobs (`--phase plan|review`, in-place default) are
+    **rejected at dispatch**, not run prompted-read-only. Mutating turns rely on
+    worktree blast radius + injected rules only; the skill routes hostile-input work
+    (research on web content) away from hermes.
 - **Prompt injection**: research jobs read hostile web content — which is exactly why
   in-place/scratch default read-only.
 - **Credentials on the worker machine**: agent auth (human ritual, once per machine;
@@ -434,8 +482,9 @@ hook target, shim (later), server.
 CI with zero API spend. The contract test suite IS the quality story.
 
 **Upstream drift** (adapters WILL rot; requirement: know ASAP, easy to maintain):
-1. Committed snapshots of `claude --help` / `codex exec --help` + stream-format
-   samples; daily CI diff → **auto-open issue with the diff attached** the day a flag
+1. Committed snapshots of `claude --help` / `codex exec --help` /
+   `cursor-agent --help` / `hermes --help` + stream-format and sidecar samples;
+   daily CI diff → **auto-open issue with the diff attached** the day a flag
    changes.
 2. Nightly canary: contract suite against real current CLIs (cheap; catches behavioral
    drift help text doesn't show).
