@@ -32,6 +32,36 @@ None.
 - [ ] [Truthful live job health](tasks/codex-health-signal.md) — **P1.** Stop false Codex context
   alarms and expose heartbeat plus workspace progress with an honest measurement basis.
 
+## Next — agent roster umbrellas
+
+Accepted 2026-07-25 (DESIGN.md §3 "Agent roster"; design job on ws-85). Two umbrella
+features, each decomposed into ordered task files; dependency chains are noted in the
+task headers.
+
+**Cursor agent support** — `--agent cursor` (`cursor-agent -p --output-format
+stream-json`; claude-shaped surface, fixtures never assumed):
+
+- [ ] [Cursor CLI capture](tasks/cursor-cli-capture.md) — **P2.** Authenticated
+  stream-json fixtures + behavior probes. **Blocked on a human running
+  `cursor-agent login` on this machine.**
+- [ ] [Cursor adapter](tasks/cursor-adapter.md) — **P2.** Adapter, parser, caps,
+  dispatch validation, fake-parser seam, e2e, doctor. Depends: capture.
+- [ ] [Cursor docs + smoke](tasks/cursor-docs-smoke.md) — **P2.** Guide/SKILL/README
+  trio + AGENTS.md smoke recipe + live receipts. Depends: adapter.
+
+**Hermes agent support** — `--agent hermes` (`hermes -z … --usage-file`; final-only
+stdout, sidecar telemetry, no sandbox — live probes done 2026-07-25, evidence in the
+adapter task):
+
+- [ ] [Final-only parser seam](tasks/hermes-parser-finalize.md) — **P2.** EOF
+  finalization in the Parser contract; runner + doctor call sites; fake-agent
+  support. Substrate change, no behavior change for shipped adapters.
+- [ ] [Hermes adapter](tasks/hermes-adapter.md) — **P2.** Oneshot invocation, sidecar
+  truth (exit code lies), session-ID chaining, read-only dispatch rejection, unit +
+  e2e. Depends: parser seam.
+- [ ] [Hermes docs + smoke](tasks/hermes-docs-smoke.md) — **P2.** Docs trio +
+  AGENTS.md smoke + live receipts. Depends: adapter.
+
 ## Later
 
 - [ ] [Orchestrator profiles](tasks/orchestrator-profiles.md) — **P1.** Named, inspectable presets
