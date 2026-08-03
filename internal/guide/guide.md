@@ -504,7 +504,7 @@ put in the task/append-prompt, not a new primitive.
   Ordinary test code may come from the implementer; adversarial/acceptance criteria
   must not originate solely from the implementer.
 - **Command/evidence distiller** — the one shared mechanical role: a fresh cheap-model
-  job (Luna low/medium effort in the example roster below) in a disposable context,
+  job (a fast low-cost model at low/medium effort) in a disposable context,
   dispatched by the orchestrator, used proactively by both the orchestrator and the
   implementer whenever a command is expected to emit chunky output. The noisy output
   belongs in the distiller's disposable context/artifact, never the caller's decision
@@ -540,40 +540,38 @@ put in the task/append-prompt, not a new primitive.
 
   It never includes the implementer's own self-assessment or raw logs — those are
   exactly what independence is checking against, not evidence for it. Independence
-  in model/agent is also not automatic: pass explicit `--model` for a different
-  model family, and explicit `--agent` when you want a different adapter entirely —
-  `ws review`'s defaults (`--agent claude`, the agent's default model) do not
-  guarantee independence from the implementer. Checks plan traceability,
+  in model/agent is also not automatic: pass explicit `--model` and explicit
+  `--agent` when you want independence — a different model family from the
+  implementer is preferred where available; `ws review`'s defaults (`--agent
+  claude`, the agent's default model) do not guarantee independence from the
+  implementer. Checks plan traceability,
   correctness/edge cases, test adequacy, security/trust boundaries,
   data-integrity/concurrency/idempotency, compatibility/migrations/public contracts,
   simplicity/complexity/scope, cleanliness/maintainability/drift, relevant
   performance/operability, and doc consistency. Findings are concrete, evidenced,
   severity-ranked, and routed as `FIX`. Never edits code, never owns landing.
 
-### Model policy (example, not a rule)
+### Model policy (capabilities, not aliases)
 
-One accepted high-intelligence/cost-balanced roster (accepted 2026-08-02), to make
-"which model for which role" concrete without hard-coding it into substrate
-semantics — swap models freely, the roles and routing stay valid:
+Per-role model choice is orchestrator policy, not a hard-coded roster. What each
+role needs is a capability requirement:
 
-```
-orchestrator (persistent)       Sol 5.6, high effort, standard speed
-planner (fresh, read-only)      Fable 5, default/high effort
-implementer (workspace)         Sonnet 5, default effort
-independent reviewer            fresh Sol 5.6, high effort, read-only
-command/evidence distiller      Luna, low/medium effort
-```
+- **orchestrator** — persistent, high-capability, high effort; assesses and routes,
+  handles simple/trivial requests directly.
+- **planner** — strong-reasoning model, fresh, read-only; contracts precise enough
+  that implementation is close to mechanical execution without eliminating
+  implementer judgment.
+- **implementer** — capable coding model, isolated workspace.
+- **independent reviewer** — fresh, read-only, high effort; a different model
+  family from the implementer preferred where available — independence is a
+  role/context/evidence property, not a model alias.
+- **command/evidence distiller** — the cheapest fast model, low/medium effort; the
+  one shared mechanical role, never an implementer.
 
-Max effort and fast mode are exceptions, not defaults. This is one accepted example
-roster, not a hard-coded policy — the planned `orchestrator profiles` work
-(`planning/tasks/orchestrator-profiles.md`) is where a roster like this becomes named,
-inspectable dispatch config.
-
-Luna-class models serve only as the shared command/evidence distiller (and similar
-bounded mechanical support) — never as implementers. The implementer role is
-Sonnet-class in this roster and the reviewer a fresh different-family model (Sol
-here), so no cross-family reviewer workaround is needed. Promotion out of the direct
-path into the full flow is covered by Routing below.
+Max effort and fast mode remain exceptions, not defaults. The planned `orchestrator
+profiles` work (`planning/tasks/orchestrator-profiles.md`) is where a concrete
+per-operator roster becomes named, inspectable dispatch config. Promotion out of the
+direct path into the full flow is covered by Routing below.
 
 ### Routing — direct handling vs. the full delivery flow
 
@@ -1294,7 +1292,7 @@ This is the top-level recipe the others slot into. Given N tasks (e.g. a set of
 3. **One workspace per task; implement in parallel.** `legwork ws new --repo R`
    per task, then `legwork run --workspace ws-N --run <wave> ...` for each. All
    implementers run at once — parallelism is workspaces, and `ws new` is safe to
-   call back-to-back (facts below). Dispatch implementers per the model roster;
+   call back-to-back (facts below). Dispatch implementers per your role/model policy;
    review is always a fresh independent reviewer. **Every task gets its own
    `task_id`** (its task file's slug,
    per task) — a wave shares one `--run <wave>` label across all N workspaces, so a

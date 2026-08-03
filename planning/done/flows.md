@@ -1,6 +1,6 @@
 # First-class Legwork flows
 
-Status: done · Priority: P1 · Origin: Miha 2026-08-02 · Depends: existing recipes and quality/verification receipts · Workspace: ws-89
+Status: done · Priority: P1 · Origin: product decision 2026-08-02 · Depends: existing recipes and quality/verification receipts · Workspace: ws-89
 
 ## Goal
 
@@ -17,17 +17,17 @@ Define explicit duties, inputs, outputs, escalation rules, and forbidden behavio
 - **Implementer:** mutating workspace worker. Implements the approved plan, writes appropriate tests, reports deviations and risks, keeps scope bounded, and returns a compact evidence-oriented result rather than logs. It never commits, silently changes a public contract, invents success criteria after implementation, or expands scope without asking.
 - **Verifier/tester:** an independent verification stack, not automatically another standing agent. The planner defines acceptance gates; a deterministic host-side boundary executes them and records receipts; the reviewer independently reproduces targeted checks. Architectural/security/data-integrity work adds a fresh adversarial test engineer. User-visible UI changes add a fresh experience verifier using a real browser and retaining screenshots, console/network evidence, and a concise usability/accessibility verdict. Normal test code may be written by the implementer; adversarial/acceptance criteria must not originate solely from the implementer.
 - **Command/evidence distiller:** the one shared mechanical role — a fresh cheap-model job in a disposable context, dispatched by the orchestrator, used proactively by both the orchestrator and the implementer whenever a command is expected to emit chunky output. Inputs are the exact approved command/working directory, the question the caller needs answered, an output budget/shape, and a redaction/retention policy. It preserves deterministic exit status, argv, duration, and a sanitized artifact pointer/digest, and returns only salient failures/warnings/metrics — never the full transcript, never an edit to implementation files, never a converted nonzero exit.
-- **Independent reviewer:** fresh read-only session, different model family from the implementer, seeded with approved plan + exact diff but not the implementer's self-assessment. It checks plan traceability, correctness/edge cases, test adequacy, security/trust boundaries, data integrity/concurrency/idempotency, compatibility/migrations/public contracts, simplicity/complexity/scope, cleanliness/maintainability/drift, relevant performance/operability, and documentation consistency. Findings are concrete, evidenced, severity-ranked, and identified for FIX routing. It never edits code or owns landing.
+- **Independent reviewer:** fresh read-only session, a different model family from the implementer preferred where available, seeded with approved plan + exact diff but not the implementer's self-assessment. It checks plan traceability, correctness/edge cases, test adequacy, security/trust boundaries, data integrity/concurrency/idempotency, compatibility/migrations/public contracts, simplicity/complexity/scope, cleanliness/maintainability/drift, relevant performance/operability, and documentation consistency. Findings are concrete, evidenced, severity-ranked, and identified for FIX routing. It never edits code or owns landing.
 
-### Model policy example
+### Model policy (capabilities, not aliases)
 
-Document the accepted high-intelligence/cost-balanced example without hard-coding it into substrate semantics:
+Document capability requirements per role without hard-coding aliases into substrate semantics:
 
-- persistent orchestrator: Sol 5.6, high, standard speed;
-- planner: Fable 5, default/high, fresh read-only;
-- implementer: Sonnet 5, default, workspace;
-- independent reviewer: fresh Sol 5.6, high, read-only;
-- command/evidence distiller: Luna low/medium;
+- persistent orchestrator: high-capability, high effort, standard speed;
+- planner: strong-reasoning model, default/high effort, fresh read-only;
+- implementer: capable coding model, default effort, workspace;
+- independent reviewer: fresh, high effort, read-only, different model family from the implementer preferred where available;
+- command/evidence distiller: cheapest fast model, low/medium effort;
 - max effort and fast mode only by exception.
 
 Profiles are the eventual wiring; flows name roles and remain valid as model rosters change.
@@ -35,8 +35,8 @@ Profiles are the eventual wiring; flows name roles and remain valid as model ros
 ### Routing
 
 1. **Direct/orchestrator path:** simple project questions, lookups, and truly trivial changes are handled by the orchestrator directly, no planner/implementer/reviewer ceremony; if files change, a focused deterministic check runs and its result is reported. Promote immediately on ambiguity, multiple interacting files, public-contract/security/data/concurrency implications, migration risk, non-obvious acceptance criteria, or UI-visibility.
-2. **Full delivery flow (default for all non-trivial implementation):** planner → approved plan artifact → Sonnet implementer → deterministic verification → fresh Sol review → FIX/reverify/re-review as needed → orchestrator lands.
-3. **High-risk extension:** the same full flow, adding design-only Fable plan + adversarial design review before code; decomposed implementation; fresh adversarial tester where useful; real-browser experience verification for UI; fresh Sol review each round; optional second independent review for security/public-contract/data-integrity changes; human checkpoint only for genuine product/risk decisions.
+2. **Full delivery flow (default for all non-trivial implementation):** planner → approved plan artifact → implementer → deterministic verification → fresh independent review → FIX/reverify/re-review as needed → orchestrator lands.
+3. **High-risk extension:** the same full flow, adding a design-only plan + adversarial design review before code; decomposed implementation; fresh adversarial tester where useful; real-browser experience verification for UI; fresh independent review each round; optional second independent review for security/public-contract/data-integrity changes; human checkpoint only for genuine product/risk decisions.
 
 Independent review is mandatory for every non-trivial change; routing never downgrades it — do not weaken the existing close/review discipline to sampling.
 
@@ -100,7 +100,7 @@ FIX returns to implemented with finding IDs; failed verification returns with on
 
 ## Log
 
-- 2026-08-03: Final orchestrator verification after independent Sol review job-246
+- 2026-08-03: Final orchestrator verification after independent review job-246
   returned `SHIP` with no findings. On both ws-89 and a clean detached worktree at its
   base commit, `git diff --check`, `gofmt -l .`, and `go vet ./...` passed. Full
   `go test ./... -count=1` reproduced the same local notifier `TestDoctor*` failures
@@ -135,10 +135,8 @@ FIX returns to implemented with finding IDs; failed verification returns with on
   SKILL.md now state `ws review` seeds only the diff by default, and that plan
   traceability and a different reviewer model family require explicit
   `--append-prompt-file`/`--model`; "Reviewer seeding" gained a matching bullet. R4
-  restored the accepted concrete example roster (Sol 5.6 orchestrator, Fable 5
-  planner, Sonnet 5 implementer, fresh Sol 5.6 reviewer, Luna mechanical/distiller) in
-  the guide's Model policy subsection, still marked example-not-substrate-semantics
-  and cross-referenced to orchestrator-profiles. README's flows paragraph needed no
+  restored the accepted model-policy example subsection in the guide, still marked
+  example-not-substrate-semantics and cross-referenced to orchestrator-profiles. README's flows paragraph needed no
   change (made none of these claims). Re-verified: `gofmt -l .` and `go vet ./...`
   clean, `git diff --check` clean, but the combined gate is **not** green —
   `go test ./... -count=1` fails with two baseline-reproduced failure categories
@@ -241,14 +239,14 @@ FIX returns to implemented with finding IDs; failed verification returns with on
   an explicit `if`/`else` guard rather than an unconditional `commit && close`;
   any FIX/malformed/stale outcome routes back through implement → verify →
   fresh review. R4-9 `skills/legwork/SKILL.md`'s workspace-flow example no
-  longer pairs `--agent codex` with `--model opus` (a Claude model on a Codex
-  adapter); it uses the supported `gpt-5.6-sol` Codex model and now routes
+  longer pairs a Claude model alias with the codex adapter; it now uses an
+  adapter-appropriate model and routes
   terminal states after both waits and gates commit/close on the same
   parsed/state/verdict/digest check as the guide, instead of unconditionally
   resuming and committing. R4-10 audited other touched examples (competition
-  section's `opus`/`codex` pairing, design-only pipeline) for the same
-  mixed-adapter-model defect; none found — `opus` there always pairs with
-  `--agent claude`. Role contracts and lane policy are unchanged; only the
+  section's adapter/model pairing, design-only pipeline) for the same
+  mixed-adapter-model defect; none found — the model alias there always paired
+  with the matching adapter. Role contracts and lane policy are unchanged; only the
   executable shape and its two mirrors changed. Re-verified: `gofmt -l .` and
   `go vet ./...` clean, `git diff --check` clean; `go test ./... -count=1`
   reproduces only the same two pre-existing baseline failure categories
@@ -450,12 +448,10 @@ FIX returns to implemented with finding IDs; failed verification returns with on
   baseline failure categories (local-sandbox notifier under `TestDoctor*`,
   `TestCodexPassthroughs` teardown flake) on this doc-only change. The final
   orchestrator runs its own authoritative check before landing.
-- 2026-08-03: Corrected routing per
-  `planning/done/flow-routing-correction.md` — the accepted operating model
-  rejects the delegated mechanical-implementation lane entirely. Removed the
-  Luna-as-implementer policy, the mechanical lane, and the cross-family reviewer
-  workaround it forced ("a Luna implementation needs a non-OpenAI reviewer") from
-  every surface. Replaced "proportional lanes" with **risk-proportional routing**:
+- 2026-08-03: A routing correction rejected the delegated mechanical-implementation
+  lane entirely. Removed the cheap-model-as-implementer policy, the mechanical
+  lane, and the cross-family reviewer workaround it forced from every surface.
+  Replaced "proportional lanes" with **risk-proportional routing**:
   (1) direct/orchestrator path for simple questions and truly trivial changes,
   with an explicit promotion boundary (ambiguity, multiple interacting files,
   public-contract/security/data/concurrency implications, migration risk,
@@ -482,3 +478,19 @@ FIX returns to implemented with finding IDs; failed verification returns with on
   `git diff --check` clean; `go test ./... -count=1` reproduces only the same two
   pre-existing baseline failure categories (local-sandbox notifier under
   `TestDoctor*`, `TestCodexPassthroughs` teardown flake) on this doc-only change.
+- 2026-08-03: Made flows orchestrator-agnostic. The prior PR had leaked one
+  orchestrator instance's local identity and roster policy into what must stay a
+  generic substrate contract — a named orchestrator, a private person as origin,
+  and a concrete model roster presented as accepted flow policy. Removed all of
+  it from `internal/guide/guide.md` (canonical), `skills/legwork/SKILL.md`,
+  `DESIGN.md`, this file, and `planning/tasks/orchestrator-profiles.md`, replacing
+  the roster with capability requirements per role (orchestrator, planner,
+  implementer, independent reviewer, command/evidence distiller). Role contracts,
+  the direct/full-flow/high-risk routing tri-split, and the full distiller
+  contract are unchanged — only aliases and identity references were stripped.
+  Deleted `planning/done/flow-routing-correction.md`, a local correction
+  transcript; its durable conclusions (no mechanical lane; direct-vs-full routing
+  with the promotion boundary; the planner's near-mechanical-contract aim; the
+  first-class shared distiller contract) were already folded into this file's
+  Accepted architecture and are preserved by this entry and the one above it.
+  Re-verified: `gofmt -l .` and `go vet ./...` clean, `git diff --check` clean.

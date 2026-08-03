@@ -221,9 +221,9 @@ fi
 ctx_name="review-context-${task_id}-${round_id}.md"
 legwork artifact save --run <label> --name "$ctx_name" "$ctx_tmp" \
   || { echo "review-context save failed" >&2; exit 1; }
-review_job=$(legwork ws review "$ws" --agent codex --model gpt-5.6-sol \
+review_job=$(legwork ws review "$ws" --agent <adapter> --model <model> \
   --append-prompt-file "$ctx_tmp") \
-  || { echo "reviewer dispatch failed" >&2; exit 1; }   # independent agent AND model, not just a flag
+  || { echo "reviewer dispatch failed" >&2; exit 1; }   # independent agent AND model, different family from the implementer where available
 shred -u "$ctx_tmp" 2>/dev/null || rm -f "$ctx_tmp"
 legwork wait "$review_job"
 legwork status "$review_job" --json    # HARD STOP: .state must be done; else fix/escalate
@@ -653,9 +653,9 @@ landed) so the run reads as a narrative.
   watch the merged timeline live with `legwork tail <label>` (or the
   snapshot `legwork events <label>`).
 - Model policy: big model + `--read-only` for plan/review turns; the implementer
-  executes an approved precise plan (Sonnet-class in the example roster). Luna-class
-  models are the shared command/evidence distiller only — never implementers. Dial
-  reasoning with `--effort` (`low` for distiller runs, `high`/`max` for hard design
-  work; codex clamps `xhigh`/`max` to its `high` ceiling). On claude, set
-  `--fallback-model` to survive overload without failing the turn.
+  executes an approved precise plan. The cheapest fast model serves as the shared
+  command/evidence distiller only — never as an implementer. Dial reasoning with
+  `--effort` (`low` for distiller runs, `high`/`max` for hard design work; codex
+  clamps `xhigh`/`max` to its `high` ceiling). On claude, set `--fallback-model` to
+  survive overload without failing the turn.
 - Smoke-test plumbing without API spend: `legwork run --agent fake "test"`.

@@ -9,16 +9,20 @@ say “use the implementation profile” or “use the independent review profil
 restating and occasionally drifting from every flag.
 
 [Flows](../done/flows.md) names roles (orchestrator, planner, implementer, verifier,
-command/evidence distiller, independent reviewer) and documents one accepted example model roster for them
-(`legwork guide`'s "Model policy" subsection) without wiring it into substrate
-semantics — flows stay valid as the roster changes. Profile names are the natural
-place that example becomes concrete config: a `[profiles.planner]`, `[profiles.
+command/evidence distiller, independent reviewer) and expresses per-role model
+choice as capability requirements (`legwork guide`'s "Model policy" subsection)
+without wiring any specific roster into substrate semantics — flows stay valid as
+an operator's roster changes. Profile names are the natural place a concrete
+roster becomes named config: a `[profiles.planner]`, `[profiles.
 implementer]`, `[profiles.review]` (etc.) set that a flow's task/append-prompt text
 can reference by name instead of restating agent/model/effort per role every time.
 This task remains the single place profile config is designed; do not fork a second
 role-profile mechanism out of the flows work.
 
 ## Desired experience
+
+Illustrative field values below, not accepted policy — any operator wires their own
+agent/model choices here.
 
 ```toml
 [profiles.implement]

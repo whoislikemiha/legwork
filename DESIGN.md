@@ -470,7 +470,7 @@ machine needs it — the laptop needs only ssh.
   is read off existing job/workspace receipts — not a new job state,
   scheduler, pipeline engine, or `flow` verb. §13 already rejects the engine; this is
   the documentation-layer counterpart: the *shape* is canonical (`legwork guide`'s
-  `## Flows` section), the *model roster* is a swappable example, never hard-coded
+  `## Flows` section), per-role model choice is orchestrator policy, never hard-coded
   into substrate semantics.
 - **`legwork guide`** prints the skill; `--help` is the fallback skill — one screen,
   verbs + the loop, sufficient for a cold agent to drive a correct happy path. Docs
