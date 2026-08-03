@@ -37,7 +37,7 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
   extended (not duplicated) by flows' role/model wiring. Depends: flows.
 - [ ] [General workspace evidence/check receipts](tasks/workspace-check-receipts.md) — **P2.**
   A `ws check` general host-side command receipt (lossless redacted artifact, compact
-  receipt) for lanes/jobs `legwork verify`'s exact-job `blocked.kind=verify` handoff
+  receipt) for flows/jobs `legwork verify`'s exact-job `blocked.kind=verify` handoff
   doesn't cover. Depends: flows, quality-receipts, external-verification-receipts.
 - [ ] [Richer structured review findings](tasks/review-finding-dimensions.md) — **P2.**
   Persist individual dimension-tagged, ID-addressable review findings in workspace

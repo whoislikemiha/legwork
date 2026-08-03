@@ -158,9 +158,12 @@ It covers the run→observe→steer loop, hooking notifications up as your wake-
 signal, workspace review flow, health recipes (spotting and recovering a
 poisoned-context worker), and **flows** — the documented multi-role delivery
 architecture built on top of jobs/workspaces: role contracts (orchestrator, planner,
-implementer, verifier, independent reviewer), a lane sized to risk (mechanical /
-normal / architectural, review always mandatory), evidence hygiene (distilled
-receipts in orchestrator context, raw logs out of it), and a flow ledger (`intake →
+implementer, command/evidence distiller, independent reviewer), risk-proportional
+routing (direct orchestrator handling for trivial work; the full planner →
+implementer → deterministic verification → independent review flow for everything
+non-trivial; high-risk gates on top — independent review mandatory for every
+non-trivial change), evidence hygiene (distilled receipts in orchestrator context,
+raw logs out of it), and a flow ledger (`intake →
 planned → implemented → verified → reviewed → landed → harvested`) read off existing
 receipts rather than new job/workspace states — plus the multi-task campaign shape
 (parallel implement, serial land), a proportionality gate for keeping small fixes

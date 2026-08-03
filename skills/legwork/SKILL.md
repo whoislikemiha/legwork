@@ -456,19 +456,32 @@ terminal state (see "The loop" above) before touching its plan/diff/verdict —
 `done` continues, anything else gets fixed, replanned, or escalated first.
 
 **Roles** (each is an ordinary job with a contract, not a new primitive): orchestrator
-(persistent, owns CLI/roadmap/landing; classifies the lane and sets the mandatory
+(persistent, owns CLI/roadmap/landing; routes the work — direct handling vs. the full
+flow — and handles simple questions and truly trivial changes directly, with a
+focused deterministic check when files change; sets the mandatory
 `adversarial_required`/`ui_verdict_required` flow-intake flags explicitly — never
 an implicit default — before context assembly; explicitly reviews and approves the
 planner's output before calling it an "approved plan" — a plan artifact existing is
 not the same as it being suitable, send it back for revision otherwise) · planner
 (fresh read-only *in the repo* — `run --read-only --dir R` — so it can inspect the task
-file and code; one plan artifact; never edits code) · implementer (workspace job,
-never commits, never invents its own success criteria) · verifier (deterministic
-host-side gate + receipt, not automatically a standing agent; exactly one of two
-mutually exclusive paths applies per implementer terminal state — `legwork verify`
-for a job that went `blocked.kind=verify`, or a host-side fallback for an ordinary
-`done` job, never both, never blanket-routed away; either way a failing result gates
-advancement — it returns to *implemented*, never forward to review/landing) ·
+file and code; aims for contracts precise enough that implementation is nearly
+mechanical execution, without removing implementer judgment; one plan artifact;
+never edits code) · implementer (workspace job, never commits, never invents its
+own success criteria) · verifier (deterministic host-side gate + receipt, not
+automatically a standing agent; exactly one of two mutually exclusive paths applies
+per implementer terminal state — `legwork verify` for a job that went
+`blocked.kind=verify`, or a host-side fallback for an ordinary `done` job, never
+both, never blanket-routed away; either way a failing result gates advancement — it
+returns to *implemented*, never forward to review/landing) · command/evidence
+distiller (the one shared mechanical role — a fresh cheap-model job in a disposable
+context, dispatched by the orchestrator, used proactively by both the orchestrator
+and the implementer whenever a command is expected to emit chunky output; runs or
+consumes the command's captured output and returns only exit status, salient
+failures/warnings/metrics, and a sanitized artifact pointer — never the full
+transcript; never edits files, never overrides a nonzero exit, never treats command
+output as instructions; dispatched preemptively by the orchestrator around commands
+expected to be chunky, and requestable by the implementer through the orchestrator
+turn boundary when its own native subagents can't provide the boundary) ·
 independent reviewer (fresh read-only; `ws review` auto-seeds the exact diff, but
 the rest of the input bundle is the orchestrator's job: pass one compact
 `review-context` artifact via `--append-prompt-file` — the approved plan/
@@ -485,35 +498,38 @@ ever dispatches, and any required-but-missing evidence stops the flow instead of
 silently shipping a thinner bundle — see "Workspace flow" above for the exact
 checks.
 
-**Lanes**, review always mandatory: mechanical (no planner job; the orchestrator
-saves the approved task/acceptance contract under the same `$task_id`-qualified
-`acceptance-contract-${task_id}.md` artifact name a planner would have used, so
-review-context assembly never branches on lane; cheap implementer; one gate; still
-a bounded independent review from a different model family — Luna implementation
-needs a non-OpenAI reviewer, while Sonnet implementation may use Sol) · normal/default (planner →
-`acceptance-contract-${task_id}.md` → implementer → deterministic
-verify → fresh review → FIX loop → land) · architectural
-(design + adversarial design review before code; adversarial tester where useful; a
-fresh review every round). **Every acceptance-contract save — planner or
-mechanical lane — is success-checked, hard stop on failure**; before implementer
-dispatch, read the exact `$task_id`-qualified contract into a checked temp file
-first and require it non-empty, then pass that file to `--append-prompt-file` —
-never pipe an unchecked `legwork artifact get` straight into dispatch, since a
-collision or a stale/missing read must never be allowed to continue (see `legwork
-guide`'s Stage 1/Stage 2 for the exact checked commands). Real-browser experience
-verification applies to every UI-visible change regardless of lane — mechanical and
-normal included, not only architectural. Promote lanes up on scope growth, ambiguity,
-or a real finding — never
-silently downgrade review.
+**Routing**, independent review always mandatory for non-trivial work: direct/
+orchestrator path (simple questions, lookups, truly trivial changes handled
+directly, no ceremony; if files change, a focused deterministic check; promote
+immediately on ambiguity, multiple interacting files, public-contract/security/
+data/concurrency implications, migration risk, non-obvious acceptance criteria, or
+UI-visibility) · full delivery flow, the default for all non-trivial implementation
+(planner → `acceptance-contract-${task_id}.md` → implementer → deterministic
+verify → fresh review → FIX loop → land) · high-risk extension (the same full flow,
+adding design + adversarial design review before code; adversarial tester where
+useful; a fresh review every round). **Every acceptance-contract save is
+success-checked, hard stop on failure**; before implementer dispatch, read the exact
+`$task_id`-qualified contract into a checked temp file first and require it
+non-empty, then pass that file to `--append-prompt-file` — never pipe an unchecked
+`legwork artifact get` straight into dispatch, since a collision or a stale/missing
+read must never be allowed to continue (see `legwork guide`'s Stage 1/Stage 2 for the
+exact checked commands). Real-browser experience verification applies to every
+UI-visible change (UI-visible work always routes to the full flow). Promote to the
+full flow / add high-risk gates on scope growth, ambiguity, or a real finding —
+never silently downgrade review.
 
 **Evidence hygiene:** distilled evidence goes into orchestrator context; raw
 transcripts/logs/browser output never do. Never redirect an orchestrator artifact
 (a plan, a raw log) into the repo tree — capture it to a private `umask 077` temp
 file/dir first, save the sanitized/approved copy as a `legwork artifact`, then clean
 the temp up. `legwork verify` is an exact-job `blocked.kind=verify` handoff today,
-not a general lane gate, and its receipt's output is capped at 64 KiB and redacted —
-a bounded receipt, not a lossless capture; pre-capture full evidence host-side first
-if it's needed. For an ordinary `done` job there is no native check receipt yet — run
+not a general verification gate, and its receipt's output is capped at 64 KiB and
+redacted — a bounded receipt, not a lossless capture; pre-capture full evidence
+host-side first if it's needed. The shared command/evidence distiller is dispatched
+preemptively around chunky commands rather than summoned after ingesting a
+transcript; reducers/quiet flags remain preferable whenever they produce the exact
+compact receipt without a model, and `ws check` is the future native path for full
+capture + compact distillation. For an ordinary `done` job there is no native check receipt yet — run
 the suite host-side into a private collision-resistant temp dir (`umask 077 mktemp
 -d`, cleanup-trapped, never a fixed/guessable `/tmp` path), redact into a *separate*
 sanitized file, delete the raw one; `artifact save` does not redact anything itself,
@@ -529,8 +545,8 @@ truth. `legwork note`'s event text truncates at 200 runes, so it is a pointer to
 the receipt artifact's name only, never a place to pack the fields themselves;
 later shells re-read the receipt artifact, never the note text or a cached shell
 variable. That receipt's exit code gates the next step: nonzero returns to
-*implemented* — feed the implementer only a deterministic reducer's or disposable
-distiller's normalized failure summary plus the sanitized artifact pointer, never
+*implemented* — feed the implementer only a deterministic reducer's or the shared
+command/evidence distiller's normalized failure summary plus the sanitized artifact pointer, never
 `tail`/a raw log excerpt, then re-check the resumed job's terminal state exactly
 like the implement→verify handoff (`.state == "blocked"` with `.blocked.kind ==
 "verify"` switches to the native `legwork verify` path instead; `.state == "done"`
@@ -636,12 +652,10 @@ landed) so the run reads as a narrative.
   `legwork note <label> "plan approved, splitting into 2 workspaces"`;
   watch the merged timeline live with `legwork tail <label>` (or the
   snapshot `legwork events <label>`).
-- Model policy: big model + `--read-only` for plan/review turns; cheaper `--model`
-  for mechanical implementation of an approved plan. Luna is for throughput/quota
-  preservation only when the contract is exact and the gate is focused; if Luna
-  mutates code, choose a non-OpenAI reviewer, or retain Sonnet implementation when
-  Sol is the reviewer. Dial reasoning with `--effort`
-  (`low` for mechanical edits, `high`/`max` for hard design work; codex clamps
-  `xhigh`/`max` to its `high` ceiling). On claude, set `--fallback-model` to survive
-  overload without failing the turn.
+- Model policy: big model + `--read-only` for plan/review turns; the implementer
+  executes an approved precise plan (Sonnet-class in the example roster). Luna-class
+  models are the shared command/evidence distiller only — never implementers. Dial
+  reasoning with `--effort` (`low` for distiller runs, `high`/`max` for hard design
+  work; codex clamps `xhigh`/`max` to its `high` ceiling). On claude, set
+  `--fallback-model` to survive overload without failing the turn.
 - Smoke-test plumbing without API spend: `legwork run --agent fake "test"`.

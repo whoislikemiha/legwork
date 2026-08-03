@@ -9,7 +9,7 @@ say “use the implementation profile” or “use the independent review profil
 restating and occasionally drifting from every flag.
 
 [Flows](../done/flows.md) names roles (orchestrator, planner, implementer, verifier,
-independent reviewer) and documents one accepted example model roster for them
+command/evidence distiller, independent reviewer) and documents one accepted example model roster for them
 (`legwork guide`'s "Model policy" subsection) without wiring it into substrate
 semantics — flows stay valid as the roster changes. Profile names are the natural
 place that example becomes concrete config: a `[profiles.planner]`, `[profiles.
@@ -32,7 +32,17 @@ agent = "claude"
 model = "opus"
 effort = "xhigh"
 read_only = true
+
+[profiles.distill]
+agent = "claude"
+model = "haiku"
+effort = "low"
 ```
+
+`profiles.distill` names the flows shared command/evidence distiller role so
+wiring it doesn't fork a second profile mechanism. Whether the distiller consumes
+an already-captured artifact (read-only) or executes the command itself (needing a
+writable cache/workspace) is a design point this task settles.
 
 ```bash
 legwork run --profile implement "read the task file"

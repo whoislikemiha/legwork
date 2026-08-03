@@ -4,7 +4,7 @@ Status: done · Priority: P1 · Origin: Miha 2026-08-02 · Depends: existing rec
 
 ## Goal
 
-Make **flows** the documented multi-role delivery architecture above Legwork's existing job/workspace substrate. A flow is a recipe with explicit role contracts, handoff artifacts, proportional lanes, evidence hygiene, and receipt-backed transitions. It is not a pipeline engine, scheduler, new job state, or `flow` verb: Legwork remains a dumb substrate and the orchestrator composes the work.
+Make **flows** the documented multi-role delivery architecture above Legwork's existing job/workspace substrate. A flow is a recipe with explicit role contracts, handoff artifacts, risk-proportional routing, evidence hygiene, and receipt-backed transitions. It is not a pipeline engine, scheduler, new job state, or `flow` verb: Legwork remains a dumb substrate and the orchestrator composes the work.
 
 ## Accepted architecture
 
@@ -12,11 +12,11 @@ Make **flows** the documented multi-role delivery architecture above Legwork's e
 
 Define explicit duties, inputs, outputs, escalation rules, and forbidden behavior for:
 
-- **Orchestrator:** persistent decision-maker and sole CLI/roadmap/landing owner. Preserves user intent and scope across projects, classifies lanes, approves plans, decomposes work, routes model/quota use, answers routine worker questions, supervises context health, curates compact evidence, enforces verification and independent-review gates, serializes landing, harvests friction, and escalates only genuine product decisions. It must react to stale diffs, repeated failure, poisoned context, stale receipts, and scope drift rather than blindly resuming.
-- **Planner:** fresh read-only architect. Investigates before prescribing; locks down contracts, interfaces where compatibility matters, invariants, data flow, failure semantics, files, dependencies, risks, migrations, and acceptance/verification criteria. It is precise about contracts but not speculative private mechanics. Produces a durable plan artifact and never edits code.
+- **Orchestrator:** persistent decision-maker and sole CLI/roadmap/landing owner. Preserves user intent and scope across projects, routes work (direct handling vs. the full delivery flow vs. the high-risk extension) and handles simple questions/truly trivial changes directly, approves plans, decomposes work, routes model/quota use, answers routine worker questions, supervises context health, curates compact evidence, enforces verification and independent-review gates, serializes landing, harvests friction, and escalates only genuine product decisions. It must react to stale diffs, repeated failure, poisoned context, stale receipts, and scope drift rather than blindly resuming.
+- **Planner:** fresh read-only architect. Investigates before prescribing; locks down contracts, interfaces where compatibility matters, invariants, data flow, failure semantics, files, dependencies, risks, migrations, and acceptance/verification criteria. It is precise about contracts but not speculative private mechanics, and aims for contracts precise enough that implementation is nearly mechanical execution without removing implementer judgment. Produces a durable plan artifact and never edits code.
 - **Implementer:** mutating workspace worker. Implements the approved plan, writes appropriate tests, reports deviations and risks, keeps scope bounded, and returns a compact evidence-oriented result rather than logs. It never commits, silently changes a public contract, invents success criteria after implementation, or expands scope without asking.
 - **Verifier/tester:** an independent verification stack, not automatically another standing agent. The planner defines acceptance gates; a deterministic host-side boundary executes them and records receipts; the reviewer independently reproduces targeted checks. Architectural/security/data-integrity work adds a fresh adversarial test engineer. User-visible UI changes add a fresh experience verifier using a real browser and retaining screenshots, console/network evidence, and a concise usability/accessibility verdict. Normal test code may be written by the implementer; adversarial/acceptance criteria must not originate solely from the implementer.
-- **Evidence distiller:** not a standing role. Deterministic exit-code-bearing output is reduced by a tool boundary; a worker uses native subagents for its own noisy exploration; only unstructured evidence gets a fresh cheap-model distiller job. Raw evidence is retained outside decision-maker context before distillation. The normalized shape is verdict, failures, warnings, metrics, and artifact pointers.
+- **Command/evidence distiller:** the one shared mechanical role — a fresh cheap-model job in a disposable context, dispatched by the orchestrator, used proactively by both the orchestrator and the implementer whenever a command is expected to emit chunky output. Inputs are the exact approved command/working directory, the question the caller needs answered, an output budget/shape, and a redaction/retention policy. It preserves deterministic exit status, argv, duration, and a sanitized artifact pointer/digest, and returns only salient failures/warnings/metrics — never the full transcript, never an edit to implementation files, never a converted nonzero exit.
 - **Independent reviewer:** fresh read-only session, different model family from the implementer, seeded with approved plan + exact diff but not the implementer's self-assessment. It checks plan traceability, correctness/edge cases, test adequacy, security/trust boundaries, data integrity/concurrency/idempotency, compatibility/migrations/public contracts, simplicity/complexity/scope, cleanliness/maintainability/drift, relevant performance/operability, and documentation consistency. Findings are concrete, evidenced, severity-ranked, and identified for FIX routing. It never edits code or owns landing.
 
 ### Model policy example
@@ -27,18 +27,18 @@ Document the accepted high-intelligence/cost-balanced example without hard-codin
 - planner: Fable 5, default/high, fresh read-only;
 - implementer: Sonnet 5, default, workspace;
 - independent reviewer: fresh Sol 5.6, high, read-only;
-- mechanical worker and on-demand distiller: Luna low/medium;
+- command/evidence distiller: Luna low/medium;
 - max effort and fast mode only by exception.
 
 Profiles are the eventual wiring; flows name roles and remain valid as model rosters change.
 
-### Proportional lanes
+### Routing
 
-1. **Mechanical:** no planner when the task file is already an adequate contract; Luna implementer for throughput/quota preservation; focused deterministic gate; bounded but independent review from a different model family for every mutating code change. A Luna implementation therefore uses a non-OpenAI reviewer; retain Sonnet implementation when Sol is the reviewer. Documentation-only/no-code changes may use orchestrator verification when no meaningful independent code review exists. Promote on scope growth, unexpected files, failed gates, ambiguity, or meaningful findings.
-2. **Normal (default):** planner → approved plan artifact → Sonnet implementer → deterministic verification → fresh Sol review → FIX/reverify/re-review as needed → orchestrator lands.
-3. **Architectural/high-risk:** design-only Fable plan + adversarial design review before code; decomposed implementation; deterministic verification; fresh adversarial tester where useful; real-browser experience verification for UI; fresh Sol review each round; optional second independent review for security/public-contract/data-integrity changes; human checkpoint only for genuine product/risk decisions.
+1. **Direct/orchestrator path:** simple project questions, lookups, and truly trivial changes are handled by the orchestrator directly, no planner/implementer/reviewer ceremony; if files change, a focused deterministic check runs and its result is reported. Promote immediately on ambiguity, multiple interacting files, public-contract/security/data/concurrency implications, migration risk, non-obvious acceptance criteria, or UI-visibility.
+2. **Full delivery flow (default for all non-trivial implementation):** planner → approved plan artifact → Sonnet implementer → deterministic verification → fresh Sol review → FIX/reverify/re-review as needed → orchestrator lands.
+3. **High-risk extension:** the same full flow, adding design-only Fable plan + adversarial design review before code; decomposed implementation; fresh adversarial tester where useful; real-browser experience verification for UI; fresh Sol review each round; optional second independent review for security/public-contract/data-integrity changes; human checkpoint only for genuine product/risk decisions.
 
-Review of mutating code remains mandatory in every lane; do not weaken the existing close/review discipline to sampling.
+Independent review is mandatory for every non-trivial change; routing never downgrades it — do not weaken the existing close/review discipline to sampling.
 
 ### Context and evidence hygiene
 
@@ -47,8 +47,8 @@ Principle: **lossless capture outside decision-maker context; distilled evidence
 - Orchestrators consume status, compact receipts, results, notes, and artifact pointers. Raw transcripts, full build/test output, and giant browser logs do not enter the persistent orchestrator context routinely.
 - Worker final reports are concise and decision-oriented. Long evidence is written to an addressable artifact first.
 - Exit code, command argv, duration, environment-safe redacted log pointer/digest, failures, warnings, and summary metrics must remain distinguishable. A model summary cannot override deterministic exit status.
-- Current `legwork verify` is truthfully documented as an exact-job `blocked.kind=verify` handoff, not a general all-lane gate. File a separate substrate task for a general workspace evidence/check receipt that captures full redacted output outside the caller context and prints a compact receipt.
-- Unstructured UI/mixed logs use an on-demand Luna distiller. It gets the evidence artifact in a disposable context and returns at most the normalized report; raw evidence remains drillable by pointer.
+- Current `legwork verify` is truthfully documented as an exact-job `blocked.kind=verify` handoff, not a general verification gate. File a separate substrate task for a general workspace evidence/check receipt that captures full redacted output outside the caller context and prints a compact receipt.
+- The shared command/evidence distiller is dispatched proactively by the orchestrator around commands expected to be chunky (and requestable by the implementer through the orchestrator boundary), not summoned on-demand after ingesting a transcript. It gets the evidence artifact in a disposable context and returns at most the normalized report; raw evidence remains drillable by pointer.
 
 ### Flow ledger
 
@@ -56,8 +56,8 @@ Document recipe-layer states reconstructed from run notes and existing receipts,
 
 `intake → planned → implemented → verified → reviewed → landed → harvested`
 
-- lane/task note guards intake;
-- plan artifact guards planned (explicitly skipped for mechanical);
+- routing/task note guards intake;
+- plan artifact guards planned;
 - non-empty diff + compact implementer result guards implemented;
 - deterministic gate/check receipt guards verified;
 - current-diff SHIP receipt guards reviewed;
@@ -450,3 +450,35 @@ FIX returns to implemented with finding IDs; failed verification returns with on
   baseline failure categories (local-sandbox notifier under `TestDoctor*`,
   `TestCodexPassthroughs` teardown flake) on this doc-only change. The final
   orchestrator runs its own authoritative check before landing.
+- 2026-08-03: Corrected routing per
+  `planning/done/flow-routing-correction.md` — the accepted operating model
+  rejects the delegated mechanical-implementation lane entirely. Removed the
+  Luna-as-implementer policy, the mechanical lane, and the cross-family reviewer
+  workaround it forced ("a Luna implementation needs a non-OpenAI reviewer") from
+  every surface. Replaced "proportional lanes" with **risk-proportional routing**:
+  (1) direct/orchestrator path for simple questions and truly trivial changes,
+  with an explicit promotion boundary (ambiguity, multiple interacting files,
+  public-contract/security/data/concurrency implications, migration risk,
+  non-obvious acceptance criteria, or UI-visibility); (2) the full delivery flow —
+  planner → implementer → deterministic verification → fresh independent review —
+  as the default for all non-trivial implementation; (3) a high-risk extension
+  adding only the already-documented adversarial/second-review/human-decision
+  gates. Independent review is now stated as mandatory for every non-trivial
+  change rather than "mandatory in every lane." Promoted the planner's duty to aim
+  for contracts precise enough that implementation is nearly mechanical execution,
+  without removing implementer judgment. Promoted the **command/evidence
+  distiller** from "not a standing role either" to a first-class shared role with
+  explicit inputs/duties/forbidden behavior and an invocation policy (the
+  orchestrator dispatches it preemptively around chunky commands; the implementer
+  requests it through the orchestrator turn boundary when its own native
+  subagents can't provide the boundary). Reconciled `internal/guide/guide.md`
+  (canonical), `skills/legwork/SKILL.md`, `README.md`, `DESIGN.md`, this file's
+  Accepted-architecture sections, `planning/tasks/orchestrator-profiles.md`, and
+  `planning/tasks/workspace-check-receipts.md`. The mechanical-lane branches in
+  the guide's "Executable flow shapes" skeleton were deleted outright (the
+  skeleton is now stated as the full delivery flow; direct-path work never enters
+  it). Historical R1–R9 Log entries above and all other `done/` archives were left
+  untouched as frozen history. Re-verified: `gofmt -l .` and `go vet ./...` clean,
+  `git diff --check` clean; `go test ./... -count=1` reproduces only the same two
+  pre-existing baseline failure categories (local-sandbox notifier under
+  `TestDoctor*`, `TestCodexPassthroughs` teardown flake) on this doc-only change.

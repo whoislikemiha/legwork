@@ -452,8 +452,9 @@ machine needs it — the laptop needs only ssh.
   most of the skill's value): missing/unparseable status block; stuck-vs-thinking
   (read last events before deciding; then cancel + nudge); poisoned context → fresh
   session from artifacts; verify-before-trusting-done; answer-vs-escalate; model/effort
-  policy (big model high effort for plan/review, cheap for mechanical implementation of
-  an approved plan, cheap+fast for interrogation — halves pipeline cost); reboot
+  policy (big model high effort for plan/review, a mid-tier implementer executing a
+  precise plan, a cheap distiller for chunky command output, cheap+fast for
+  interrogation — proportional cost); reboot
   recovery; parallel workspaces + merge sequencing (land sequentially; conflict → fix
   job in the workspace; decompose along file boundaries at plan time so conflicts are
   rare by construction); plan task-lists with dependency annotations → fan-out
@@ -461,9 +462,10 @@ machine needs it — the laptop needs only ssh.
   step; start-of-run stale-job sweep; bootstrap a cold repo (workstree); raised budgets
   for instructed subagent fan-out.
 - **Flows are frozen at the recipe/orchestrator layer, not as verbs** (accepted
-  2026-08-02): named roles (orchestrator, planner, implementer, verifier, independent
-  reviewer), proportional lanes (mechanical/normal/architectural, review always
-  mandatory), context/evidence hygiene, and a flow ledger
+  2026-08-02): named roles (orchestrator, planner, implementer, verifier, command
+  distiller, independent reviewer), risk-proportional routing (direct orchestrator
+  handling / full delivery flow / high-risk gates; independent review mandatory for
+  every non-trivial change), context/evidence hygiene, and a flow ledger
   (`intake → planned → implemented → verified → reviewed → landed → harvested`) that
   is read off existing job/workspace receipts — not a new job state,
   scheduler, pipeline engine, or `flow` verb. §13 already rejects the engine; this is
