@@ -1,12 +1,22 @@
 # Orchestrator profiles
 
-Status: later · Priority: P1 · Origin: repeated model/effort/access policy drift · Depends: — · Workspace: —
+Status: later · Priority: P1 · Origin: repeated model/effort/access policy drift; extended by [Flows](../done/flows.md) role/model wiring · Depends: — · Workspace: —
 
 ## Goal
 
 Make recurring dispatch policy named and inspectable so an orchestrator can reliably
 say “use the implementation profile” or “use the independent review profile” without
 restating and occasionally drifting from every flag.
+
+[Flows](../done/flows.md) names roles (orchestrator, planner, implementer, verifier,
+independent reviewer) and documents one accepted example model roster for them
+(`legwork guide`'s "Model policy" subsection) without wiring it into substrate
+semantics — flows stay valid as the roster changes. Profile names are the natural
+place that example becomes concrete config: a `[profiles.planner]`, `[profiles.
+implementer]`, `[profiles.review]` (etc.) set that a flow's task/append-prompt text
+can reference by name instead of restating agent/model/effort per role every time.
+This task remains the single place profile config is designed; do not fork a second
+role-profile mechanism out of the flows work.
 
 ## Desired experience
 
