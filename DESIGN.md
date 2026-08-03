@@ -448,18 +448,30 @@ machine needs it — the laptop needs only ssh.
 
 - **Worker-facing rules**: injected at runtime (§4). Not documentation.
 - **Orchestrator-facing skill**, split **how-to** (the loop: run → wake/poll → handle
-  needs-input/done/blocked → resume → verify → close) vs **recipes** (the playbook —
+  needs-input/done/blocked → resume → verify → close) vs **flows** (the playbook —
   most of the skill's value): missing/unparseable status block; stuck-vs-thinking
   (read last events before deciding; then cancel + nudge); poisoned context → fresh
   session from artifacts; verify-before-trusting-done; answer-vs-escalate; model/effort
-  policy (big model high effort for plan/review, cheap for mechanical implementation of
-  an approved plan, cheap+fast for interrogation — halves pipeline cost); reboot
+  policy (big model high effort for plan/review, a mid-tier implementer executing a
+  precise plan, a cheap distiller for chunky command output, cheap+fast for
+  interrogation — proportional cost); reboot
   recovery; parallel workspaces + merge sequencing (land sequentially; conflict → fix
   job in the workspace; decompose along file boundaries at plan time so conflicts are
   rare by construction); plan task-lists with dependency annotations → fan-out
   decisions; checkpoint reports at phase boundaries, citable; close as final pipeline
   step; start-of-run stale-job sweep; bootstrap a cold repo (workstree); raised budgets
   for instructed subagent fan-out.
+- **Flows are frozen at the recipe/orchestrator layer, not as verbs** (accepted
+  2026-08-02): named roles (orchestrator, planner, implementer, verifier, command
+  distiller, independent reviewer), risk-proportional routing (direct orchestrator
+  handling / full delivery flow / high-risk gates; independent review mandatory for
+  every non-trivial change), context/evidence hygiene, and a flow ledger
+  (`intake → planned → implemented → verified → reviewed → landed → harvested`) that
+  is read off existing job/workspace receipts — not a new job state,
+  scheduler, pipeline engine, or `flow` verb. §13 already rejects the engine; this is
+  the documentation-layer counterpart: the *shape* is canonical (`legwork guide`'s
+  `## Flows` section), per-role model choice is orchestrator policy, never hard-coded
+  into substrate semantics.
 - **`legwork guide`** prints the skill; `--help` is the fallback skill — one screen,
   verbs + the loop, sufficient for a cold agent to drive a correct happy path. Docs
   travel with the binary over ssh.
@@ -467,6 +479,9 @@ machine needs it — the laptop needs only ssh.
 ## 13. Out of scope / explicitly rejected
 
 - Pipeline engine in the tool (runs are labels; orchestrators compose).
+- Flow ledger states (`intake/planned/implemented/verified/reviewed/landed/harvested`,
+  §12) as new job/workspace lifecycle states or a `flow` verb — they are read off
+  existing receipts by the orchestrator, never persisted or enforced by legwork itself.
 - MCP server integration (§1).
 - `spawn_subjob` / workers mutating the job graph (§5).
 - Databases, daemons (§11).

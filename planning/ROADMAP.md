@@ -21,8 +21,6 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-None.
-
 ## Next
 
 - [ ] [Actionable workspace and job status](tasks/actionable-workspace-status.md) — **P1.** Add
@@ -35,7 +33,15 @@ None.
 ## Later
 
 - [ ] [Orchestrator profiles](tasks/orchestrator-profiles.md) — **P1.** Named, inspectable presets
-  for agent/model/effort/access/timeout policy, with explicit resolved dispatch values.
+  for agent/model/effort/access/timeout policy, with explicit resolved dispatch values;
+  extended (not duplicated) by flows' role/model wiring. Depends: flows.
+- [ ] [General workspace evidence/check receipts](tasks/workspace-check-receipts.md) — **P2.**
+  A `ws check` general host-side command receipt (lossless redacted artifact, compact
+  receipt) for flows/jobs `legwork verify`'s exact-job `blocked.kind=verify` handoff
+  doesn't cover. Depends: flows, quality-receipts, external-verification-receipts.
+- [ ] [Richer structured review findings](tasks/review-finding-dimensions.md) — **P2.**
+  Persist individual dimension-tagged, ID-addressable review findings in workspace
+  metadata instead of severity counts only. Depends: flows, quality-receipts.
 - [ ] [Stable structured operation surface](tasks/native-operation-surface.md) — **P1.** Versioned
   JSON operations and schema discovery for the core CLI-over-ssh loop without MCP or a daemon.
 - [ ] [Exact Codex `xhigh` passthrough](tasks/model-aware-reasoning-effort.md) — **P2.** Stop

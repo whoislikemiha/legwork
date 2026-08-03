@@ -1,6 +1,6 @@
 # Orchestrator profiles
 
-Status: later · Priority: P1 · Origin: repeated model/effort/access policy drift · Depends: — · Workspace: —
+Status: later · Priority: P1 · Origin: repeated model/effort/access policy drift; extended by [Flows](../done/flows.md) role/model wiring · Depends: — · Workspace: —
 
 ## Goal
 
@@ -8,7 +8,21 @@ Make recurring dispatch policy named and inspectable so an orchestrator can reli
 say “use the implementation profile” or “use the independent review profile” without
 restating and occasionally drifting from every flag.
 
+[Flows](../done/flows.md) names roles (orchestrator, planner, implementer, verifier,
+command/evidence distiller, independent reviewer) and expresses per-role model
+choice as capability requirements (`legwork guide`'s "Model policy" subsection)
+without wiring any specific roster into substrate semantics — flows stay valid as
+an operator's roster changes. Profile names are the natural place a concrete
+roster becomes named config: a `[profiles.planner]`, `[profiles.
+implementer]`, `[profiles.review]` (etc.) set that a flow's task/append-prompt text
+can reference by name instead of restating agent/model/effort per role every time.
+This task remains the single place profile config is designed; do not fork a second
+role-profile mechanism out of the flows work.
+
 ## Desired experience
+
+Illustrative field values below, not accepted policy — any operator wires their own
+agent/model choices here.
 
 ```toml
 [profiles.implement]
@@ -22,7 +36,17 @@ agent = "claude"
 model = "opus"
 effort = "xhigh"
 read_only = true
+
+[profiles.distill]
+agent = "claude"
+model = "haiku"
+effort = "low"
 ```
+
+`profiles.distill` names the flows shared command/evidence distiller role so
+wiring it doesn't fork a second profile mechanism. Whether the distiller consumes
+an already-captured artifact (read-only) or executes the command itself (needing a
+writable cache/workspace) is a design point this task settles.
 
 ```bash
 legwork run --profile implement "read the task file"

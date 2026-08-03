@@ -156,10 +156,20 @@ $ legwork guide
 
 It covers the run→observe→steer loop, hooking notifications up as your wake-up
 signal, workspace review flow, health recipes (spotting and recovering a
-poisoned-context worker), and orchestration recipes — the multi-task campaign
-shape (parallel implement, serial land), a proportionality gate for keeping small
-fixes small, append-prompt norms, and the
-competition/design-only patterns. Preflight a machine before dispatching with
+poisoned-context worker), and **flows** — the documented multi-role delivery
+architecture built on top of jobs/workspaces: role contracts (orchestrator, planner,
+implementer, command/evidence distiller, independent reviewer), risk-proportional
+routing (direct orchestrator handling for trivial work; the full planner →
+implementer → deterministic verification → independent review flow for everything
+non-trivial; high-risk gates on top — independent review mandatory for every
+non-trivial change), evidence hygiene (distilled receipts in orchestrator context,
+raw logs out of it), and a flow ledger (`intake →
+planned → implemented → verified → reviewed → landed → harvested`) read off existing
+receipts rather than new job/workspace states — plus the multi-task campaign shape
+(parallel implement, serial land), a proportionality gate for keeping small fixes
+small, append-prompt norms, and the competition/design-only patterns. A flow is a
+recipe, not a new verb or scheduler — legwork stays the substrate; the orchestrator
+composes it. Preflight a machine before dispatching with
 `legwork doctor` (agent binary, auth, model, state dir, notifier — machine-readable,
 stable exit codes). Record `legwork version --json` in field notes when build
 identity matters; it prints version (or `dev`), commit, dirty flag, and date.
