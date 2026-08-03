@@ -489,7 +489,8 @@ checks.
 saves the approved task/acceptance contract under the same `$task_id`-qualified
 `acceptance-contract-${task_id}.md` artifact name a planner would have used, so
 review-context assembly never branches on lane; cheap implementer; one gate; still
-a bounded independent review) · normal/default (planner →
+a bounded independent review from a different model family — Luna implementation
+needs a non-OpenAI reviewer, while Sonnet implementation may use Sol) · normal/default (planner →
 `acceptance-contract-${task_id}.md` → implementer → deterministic
 verify → fresh review → FIX loop → land) · architectural
 (design + adversarial design review before code; adversarial tester where useful; a
@@ -636,7 +637,10 @@ landed) so the run reads as a narrative.
   watch the merged timeline live with `legwork tail <label>` (or the
   snapshot `legwork events <label>`).
 - Model policy: big model + `--read-only` for plan/review turns; cheaper `--model`
-  for mechanical implementation of an approved plan. Dial reasoning with `--effort`
+  for mechanical implementation of an approved plan. Luna is for throughput/quota
+  preservation only when the contract is exact and the gate is focused; if Luna
+  mutates code, choose a non-OpenAI reviewer, or retain Sonnet implementation when
+  Sol is the reviewer. Dial reasoning with `--effort`
   (`low` for mechanical edits, `high`/`max` for hard design work; codex clamps
   `xhigh`/`max` to its `high` ceiling). On claude, set `--fallback-model` to survive
   overload without failing the turn.

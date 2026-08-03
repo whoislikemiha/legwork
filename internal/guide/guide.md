@@ -546,6 +546,15 @@ roster, not a hard-coded policy — the planned `orchestrator profiles` work
 (`planning/tasks/orchestrator-profiles.md`) is where a roster like this becomes named,
 inspectable dispatch config.
 
+Luna is the mechanical option for throughput and quota preservation, not because a
+small diff deserves weaker judgment. Use it only when the contract is already exact,
+the change is narrow and reversible, and a focused deterministic gate can catch the
+obvious failure modes. Model-family independence still outranks the roster: if Luna
+mutates code, route review to a fresh non-OpenAI reviewer; if the reviewer is Sol,
+keep Sonnet as the implementer. Promote out of Luna immediately when repository
+inspection reveals ambiguity, public-contract impact, security/data/concurrency risk,
+or unexpected files.
+
 ### Lanes — size the flow to the risk
 
 Review of mutating code is mandatory in every lane; lanes change how much runs
@@ -556,7 +565,9 @@ lane only decides how much *else* runs alongside it.
 
 1. **Mechanical** — skip the planner when the task file is already an adequate
    contract; cheap-model implementer; one focused deterministic gate; still a bounded
-   independent review for every mutating change. Documentation-only/no-code changes
+   independent review from a different model family for every mutating change (so a
+   Luna implementation needs a non-OpenAI reviewer; Sonnet implementation may use
+   Sol). Documentation-only/no-code changes
    may use orchestrator verification instead when there is no meaningful independent
    code review to run. Promote to Normal on scope growth, unexpected files, a failed
    gate, ambiguity, or a real review finding.

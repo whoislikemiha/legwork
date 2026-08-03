@@ -34,7 +34,7 @@ Profiles are the eventual wiring; flows name roles and remain valid as model ros
 
 ### Proportional lanes
 
-1. **Mechanical:** no planner when the task file is already an adequate contract; Luna implementer; focused deterministic gate; bounded but independent review for every mutating code change. Documentation-only/no-code changes may use orchestrator verification when no meaningful independent code review exists. Promote on scope growth, unexpected files, failed gates, ambiguity, or meaningful findings.
+1. **Mechanical:** no planner when the task file is already an adequate contract; Luna implementer for throughput/quota preservation; focused deterministic gate; bounded but independent review from a different model family for every mutating code change. A Luna implementation therefore uses a non-OpenAI reviewer; retain Sonnet implementation when Sol is the reviewer. Documentation-only/no-code changes may use orchestrator verification when no meaningful independent code review exists. Promote on scope growth, unexpected files, failed gates, ambiguity, or meaningful findings.
 2. **Normal (default):** planner → approved plan artifact → Sonnet implementer → deterministic verification → fresh Sol review → FIX/reverify/re-review as needed → orchestrator lands.
 3. **Architectural/high-risk:** design-only Fable plan + adversarial design review before code; decomposed implementation; deterministic verification; fresh adversarial tester where useful; real-browser experience verification for UI; fresh Sol review each round; optional second independent review for security/public-contract/data-integrity changes; human checkpoint only for genuine product/risk decisions.
 
