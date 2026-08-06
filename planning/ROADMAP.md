@@ -25,6 +25,26 @@ None.
 
 ## Next
 
+- [ ] [Claude policy hook layer](tasks/claude-policy-hooks.md) — **P0.** Close the largest §9
+  posture gap: claude mutating jobs run bypass with no PreToolUse policy layer; ship
+  `legwork _hook`, per-job generated settings, fail-closed denies (push, out-of-worktree
+  writes), and the `sandbox: os|policy|none` capability tier. Origin: 2026-08-06 audit.
+- [ ] [In-place jobs read-only by default](tasks/inplace-readonly-default.md) — **P0.** `--dir`
+  shipped writable-unless-`--read-only`; DESIGN §2 mandates read-only-unless-`--allow-write`
+  (prompt-injection posture). Breaking change, loud dispatch error on readonly-incapable
+  agents. Origin: 2026-08-06 audit.
+- [ ] [Non-workspace auto-close + gc retention coherence](tasks/nonworkspace-autoclose.md) —
+  **P1.** gc's retention clock assumes the never-shipped §2 auto-close, so unacked
+  non-workspace transcripts timer-delete; pick auto-close or ack-anchored retention —
+  deletion never on time alone. Origin: 2026-08-06 audit.
+- [ ] [DESIGN.md sync](tasks/design-sync.md) — **P2.** Ratify deliberate drift (verb table,
+  missing-block→blocked wording, renames, shipped serve/dashboard, event families), mark
+  intended-but-unbuilt items with pointers; posture fixes stay with their own tasks. Lands
+  after the P0s pick their direction. Origin: 2026-08-06 audit.
+- [ ] [Retire the guide — progressive disclosure via the binary](tasks/retire-the-guide.md) — **P1.**
+  Kill the preloaded 43KB guide; depth moves into per-verb long `--help` + embedded help topics
+  (still ssh-embedded, now version-matched), SKILL.md shrinks to the loop + routing table.
+  Origin: PR #1 review 2026-08-06.
 - [ ] [Transient provider failure recovery](tasks/transient-provider-recovery.md) — **P1.** Classify
   temporary provider failures, preserve useful progress, and make replay safety explicit.
 - [ ] [Truthful live job health](tasks/codex-health-signal.md) — **P1.** Stop false Codex context
@@ -70,6 +90,17 @@ stream-json`; claude-shaped surface, fixtures never assumed):
   subscription, and unknown usage; aggregate only comparable values.
 - [ ] Small remainders — carried from the pre-system roadmap; **no task file yet, create one when
   picked up** (each is a real item, just not currently scheduled):
+  - **Workspace dispatch flock** (P1, small) — the one-active-job-per-workspace invariant is a
+    scan-then-create (`workspace_cmds.go` active-job check), not the DESIGN §2 flock; TOCTOU
+    race under concurrent dispatch. Take a per-workspace flock across check+create.
+    (2026-08-06 audit.)
+  - **Runner liveness PID-reuse hazard** (P2, small) — liveness is `kill(pid, 0)` on
+    `RunnerPID` from meta; after reboot a reused PID can make a dead runner look alive.
+    Validate process start time or parentage before trusting the signal. (2026-08-06 audit.)
+  - **`ws new` base ref default** (P2, small) — branches off current HEAD; DESIGN §2 says
+    default-branch tip (`DefaultBranchTip` exists but is only used at close/gc). Silently
+    basing on the operator's checkout is surprise-prone; default to the default branch,
+    `--base` already overrides. (2026-08-06 audit.)
   - **Command grammar + self-describing JSON** (P2) — wrapped/documented `--json` envelopes,
     examples in help (AUDIT E3). Run-selector consistency promoted to
     [unified-addressing.md](done/unified-addressing.md); envelope work promoted to
