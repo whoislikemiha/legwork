@@ -37,6 +37,7 @@ func runEval() error {
 		realBin      = flag.String("real-bin", "", "prebuilt legwork binary (default: go build from -repo)")
 		reps         = flag.Int("reps", 1, "repetitions per (model, scenario); rates replace pass/fail")
 		parallel     = flag.Int("parallel", 3, "concurrent runs (each is an isolated sandbox)")
+		baseline     = flag.String("baseline", "", "prior run dir (or its summary.json) to diff this run against")
 	)
 	flag.Parse()
 
@@ -127,7 +128,7 @@ func runEval() error {
 		}
 		return a.Rep < b.Rep
 	})
-	return writeSummary(runRoot, results, *reps)
+	return writeSummary(runRoot, results, *reps, *baseline)
 }
 
 func runOne(runRoot, model string, entry scenarioEntry, rep, reps int, bin, self, skill, orch string) (*scenarioResult, error) {
@@ -226,7 +227,7 @@ func loadScenarios(root, only string) ([]scenarioEntry, error) {
 	return out, nil
 }
 
-func writeSummary(runRoot string, results []*scenarioResult, reps int) error {
+func writeSummary(runRoot string, results []*scenarioResult, reps int, baseline string) error {
 	raw, err := json.MarshalIndent(results, "", "  ")
 	if err != nil {
 		return err
@@ -238,6 +239,7 @@ func writeSummary(runRoot string, results []*scenarioResult, reps int) error {
 
 	if reps > 1 {
 		writeAggregate(&b, results)
+		writeBaselineDelta(&b, baseline, results)
 		b.WriteString("\n## Failing runs\n")
 		for _, r := range results {
 			if !r.Passed {
@@ -276,6 +278,8 @@ func writeSummary(runRoot string, results []*scenarioResult, reps int) error {
 			kTok(o.CacheReadTokens), kTok(o.CacheCreationTokens), kTok(o.PeakContextTokens),
 			o.contextPct(), o.WallS, o.CostUSD)
 	}
+
+	writeBaselineDelta(&b, baseline, results)
 
 	b.WriteString("\n## Detail\n")
 	for _, r := range results {
@@ -347,6 +351,94 @@ func writeAggregate(b *strings.Builder, results []*scenarioResult) {
 			k.model, k.scenario, pass, len(g), quiz,
 			median(fumbles), maxF(fumbles), median(denials), maxF(denials),
 			median(invs), lat, kTok(int64(maxF(peaks))), median(walls), cost)
+	}
+}
+
+// aggKey/aggRow are the per-(model, scenario) rollup used by the baseline
+// delta. Kept separate from writeAggregate's inline math so a stored
+// summary.json from any prior run aggregates identically.
+type aggKey struct{ Model, Scenario string }
+
+type aggRow struct {
+	Pass, Total int
+	Fumbles     []float64
+	Denials     []float64
+	Cost        float64
+}
+
+func aggregate(results []*scenarioResult) (map[aggKey]*aggRow, []aggKey) {
+	rows := map[aggKey]*aggRow{}
+	var order []aggKey
+	for _, r := range results {
+		k := aggKey{r.Model, r.Scenario}
+		row, ok := rows[k]
+		if !ok {
+			row = &aggRow{}
+			rows[k] = row
+			order = append(order, k)
+		}
+		row.Total++
+		if r.Passed {
+			row.Pass++
+		}
+		row.Fumbles = append(row.Fumbles, float64(r.Metrics.Fumbles))
+		row.Denials = append(row.Denials, float64(r.Orch.PermissionDenials))
+		row.Cost += r.Orch.CostUSD
+	}
+	return rows, order
+}
+
+// writeBaselineDelta renders this run against a prior run's summary.json —
+// the regression-compare surface auto-research iterations diff instead of
+// reading two markdown reports by hand. Baseline rows with no counterpart in
+// this run (and vice versa) are named, never silently dropped.
+func writeBaselineDelta(b *strings.Builder, baseline string, results []*scenarioResult) {
+	if baseline == "" {
+		return
+	}
+	path := baseline
+	if info, err := os.Stat(path); err == nil && info.IsDir() {
+		path = filepath.Join(path, "summary.json")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Fprintf(b, "\n## Delta vs baseline\n\nbaseline unreadable: %v\n", err)
+		return
+	}
+	var prior []*scenarioResult
+	if err := json.Unmarshal(raw, &prior); err != nil {
+		fmt.Fprintf(b, "\n## Delta vs baseline\n\nbaseline unparseable: %v\n", err)
+		return
+	}
+	base, _ := aggregate(prior)
+	now, order := aggregate(results)
+
+	fmt.Fprintf(b, "\n## Delta vs baseline (%s)\n\n", path)
+	b.WriteString("| model | scenario | pass | Δpass | fumbles med | denials med | cost |\n")
+	b.WriteString("|---|---|---|---|---|---|---|\n")
+	for _, k := range order {
+		n := now[k]
+		p, ok := base[k]
+		if !ok {
+			fmt.Fprintf(b, "| %s | %s | %d/%d | new (not in baseline) | %.0f | %.0f | $%.2f |\n",
+				k.Model, k.Scenario, n.Pass, n.Total, median(n.Fumbles), median(n.Denials), n.Cost)
+			continue
+		}
+		// Rate delta in percentage points so unequal rep counts stay comparable.
+		delta := float64(n.Pass)/float64(n.Total) - float64(p.Pass)/float64(p.Total)
+		fmt.Fprintf(b, "| %s | %s | %d/%d (was %d/%d) | %+.0f pp | %.0f (was %.0f) | %.0f (was %.0f) | $%.2f (was $%.2f) |\n",
+			k.Model, k.Scenario, n.Pass, n.Total, p.Pass, p.Total, delta*100,
+			median(n.Fumbles), median(p.Fumbles), median(n.Denials), median(p.Denials), n.Cost, p.Cost)
+	}
+	var missing []string
+	for k := range base {
+		if _, ok := now[k]; !ok {
+			missing = append(missing, k.Model+"/"+k.Scenario)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		fmt.Fprintf(b, "\nnot re-run this time (baseline only): %s\n", strings.Join(missing, ", "))
 	}
 }
 

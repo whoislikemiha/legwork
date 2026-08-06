@@ -236,8 +236,249 @@ func wsCmd() *cobra.Command {
 	reviewCmd.Flags().StringVar(&reviewAppendPromptFile, "append-prompt-file", "", "read orchestrator additions from a UTF-8 text file, or - for stdin")
 	reviewCmd.Flags().BoolVar(&reviewJSON, "json", false, "JSON output")
 
-	ws.AddCommand(newCmd, lsCmd, commitCmd, reviewCmd)
+	ws.AddCommand(newCmd, lsCmd, commitCmd, reviewCmd, wsStatusCmd())
 	return ws
+}
+
+// wsStatusAction is one deterministic next step: what to do, why, and a
+// copyable command when one is safe to suggest.
+type wsStatusAction struct {
+	Action  string `json:"action"`
+	Reason  string `json:"reason"`
+	Command string `json:"command,omitempty"`
+}
+
+type wsStatusJob struct {
+	ID    string `json:"id"`
+	State string `json:"state"`
+}
+
+type wsStatusOut struct {
+	Workspace    string                   `json:"workspace"`
+	Repo         string                   `json:"repo"`
+	Branch       string                   `json:"branch"`
+	BaseOID      string                   `json:"base_oid"`
+	State        string                   `json:"state"`
+	Disposition  string                   `json:"disposition,omitempty"`
+	MergedInto   string                   `json:"merged_into,omitempty"`
+	Checkpoints  int                      `json:"checkpoints"`
+	Jobs         []wsStatusJob            `json:"jobs"`
+	DiffStat     string                   `json:"diff_stat,omitempty"`
+	FinalCommit  *workspace.CommitInfo    `json:"final_commit,omitempty"`
+	CloseReceipt *workspace.CloseReceipt  `json:"close_receipt,omitempty"`
+	Review       *workspace.ReviewReceipt `json:"latest_review,omitempty"`
+	Verification *job.VerificationReceipt `json:"latest_verification,omitempty"`
+	Attention    []string                 `json:"attention"`
+	NextActions  []wsStatusAction         `json:"next_actions"`
+}
+
+// wsStatusCmd is the one-command workspace rollup (see
+// planning/tasks/actionable-workspace-status.md): what happened, what needs
+// attention, and the next safe action — without joining job status, events,
+// diffs, review prose, and receipts by hand. Strictly read-only; it reads
+// persisted receipts, never infers a verdict from prose, and never advances
+// state. For a closed workspace the close receipt shown here IS the landing
+// proof — the answer to "confirm the change landed".
+func wsStatusCmd() *cobra.Command {
+	var asJSON bool
+	c := &cobra.Command{
+		Use:   "status <workspace>",
+		Short: "Workspace rollup: facts, receipts, attention, next safe action",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			s, wss, err := openWorkspaces()
+			if err != nil {
+				return err
+			}
+			m, err := wss.Load(args[0])
+			if err != nil {
+				return err
+			}
+			out, err := buildWSStatus(s, wss, m)
+			if err != nil {
+				return err
+			}
+			if asJSON {
+				return printJSON(out)
+			}
+			printWSStatus(out)
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
+	return c
+}
+
+func buildWSStatus(s *job.Store, wss *workspace.Store, m *workspace.Meta) (*wsStatusOut, error) {
+	out := &wsStatusOut{
+		Workspace: m.ID, Repo: m.Repo, Branch: m.Branch, BaseOID: m.BaseOID,
+		State: m.State, Disposition: m.Disposition, MergedInto: m.MergedInto,
+		Checkpoints: m.Checkpoints, FinalCommit: m.FinalCommit, CloseReceipt: m.CloseReceipt,
+		Review: m.LatestReview, Verification: workspaceCurrentVerification(s, m),
+		Attention: []string{}, NextActions: []wsStatusAction{},
+	}
+	metas, err := s.List()
+	if err != nil {
+		return nil, err
+	}
+	var attached []*job.Meta
+	for _, jm := range metas {
+		if jm.Workspace != m.ID {
+			continue
+		}
+		s.Reconcile(jm)
+		attached = append(attached, jm)
+		out.Jobs = append(out.Jobs, wsStatusJob{ID: jm.ID, State: string(jm.State)})
+	}
+	if m.State == "open" {
+		if stat, err := wss.Diff(m, true); err != nil {
+			out.DiffStat = "unavailable: " + err.Error()
+		} else if stat = strings.TrimSpace(stat); stat == "" {
+			out.DiffStat = "empty"
+		} else {
+			lines := strings.Split(stat, "\n")
+			out.DiffStat = strings.TrimSpace(lines[len(lines)-1])
+		}
+	}
+	wsStatusAdvice(out, m, attached)
+	if len(out.Attention) == 0 {
+		out.Attention = append(out.Attention, "none")
+	}
+	return out, nil
+}
+
+// wsStatusAdvice derives the deterministic attention/next_actions codes.
+// Review, verification, merge, and close remain separate gates — the advice
+// names the next one, it never combines or skips them.
+func wsStatusAdvice(out *wsStatusOut, m *workspace.Meta, attached []*job.Meta) {
+	if m.State == "closed" {
+		reason := "workspace is closed; the close receipt above is the durable record"
+		if m.Disposition == "merged" {
+			reason = "landed: the close receipt (target, final commit) is the proof — no git check needed"
+		}
+		out.NextActions = append(out.NextActions, wsStatusAction{Action: "none", Reason: reason})
+		return
+	}
+	for _, jm := range attached {
+		switch {
+		case jm.State == job.StateActive || jm.State == job.StateQueued:
+			out.Attention = append(out.Attention, "job-running")
+			out.NextActions = append(out.NextActions, wsStatusAction{Action: "wait",
+				Reason:  jm.ID + " is " + string(jm.State),
+				Command: "legwork wait " + jm.ID})
+		case jm.State == job.StateNeedsInput:
+			out.Attention = append(out.Attention, "needs-input")
+			out.NextActions = append(out.NextActions, wsStatusAction{Action: "answer",
+				Reason:  jm.ID + " asked: " + events.Truncate(jm.Question),
+				Command: "legwork answer " + jm.ID + " \"<decision>\""})
+		case jm.State == job.StateBlocked && jm.Blocked != nil && jm.Blocked.Kind == "verify":
+			out.Attention = append(out.Attention, "blocked-verify")
+			out.NextActions = append(out.NextActions, wsStatusAction{Action: "verify",
+				Reason:  jm.ID + " requested host verification",
+				Command: "legwork verify " + jm.ID + " -- <argv...>"})
+		case jm.State == job.StateBlocked && jm.Blocked != nil && jm.Blocked.Kind == "provision":
+			out.Attention = append(out.Attention, "needs-provision")
+			out.NextActions = append(out.NextActions, wsStatusAction{Action: "approve",
+				Reason:  jm.ID + " wants: " + events.Truncate(jm.Blocked.Command),
+				Command: "legwork approve " + jm.ID})
+		case jm.State == job.StateFailed || jm.State == job.StateInterrupted || jm.State == job.StateAuthNeeded:
+			out.Attention = append(out.Attention, string(jm.State))
+			out.NextActions = append(out.NextActions, wsStatusAction{Action: "inspect",
+				Reason:  jm.ID + " is " + string(jm.State),
+				Command: "legwork events " + jm.ID})
+		}
+	}
+	if len(out.NextActions) > 0 {
+		return // a job needs handling before any landing step is safe
+	}
+	if r := out.Review; r != nil && r.Parsed && r.Verdict == "FIX" {
+		out.Attention = append(out.Attention, "review-fix")
+		out.NextActions = append(out.NextActions, wsStatusAction{Action: "fix-findings",
+			Reason:  fmt.Sprintf("review %s returned FIX (%d findings); relay them to the implementer", r.Job, r.Findings.Total),
+			Command: "legwork resume <implementer-job> \"<findings>\""})
+		return
+	}
+	if v := out.Verification; v != nil && !v.Passed {
+		out.Attention = append(out.Attention, "verification-failed")
+		out.NextActions = append(out.NextActions, wsStatusAction{Action: "verify",
+			Reason:  "latest verification did not pass",
+			Command: shellCommand(verifyRetry(v.Job, v.Argv))})
+		return
+	}
+	switch {
+	case out.DiffStat == "empty" && len(attached) == 0:
+		out.NextActions = append(out.NextActions, wsStatusAction{Action: "dispatch",
+			Reason:  "no changes and no jobs yet",
+			Command: "legwork run --workspace " + m.ID + " \"<task>\""})
+	case out.DiffStat != "empty" && (out.Review == nil || !out.Review.Parsed):
+		out.NextActions = append(out.NextActions, wsStatusAction{Action: "review",
+			Reason:  "unreviewed changes; close will refuse without a disposition",
+			Command: "legwork ws review " + m.ID})
+	case out.FinalCommit == nil && out.DiffStat != "empty":
+		out.NextActions = append(out.NextActions, wsStatusAction{Action: "commit",
+			Reason:  "review verdict SHIP; commit as the orchestrator",
+			Command: "legwork ws commit " + m.ID + " -m \"<message>\""})
+	default:
+		out.NextActions = append(out.NextActions, wsStatusAction{Action: "close",
+			Reason:  "work is committed; land and close",
+			Command: "legwork close " + m.ID + " --merge-into main"})
+	}
+}
+
+func printWSStatus(out *wsStatusOut) {
+	state := out.State
+	if out.Disposition != "" {
+		state += "/" + out.Disposition
+	}
+	fmt.Printf("%s  %s  repo: %s\n", out.Workspace, state, out.Repo)
+	fmt.Printf("branch: %s  base: %s  checkpoints: %d\n", out.Branch, shortOID(out.BaseOID), out.Checkpoints)
+	if len(out.Jobs) > 0 {
+		parts := make([]string, len(out.Jobs))
+		for i, j := range out.Jobs {
+			parts[i] = j.ID + " " + j.State
+		}
+		fmt.Printf("jobs: %s\n", strings.Join(parts, ", "))
+	}
+	if out.DiffStat != "" {
+		fmt.Printf("diff: %s\n", out.DiffStat)
+	}
+	if r := out.Review; r != nil {
+		if r.Parsed {
+			fmt.Printf("review: %s (%s, %d findings)\n", r.Verdict, r.Job, r.Findings.Total)
+		} else {
+			fmt.Printf("review: unparsed (%s): %s\n", r.Job, r.ParseError)
+		}
+	}
+	if v := out.Verification; v != nil {
+		state := "failed"
+		if v.Passed {
+			state = "passed"
+		} else if v.TimedOut {
+			state = "timed out"
+		}
+		fmt.Printf("verification: %s  receipt: %s\n", state, v.ReceiptID)
+	}
+	if fc := out.FinalCommit; fc != nil {
+		fmt.Printf("final commit: %s %q\n", shortOID(fc.OID), fc.Message)
+	}
+	if cr := out.CloseReceipt; cr != nil {
+		line := "close receipt: " + cr.ReceiptID
+		if cr.Target != "" {
+			line += "  merged into: " + cr.Target
+		}
+		if cr.ClosedAt != nil {
+			line += "  at " + cr.ClosedAt.Format(time.RFC3339)
+		}
+		fmt.Println(line)
+	}
+	fmt.Printf("attention: %s\n", strings.Join(out.Attention, ", "))
+	for _, a := range out.NextActions {
+		line := "next: " + a.Action + " — " + a.Reason
+		if a.Command != "" {
+			line += "\n      " + a.Command
+		}
+		fmt.Println(line)
+	}
 }
 
 func workspaceCurrentVerification(s *job.Store, wm *workspace.Meta) *job.VerificationReceipt {

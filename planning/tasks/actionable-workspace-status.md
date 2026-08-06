@@ -55,3 +55,13 @@ particular, `blocked.kind=verify` points to verification rather than generic res
 - A pipeline engine, auto-merge, policy daemon, or replacement for `diff`/`events`.
 
 ## Log
+
+2026-08-06 — first slice landed, driven by the orchestration eval's residual F1
+(instructed "confirm it landed" routes to git even with the close receipt in
+hand): `legwork ws status <ws> [--json]` ships facts (identity, jobs, diff
+stat, latest review/verification receipts, final commit, close receipt) plus
+deterministic `attention` and `next_actions` (wait/answer/verify/approve/
+inspect/dispatch/review/fix-findings/commit/close/none) with copyable commands.
+Read-only, receipts-only, per this spec. Still open from the spec: job
+`status` sharing the attention/action vocabulary; ahead/behind git facts;
+fixtures for FIX/SHIP/conflicted states beyond the current e2e coverage.

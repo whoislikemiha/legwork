@@ -153,9 +153,16 @@ One active job per workspace; parallelism = multiple workspaces. `close` refuses
 unreviewed changes without an explicit disposition — that's the review gate, don't
 bypass it reflexively.
 
+`legwork ws status "$ws" [--json]` is the one-command rollup: facts, attached
+jobs, latest review/verification receipts, final commit, close receipt, plus
+`attention` and `next_actions` codes with a copyable command each. Reach for it
+whenever the question is "where is this workspace / what do I do next".
+
 A successful close prints the landing proof — landed target, merge commit, receipt
-ID (`--json` carries the full `close_receipt`). Do not re-verify with `git log`
-afterwards; disposition claims are verified before the receipt is written.
+ID (`--json` carries the full `close_receipt`). To confirm a landing (including
+when the task says "confirm the change landed"), use `legwork ws status "$ws"` —
+it re-reads the close receipt. Never `git log`; disposition claims are verified
+before the receipt is written.
 
 Use `legwork ws review <ws>` before landing implementer output. It checkpoints the
 reviewed tree and dispatches a read-only reviewer job seeded with that exact diff

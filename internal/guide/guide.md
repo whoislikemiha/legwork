@@ -239,9 +239,18 @@ legwork close ws-N --merge-into main     -> no-ff merge locally, then close as m
 legwork close ws-N --merged|--discard [--reason TEXT] [--retention POLICY]
                                          -> records a close receipt + workspace event, then drops
                                             the local worktree cache
+legwork ws status ws-N [--json]          -> one-command rollup: facts, receipts,
+                                            attention, next safe action
 legwork events ws-N --workspace [--since N] [--json]
                                          -> append-only workspace commit/close history
 ```
+
+`ws status` is the "where are we" command: identity, attached jobs, diff stat,
+latest review verdict and verification receipt, final commit, close receipt,
+plus deterministic `attention` and `next_actions` (wait, answer, verify,
+approve, review, fix-findings, commit, close) with a copyable command each.
+It is strictly read-only and reads persisted receipts only — it never infers a
+verdict from prose and never advances state.
 
 **You own git history; workers never commit.** The injected contract forbids
 worker commits — do not override it in your prompts ("commit when done" turns a
@@ -279,10 +288,12 @@ switch. Use `-m` to supply the merge commit message, and `--json` for
 
 **The close output is the landing proof.** A successful close prints the landed
 target, merge commit, and receipt ID (`--json` carries the full `close_receipt`
-with `final_commit`); the same receipt stays queryable via `legwork events ws-N
---workspace`. Do not re-verify with `git log`/`git status` afterwards — if close
-printed a receipt the work landed, and if it refused it said why. Every
-disposition claim is verified before the receipt is written.
+with `final_commit`). When you need to confirm a landing — including when the
+task explicitly says "confirm the change landed" — the command is `legwork ws
+status <ws>`: it re-reads the persisted close receipt, target, and final
+commit. Do not re-verify with `git log`/`git status`; if close printed a
+receipt the work landed, and if it refused it said why. Every disposition
+claim is verified before the receipt is written.
 
 If the work landed by another path (PR, manual merge), close `--merged`.
 `--merged` is verified, not trusted: the branch must actually be an ancestor of

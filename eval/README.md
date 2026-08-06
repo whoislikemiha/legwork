@@ -16,6 +16,9 @@ go build -o /tmp/legwork-eval ./eval
 
 # the ladder: full suite across tiers
 /tmp/legwork-eval -models haiku,sonnet,opus
+
+# the loop: diff a mutation against a prior run's summary.json
+/tmp/legwork-eval -reps 5 -baseline eval/results/<prior-runid>
 ```
 
 Findings from runs are tracked in [FINDINGS.md](FINDINGS.md) — diff new results

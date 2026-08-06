@@ -23,6 +23,7 @@ $ legwork verify job-7 -- go test ./... -count=1  # host-side receipt for blocke
 $ legwork ws review ws-1 --model opus    # independent read-only review of the diff
 $ legwork ws commit ws-1 -m "add API rate limiting"
 $ legwork close ws-1 --merge-into main --reason "landed in main" # merges, records, reclaims
+$ legwork ws status ws-1       # rollup: facts, receipts, attention, next safe action
 ```
 
 ## Why
