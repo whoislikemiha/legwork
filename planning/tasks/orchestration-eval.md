@@ -98,8 +98,12 @@ re-verification is gone, instructed confirmation needs a receipt-shaped surface.
   choice measurement inside verify-gate/workspace-flow).
 - Tier ladder runs (sonnet/opus) + report deltas vs haiku.
 - Failure-injection scenarios (mid-turn death, failing provision, double-FIX).
-- Receipt-shaped confirmation surface for the residual F1 (instructed
-  confirmation) — product side, then re-measure workspace-flow.
+- ~~Receipt-shaped confirmation surface~~ — landed as `ws status`
+  (first slice of actionable-workspace-status): verify-gate 3/5 → 5/5,
+  workspace-flow 1/5 → 3/5, verb adopted in 9/10 runs from skill text alone.
+  Residual git-after-close is now a tracked rate (2/5), not a structural gap.
+- ~~Results history/regression compare~~ — landed as `-baseline <prior run>`:
+  aggregates the stored summary.json and appends a Delta table (Δpass in pp,
+  fumble/denial medians, cost). The auto-research loop is now
+  mutate → `-reps 5 -baseline <prior>` → read one table.
 - Codex orchestrator driver via `cmd:`.
-- Results history/regression compare across runs (à la money_intelligence evals)
-  — still the blocker for hands-off auto-research iteration.

@@ -31,6 +31,16 @@ splits the finding in two:
   or a close-receipt read verb) may be needed for the reach to have a natural
   in-tool answer.
 
+Second iteration (2026-08-06, `ws status` landed as that surface + skill
+wording): verify-gate 3/5 → **5/5**, workspace-flow 1/5 → **3/5** (+40 pp
+each, `-baseline` diff). `ws status ws-1 --json` was invoked in 9 of 10 runs —
+the verb is discoverable and adopted from the skill text alone. The residual
+2/5 workspace-flow failures still `git log`/`git show` after close — in both,
+*after* also reading ws status (belt-and-suspenders, not ignorance of the
+surface); instructed-confirmation git is now a minority behavior tracked as a
+rate, not a structural gap. Also observed live: a
+multiline `ws commit -m` succeeded, confirming the F2 non-fix call.
+
 After `close --merge-into main`, haiku consistently tries `git log` / `git status`
 to confirm the change landed (4+ denied attempts per run in verify-gate, also seen
 in workspace-flow). Legwork *has* the answer — close receipts record disposition
