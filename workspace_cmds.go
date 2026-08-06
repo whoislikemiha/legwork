@@ -79,9 +79,10 @@ func wsCmd() *cobra.Command {
 
 	var lsJSON bool
 	lsCmd := &cobra.Command{
-		Use:   "ls",
-		Short: "List workspaces",
-		Args:  cobra.NoArgs,
+		Use:     "ls",
+		Aliases: []string{"list"},
+		Short:   "List workspaces",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, wss, err := openWorkspaces()
 			if err != nil {
@@ -366,8 +367,15 @@ func compactCommitEventReceipt(info *workspace.CommitInfo) *workspace.CommitInfo
 	return &compact
 }
 
+type diffOutput struct {
+	Workspace string `json:"workspace"`
+	Branch    string `json:"branch"`
+	Stat      bool   `json:"stat"`
+	Diff      string `json:"diff"`
+}
+
 func diffCmd() *cobra.Command {
-	var stat bool
+	var stat, asJSON bool
 	c := &cobra.Command{
 		Use:   "diff <workspace>",
 		Short: "Changes vs the workspace base (includes untracked files)",
@@ -388,11 +396,15 @@ func diffCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if asJSON {
+				return printJSON(diffOutput{Workspace: m.ID, Branch: m.Branch, Stat: stat, Diff: out})
+			}
 			fmt.Print(out)
 			return nil
 		},
 	}
 	c.Flags().BoolVar(&stat, "stat", false, "diffstat only")
+	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
 	return c
 }
 
@@ -530,6 +542,16 @@ func closeCmd() *cobra.Command {
 			} else {
 				fmt.Printf("%s closed (%s)\n", m.ID, m.Disposition)
 			}
+			// The receipt is the landing proof — print it so confirming the
+			// close never requires reaching for git (F1 in eval/FINDINGS.md).
+			if merge != nil {
+				fmt.Printf("  landed: %s @ %s (merge commit)\n", merge.TargetBranch, shortOID(merge.Commit))
+			} else if m.MergedInto != "" {
+				fmt.Printf("  landed: verified ancestor of %s\n", m.MergedInto)
+			}
+			if m.CloseReceipt != nil {
+				fmt.Printf("  receipt: %s\n", m.CloseReceipt.ReceiptID)
+			}
 			return nil
 		},
 	}
@@ -546,6 +568,13 @@ func closeCmd() *cobra.Command {
 	c.Flags().BoolVar(&force, "force", false, "skip --merged verification")
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
 	return c
+}
+
+func shortOID(oid string) string {
+	if len(oid) > 12 {
+		return oid[:12]
+	}
+	return oid
 }
 
 type closeOutput struct {

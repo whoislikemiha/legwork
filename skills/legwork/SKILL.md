@@ -99,7 +99,9 @@ Act on `state`:
   `legwork ack "$job"` for reviewed workspace-less jobs, or `legwork close <ws>` for
   workspace jobs.
 - `needs-input` — `legwork answer "$job" "<decision>"`; escalate to the human only
-  if it is genuinely their call.
+  if it is genuinely their call. `resume`/`answer` take the same selectors as
+  `status`: positional job ID, or `--job <id>` / `--run <label>` (a run targets
+  its newest job).
 - `blocked` — read `legwork status "$job" --json` and inspect `blocked.kind`.
   `provision` means the worker supplied an exact command; run `legwork approve
   "$job"` only when you agree to execute it outside the sandbox; use `--timeout` to
@@ -136,7 +138,7 @@ secret forwarding. Run `legwork doctor` after changing notifier capture config.
 ws=$(legwork ws new --repo ~/code/app --json | jq -r .id)   # worktree + branch;
                                                             # runs workstree init if configured
 legwork run --workspace "$ws" --agent claude "implement X"
-legwork diff "$ws"                     # changes vs base, incl. untracked
+legwork diff "$ws" [--stat] [--json]   # changes vs base, incl. untracked
 legwork ws review "$ws" --model opus    # independent read-only review of that diff
 legwork resume <job> "fix review finding Y"                 # same lineage
 legwork ws commit "$ws" -m "message" --json   # records final_commit receipt; refuses empty
@@ -150,6 +152,10 @@ legwork close "$ws" --merged --reason "landed" # work landed by another path: ve
 One active job per workspace; parallelism = multiple workspaces. `close` refuses
 unreviewed changes without an explicit disposition — that's the review gate, don't
 bypass it reflexively.
+
+A successful close prints the landing proof — landed target, merge commit, receipt
+ID (`--json` carries the full `close_receipt`). Do not re-verify with `git log`
+afterwards; disposition claims are verified before the receipt is written.
 
 Use `legwork ws review <ws>` before landing implementer output. It checkpoints the
 reviewed tree and dispatches a read-only reviewer job seeded with that exact diff

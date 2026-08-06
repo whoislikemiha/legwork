@@ -102,11 +102,11 @@ func TestCheckNotifier(t *testing.T) {
 		}
 	})
 
-	t.Run("command exit 1 fails", func(t *testing.T) {
+	t.Run("command exit 1 warns (advisory: jobs run without notifications)", func(t *testing.T) {
 		writeNotifyConfig(t, "exit 1")
 		c := checkNotifier(ad)
-		if c.Status != StatusFail {
-			t.Fatalf("want fail, got %s (%s)", c.Status, c.Detail)
+		if c.Status != StatusWarn {
+			t.Fatalf("want warn, got %s (%s)", c.Status, c.Detail)
 		}
 	})
 

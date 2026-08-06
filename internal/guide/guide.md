@@ -107,7 +107,9 @@ legwork status <selector> --json         -> job IDs win; a run selects its newes
                 hermes portal for subscription auth, or configure Hermes provider keys)
   interrupted  the turn died mid-flight (crash/cancel); session survives -> resume
 legwork result <selector>                -> print the final report, raw
-legwork resume <job> "next instruction"  -> another turn in the same session
+legwork resume <selector> "next instruction" -> another turn in the same session
+                                            (selectors as in status: --job/--run work here
+                                             and on answer; a run targets its newest job)
 legwork approve <job> [--timeout 30m]    -> run approved needs-provision command, then resume
 legwork verify <job> [--timeout 30m] -- <argv...>
                                          -> host verification receipt; worker remains historical blocked
@@ -177,7 +179,10 @@ does static checks only (offline-safe); `--agent fake` probes for free. `--json`
 
 `status` is `ok | warn | fail | skip`; top-level `ok` is true when nothing failed
 (warns/skips are fine). Exit codes: `0` no failures, `1` one or more `fail`, `2` usage
-error (e.g. unknown agent).
+error (e.g. unknown agent). `fail` is reserved for problems that would break a
+subsequent `run` (missing agent, bad auth/model, unwritable state dir, unloadable
+config); advisory problems — like a configured notifier command that exits nonzero,
+which loses notifications but never blocks jobs — are `warn` and keep exit `0`.
 
 ## Getting woken up instead of polling
 
@@ -226,7 +231,7 @@ turns inside it, one active at a time. Parallel work = multiple workspaces.
 legwork ws new --repo <path>             -> ws-N (runs workstree init if the repo
                                             has worktree.toml; setup failure aborts)
 legwork run --workspace ws-N --agent claude "implement X per plan.md"
-legwork diff ws-N [--stat]               -> changes vs base, incl. untracked files
+legwork diff ws-N [--stat] [--json]      -> changes vs base, incl. untracked files
 legwork ws review ws-N [--model M]       -> read-only independent review over that diff
 legwork resume <job> "review feedback: fix Y"
 legwork ws commit ws-N -m "message" --json -> orchestrator commit, recorded as final_commit receipt
@@ -271,6 +276,13 @@ switch. Use `-m` to supply the merge commit message, and `--json` for
 `{ok,state,blocked}` output where `blocked.kind` distinguishes `conflict` from
 `guard-refused`; the `--merge-into` conflict path exits `1`, guard refusals exit
 `3`, and ordinary CLI failures remain normal non-zero errors.
+
+**The close output is the landing proof.** A successful close prints the landed
+target, merge commit, and receipt ID (`--json` carries the full `close_receipt`
+with `final_commit`); the same receipt stays queryable via `legwork events ws-N
+--workspace`. Do not re-verify with `git log`/`git status` afterwards — if close
+printed a receipt the work landed, and if it refused it said why. Every
+disposition claim is verified before the receipt is written.
 
 If the work landed by another path (PR, manual merge), close `--merged`.
 `--merged` is verified, not trusted: the branch must actually be an ancestor of
@@ -414,7 +426,7 @@ All are strictly read-only; `runs` and `tail` are plain-stdout (work over
 starts a local browser console.
 
 ```
-legwork runs                 -> one line per run label, rolled up (the overview)
+legwork runs [--run <label>] -> one line per run label, rolled up (the overview)
 legwork tail                 -> tail -f across all jobs + run logs (the live feed)
 legwork dashboard            -> interactive TUI: runs + selected-job + timeline
 legwork serve                -> browser operator console on localhost (GET-only)

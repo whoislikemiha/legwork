@@ -11,12 +11,15 @@ import (
 )
 
 // doctor runs the doctor command with the env's state/script plus any extra
-// env, returning combined output and the process exit code.
+// env, returning combined output and the process exit code. LEGWORK_CONFIG
+// defaults to an absent file so the host's real notifier config never leaks
+// into the checks; extraEnv still overrides it (last entry wins).
 func (e *env) doctor(extraEnv []string, args ...string) (string, int) {
 	cmd := exec.Command(binPath, append([]string{"doctor"}, args...)...)
 	cmd.Env = append(os.Environ(),
 		"LEGWORK_STATE_DIR="+e.state,
 		"LEGWORK_FAKE_SCRIPT="+e.script,
+		"LEGWORK_CONFIG="+filepath.Join(e.state, "config-absent.toml"),
 	)
 	if e.parser != "" {
 		cmd.Env = append(cmd.Env, "LEGWORK_FAKE_PARSER="+e.parser)
@@ -201,6 +204,38 @@ func TestDoctorNotifierPayload(t *testing.T) {
 	if p["event"] != "doctor" {
 		t.Fatalf("payload event = %v, want doctor\n%s", p["event"], data)
 	}
+}
+
+func TestDoctorBrokenNotifierCommandIsAdvisory(t *testing.T) {
+	e := newEnv(t)
+	e.writeScript(t, resultDone)
+	// A command that exits nonzero is advisory: jobs run fine without
+	// notifications, so preflight must warn, not fail (exit 0).
+	cfgPath := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(cfgPath, []byte("[notify]\ncommand = \"exit 2\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := e.doctor([]string{"LEGWORK_CONFIG=" + cfgPath},
+		"--agent", "fake", "--dir", t.TempDir(), "--json")
+	if code != 0 {
+		t.Fatalf("broken notifier command must not fail preflight, got exit %d\n%s", code, out)
+	}
+	var rep struct {
+		OK     bool `json:"ok"`
+		Checks []struct{ Name, Status, Detail string }
+	}
+	if err := json.Unmarshal([]byte(out), &rep); err != nil {
+		t.Fatalf("bad json: %v\n%s", err, out)
+	}
+	for _, c := range rep.Checks {
+		if c.Name == "notifier" {
+			if c.Status != "warn" || !strings.Contains(c.Detail, "command failed") {
+				t.Fatalf("notifier = %s (%s), want warn with the exit surfaced", c.Status, c.Detail)
+			}
+			return
+		}
+	}
+	t.Fatalf("no notifier check in report:\n%s", out)
 }
 
 func TestDoctorNotifierUsesTransientCaptureAndValidatesConfig(t *testing.T) {

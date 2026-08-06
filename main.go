@@ -66,7 +66,28 @@ health, recipes).`,
 		noteCmd(), doctorCmd(), gcCmd(), guideCmd(), runnerCmd(), fakeAgentCmd(),
 		runsCmd(), tailCmd(), dashboardCmd(), serveCmd(), artifactCmd(), versionCmd(), rulesCmd(),
 		skillCmd(), waitCmd())
+	root.SetFlagErrorFunc(flagErrorHint)
 	return root
+}
+
+// flagErrorHint enriches cobra's unknown-flag errors on the resume-family
+// verbs. Orchestrators habitually assume dispatch-time flags work everywhere
+// (F2 in eval/FINDINGS.md); when the guess fails, name where the flag actually
+// lives so the retry is right instead of another guess.
+func flagErrorHint(cmd *cobra.Command, err error) error {
+	msg := err.Error()
+	flag, ok := strings.CutPrefix(msg, "unknown flag: ")
+	if !ok {
+		return err
+	}
+	switch cmd.Name() {
+	case "resume", "answer", "approve":
+		switch flag {
+		case "--agent", "--model", "--effort", "--append-prompt", "--append-prompt-file", "--fallback-model", "--read-only":
+			return fmt.Errorf("%s: %s is set at dispatch (legwork run / ws review); %s continues the job's session with its existing agent, model, and rules", msg, flag, cmd.Name())
+		}
+	}
+	return err
 }
 
 type commandError struct {
@@ -463,14 +484,50 @@ func doResumeWithEvent(id, message, eventType, preview string, fields map[string
 	return m, nil
 }
 
-func resumeCmd() *cobra.Command {
+// resolveResumeTarget mirrors the read-side selector surface (positional, or
+// --job/--run) for the resume-family verbs: with a selector flag the single
+// positional is the message; without one the classic <job> <message> form
+// applies. Run labels resolve to the newest job, announced on stderr like the
+// read commands do.
+func resolveResumeTarget(cmd *cobra.Command, verb string, args []string, jobFlag, runFlag string) (id, message string, err error) {
+	positional := ""
+	switch {
+	case len(args) == 2:
+		positional, message = args[0], args[1]
+	case jobFlag == "" && runFlag == "":
+		return "", "", fmt.Errorf("%s needs a target: %s <job> <message>, or --job <id> / --run <label> with just the message", verb, verb)
+	default:
+		message = args[0]
+	}
+	s, err := openStore()
+	if err != nil {
+		return "", "", err
+	}
+	sel, err := resolveReadSelector(s, positional, jobFlag, runFlag)
+	if err != nil {
+		return "", "", err
+	}
+	m := sel.Newest()
+	if m == nil {
+		return "", "", fmt.Errorf("run %q has no jobs; %s requires a job", sel.Selector, verb)
+	}
+	resolutionNotice(cmd, sel, m)
+	return m.ID, message, nil
+}
+
+func resumeFamilyCmd(use, short, verb, eventType string) *cobra.Command {
 	var asJSON bool
+	var jobID, runLabel string
 	c := &cobra.Command{
-		Use:   "resume <job> <message>",
-		Short: "Continue a job's session with a new instruction",
-		Args:  cobra.ExactArgs(2),
+		Use:   use,
+		Short: short,
+		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			m, err := doResume(args[0], args[1], events.TypeResume)
+			id, message, err := resolveResumeTarget(cmd, verb, args, jobID, runLabel)
+			if err != nil {
+				return err
+			}
+			m, err := doResume(id, message, eventType)
 			if err != nil {
 				return err
 			}
@@ -482,29 +539,19 @@ func resumeCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
+	c.Flags().StringVar(&jobID, "job", "", "force an exact job ID selector")
+	c.Flags().StringVar(&runLabel, "run", "", "target the run label's newest job")
 	return c
 }
 
+func resumeCmd() *cobra.Command {
+	return resumeFamilyCmd("resume [selector] <message> [--job <id> | --run <label>]",
+		"Continue a job's session with a new instruction", "resume", events.TypeResume)
+}
+
 func answerCmd() *cobra.Command {
-	var asJSON bool
-	c := &cobra.Command{
-		Use:   "answer <job> <answer>",
-		Short: "Answer a needs-input question and continue the job",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			m, err := doResume(args[0], args[1], events.TypeAnswer)
-			if err != nil {
-				return err
-			}
-			if asJSON {
-				return printJSON(m)
-			}
-			fmt.Println(m.ID)
-			return nil
-		},
-	}
-	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
-	return c
+	return resumeFamilyCmd("answer [selector] <answer> [--job <id> | --run <label>]",
+		"Answer a needs-input question and continue the job", "answer", events.TypeAnswer)
 }
 
 func approveCmd() *cobra.Command {
@@ -667,13 +714,44 @@ func resolveReadSelector(s *job.Store, positional, jobFlag, runFlag string) (job
 	if jobFlag != "" && runFlag != "" {
 		return job.Selection{}, fmt.Errorf("--job and --run are mutually exclusive")
 	}
-	if jobFlag != "" {
-		return job.Resolve(s, jobFlag, job.SelectorJob)
+	var sel job.Selection
+	var err error
+	switch {
+	case jobFlag != "":
+		sel, err = job.Resolve(s, jobFlag, job.SelectorJob)
+	case runFlag != "":
+		sel, err = job.Resolve(s, runFlag, job.SelectorRun)
+	default:
+		sel, err = job.Resolve(s, positional, "")
 	}
-	if runFlag != "" {
-		return job.Resolve(s, runFlag, job.SelectorRun)
+	if err != nil {
+		selector := positional
+		if jobFlag != "" {
+			selector = jobFlag
+		} else if runFlag != "" {
+			selector = runFlag
+		}
+		err = workspaceSelectorHint(selector, err)
 	}
-	return job.Resolve(s, positional, "")
+	return sel, err
+}
+
+// workspaceSelectorHint targets the observed weak-tier trap (F3 in
+// eval/FINDINGS.md): a workspace ID handed to a job selector ("result ws-1").
+// When the failed selector names an existing workspace, say so and point at
+// the workspace surfaces instead of the generic no-such-job error.
+func workspaceSelectorHint(selector string, err error) error {
+	if !strings.HasPrefix(selector, "ws-") {
+		return err
+	}
+	_, wss, werr := openWorkspaces()
+	if werr != nil {
+		return err
+	}
+	if _, lerr := wss.Load(selector); lerr != nil {
+		return err
+	}
+	return fmt.Errorf("%s is a workspace, not a job; list its jobs with legwork ls --workspace %s, or use the workspace verbs (ws, diff, close)", selector, selector)
 }
 
 // resolutionNotice is deliberately stderr-only: result's stdout is the raw
@@ -1422,7 +1500,7 @@ func ackCmd() *cobra.Command {
 			}
 			m, err := s.LoadMeta(args[0])
 			if err != nil {
-				return err
+				return workspaceSelectorHint(args[0], err)
 			}
 			s.Reconcile(m)
 			if m.Workspace != "" {

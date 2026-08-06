@@ -314,11 +314,12 @@ func checkWorkstree(dir string) Check {
 // checkNotifier runs the configured notify command with a doctor payload and
 // reports its exit status. No command configured -> skip.
 //
-// A broken command fails doctor here, even though the runner deliberately
-// tolerates notify failures at job time (a slow/erroring notifier must never
-// wedge a job — notify.Send swallows it). That asymmetry is the point: doctor
-// is preflight, so surfacing a misconfigured notifier now is exactly when the
-// operator can still fix it, before jobs start silently losing notifications.
+// The line between fail and warn is whether a subsequent run would break:
+// an unloadable/invalid config fails (dispatch itself calls notify.Load and
+// refuses), while a command that merely exits nonzero warns — jobs run fine
+// without notifications (the runner swallows notify errors), so a preflighting
+// orchestrator must not be blocked on an advisory problem. The warn detail
+// still names the exit so the operator can fix it while it is cheap to.
 func checkNotifier(ad adapter.Adapter) Check {
 	cfg, err := notify.Load()
 	if err != nil {
@@ -337,7 +338,8 @@ func checkNotifier(ad adapter.Adapter) Check {
 	if err := cfg.SendWithOrigin(notify.Payload{
 		Event: "doctor", Job: "doctor", Agent: ad.Name(), Task: "doctor preflight",
 	}, origin); err != nil {
-		return Check{"notifier", StatusFail, "command failed: " + err.Error()}
+		return Check{"notifier", StatusWarn,
+			"command failed: " + err.Error() + " (advisory: jobs still run, notifications may be lost)"}
 	}
 	return Check{"notifier", StatusOK, `command exited 0 (event "doctor" sent)`}
 }

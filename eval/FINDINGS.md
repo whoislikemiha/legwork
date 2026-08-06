@@ -12,7 +12,11 @@ behavior to track) · **fixed-harness** (eval bug, resolved) · **observation**
 ## Product findings (legwork)
 
 ### F1 · Landing confirmation gap — orchestrators reach for git after close
-Status: **open-product** · seen: every live workspace run (2026-08-01, haiku)
+Status: **open-product, fix landed 2026-08-06 (pending re-measure)** · seen: every
+live workspace run (2026-08-01, haiku) · Fix: close now prints the landing proof
+(landed target, merge commit, receipt ID) in human output, and the guide/skill
+state explicitly that the close receipt IS the proof — no git check needed.
+Re-run verify-gate/workspace-flow to confirm the denial count drops.
 
 After `close --merge-into main`, haiku consistently tries `git log` / `git status`
 to confirm the change landed (4+ denied attempts per run in verify-gate, also seen
@@ -27,8 +31,15 @@ Also seen pre-dispatch: `ls`/`find` exploration of the repo before creating the
 workspace. That one is arguably out of legwork's scope by design; not actionable.
 
 ### F2 · Flag-surface inconsistencies fumble real orchestrators
-Status: **open-product** · seen: feature-pipeline + verify-gate live runs (haiku);
-frequency confirmed by the 5-rep baseline (feature-pipeline: fumbles in 5/5 reps)
+Status: **open-product, fix landed 2026-08-06 (pending re-measure)** · seen:
+feature-pipeline + verify-gate live runs (haiku); frequency confirmed by the
+5-rep baseline (feature-pipeline: fumbles in 5/5 reps) · Fix: `resume`/`answer`
+accept the read-side selector surface (`--job`/`--run`, run → newest job);
+`diff --json`; `runs --run <label>` filter; `ws list` aliases `ws ls`; unknown
+dispatch-time flags on resume/answer/approve error with "set at dispatch" hints.
+Multiline `commit -m` needed no fix — the message passes through to `git commit
+-m` verbatim; the observed fumble was orchestrator-side shell quoting.
+Re-run feature-pipeline/false-claim to measure the fumble-rate delta.
 
 The pattern: orchestrators assume dispatch-time flags work on every verb.
 Observed nonzero-exit guesses: `resume --run/--agent/--append-prompt/--json`,
@@ -40,13 +51,24 @@ a workspace-attached reviewer job — the ack/close terminal-verb split predicte
 by AUDIT.md, now observed live.
 
 ### F3 · Selector ambiguity is real at the weak tier
-Status: **open-product** · seen: first live run (haiku, workspace-flow)
+Status: **open-product, fix landed 2026-08-06 (pending re-measure)** · seen:
+first live run (haiku, workspace-flow)
 
 `result ws-1` — a workspace ID passed to a job/run selector command, exactly the
 trap predicted by planning/AUDIT.md. One occurrence so far; watch the rate.
+Fix: job selectors (status/result/events/resume/answer/ack) that fail on an
+existing workspace ID now say "is a workspace, not a job" and point at
+`ls --workspace` and the workspace verbs.
 
 ### F4 · doctor's exit semantics are blunt
-Status: **open-product** (minor) · seen: first live run + pre-existing e2e failures
+Status: **open-product, fix landed 2026-08-06** · seen: first live run +
+pre-existing e2e failures · Fix: notifier-command failure is now `warn`/exit 0
+(fail is reserved for what would break a subsequent run: agent, auth/model,
+state dir, unloadable config — an unloadable config also blocks dispatch, so it
+stays fail); doctor e2e tests pin a hermetic LEGWORK_CONFIG so the host
+notifier can't leak in (the local doctor test failures are gone). The `verify`
+non-workspace message already existed
+("host verification requires a workspace job").
 
 `doctor --agent fake --json` exits 1 when any check fails (here: the host notifier
 leaking into the sandbox — harness side since fixed with a hermetic config). An

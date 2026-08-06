@@ -23,6 +23,7 @@ import (
 
 func runsCmd() *cobra.Command {
 	var asJSON bool
+	var runFilter string
 	c := &cobra.Command{
 		Use:   "runs",
 		Short: "Pipeline overview: one line per run label, rolled up",
@@ -48,6 +49,19 @@ func runsCmd() *cobra.Command {
 				return err
 			}
 			rollups := timeline.Rollups(metas, runLogs, health.ContextThreshold)
+			if runFilter != "" {
+				filtered := rollups[:0]
+				for _, r := range rollups {
+					if r.Label == runFilter {
+						filtered = append(filtered, r)
+					}
+				}
+				rollups = filtered
+				if len(rollups) == 0 && !asJSON {
+					fmt.Printf("no run %q\n", runFilter)
+					return nil
+				}
+			}
 			if asJSON {
 				// Always an array (never null) so consumers can iterate.
 				if rollups == nil {
@@ -107,6 +121,7 @@ func runsCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&asJSON, "json", false, "JSON output")
+	c.Flags().StringVar(&runFilter, "run", "", "only this run label")
 	return c
 }
 
