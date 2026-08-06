@@ -46,6 +46,40 @@ type invocation struct {
 	Argv []string  `json:"argv"`
 	Exit int       `json:"exit"`
 	MS   int64     `json:"ms"`
+	// ForcedFake marks a dispatch whose agent the sandbox rewrote to fake.
+	// The orchestrator's original argv is what gets logged.
+	ForcedFake bool `json:"forced_fake,omitempty"`
+}
+
+// enforceFakeAgent is sandbox policy, not behavior correction: every job a
+// scenario spawns must be the scripted fake agent — a real agent dispatch
+// burns money and takes the scenario off-script (first hit: ws review without
+// --agent fake spawned real claude reviewers in all 3 double-fix validation
+// runs). The rewrite is transparent to the orchestrator; the invocation log
+// keeps the original argv plus a forced_fake marker so the drift stays
+// measurable instead of silently absorbed.
+func enforceFakeAgent(args []string) ([]string, bool) {
+	if !dispatches(args) {
+		return args, false
+	}
+	out := append([]string(nil), args...)
+	for i, a := range out {
+		if a == "--agent" && i+1 < len(out) {
+			if out[i+1] == "fake" {
+				return out, false
+			}
+			out[i+1] = "fake"
+			return out, true
+		}
+		if strings.HasPrefix(a, "--agent=") {
+			if a == "--agent=fake" {
+				return out, false
+			}
+			out[i] = "--agent=fake"
+			return out, true
+		}
+	}
+	return append(out, "--agent", "fake"), true
 }
 
 // runShim is the process entrypoint when argv[0] is "legwork". It never
@@ -58,13 +92,13 @@ func runShim() int {
 		io.WriteString(os.Stderr, "legwork eval shim: "+err.Error()+"\n")
 		return 3
 	}
-	args := os.Args[1:]
+	args, forced := enforceFakeAgent(os.Args[1:])
 
 	script := cfg.scriptFor(args)
 
 	start := time.Now()
 	exit, stdout := cfg.execReal(args, script)
-	cfg.logInvocation(invocation{TS: start.UTC(), Argv: args, Exit: exit, MS: time.Since(start).Milliseconds()})
+	cfg.logInvocation(invocation{TS: start.UTC(), Argv: os.Args[1:], Exit: exit, MS: time.Since(start).Milliseconds(), ForcedFake: forced})
 
 	if exit == 0 {
 		cfg.recordDispatch(args, stdout)

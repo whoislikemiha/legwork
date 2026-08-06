@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-review-2"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":320,"output_tokens":115},"session_id":"fake-review-2","result":"Checksum validation looks right now, but a failed flush still drops the batch.\n```json\n{\"verdict\":\"FIX\",\"findings\":[{\"file\":\"exporter.txt\",\"line\":1,\"severity\":\"high\",\"detail\":\"R-9: failed flushes are dropped; add retry with backoff (mark it retry-R9)\"}]}\n```\n\nstate: done"}

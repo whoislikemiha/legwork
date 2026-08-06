@@ -1,6 +1,6 @@
 # Orchestration eval harness (Layer 0/1)
 
-Status: in flight · Priority: P1 · Origin: 2026-08-01 auto-research discussion — measure whether an orchestrator model can drive the surface, and whether harness/doc changes help weaker tiers · Depends: — · Workspace: —
+Status: landed 2026-08-06 · Priority: P1 · Origin: 2026-08-01 auto-research discussion — measure whether an orchestrator model can drive the surface, and whether harness/doc changes help weaker tiers · Depends: — · Workspace: —
 
 ## Goal
 
@@ -98,6 +98,11 @@ re-verification is gone, instructed confirmation needs a receipt-shaped surface.
   choice measurement inside verify-gate/workspace-flow).
 - Tier ladder runs (sonnet/opus) + report deltas vs haiku.
 - Failure-injection scenarios (mid-turn death, failing provision, double-FIX).
+- ~~Failure-injection scenarios~~ — landed 2026-08-06: `failing-provision`
+  (3/3 live) and `double-fix` (strict FIX-loop gate; residual failures are the
+  F1 rate). Validation surfaced and fixed two harness gaps: fake-agent
+  enforcement in the shim (F13) and most-turns job resolution (F14).
+  Mid-turn death was already covered by `flaky-worker`.
 - ~~Receipt-shaped confirmation surface~~ — landed as `ws status`
   (first slice of actionable-workspace-status): verify-gate 3/5 → 5/5,
   workspace-flow 1/5 → 3/5, verb adopted in 9/10 runs from skill text alone.
@@ -106,4 +111,21 @@ re-verification is gone, instructed confirmation needs a receipt-shaped surface.
   aggregates the stored summary.json and appends a Delta table (Δpass in pp,
   fumble/denial medians, cost). The auto-research loop is now
   mutate → `-reps 5 -baseline <prior>` → read one table.
-- Codex orchestrator driver via `cmd:`.
+- Codex orchestrator driver via `cmd:` — split to
+  [eval-codex-orchestrator.md](eval-codex-orchestrator.md).
+- Tier ladder — split to [eval-tier-ladder.md](eval-tier-ladder.md).
+
+## Verdict
+
+Landed 2026-08-06. The harness is complete: runner + PATH shim (with in-sandbox
+fake-agent enforcement), deterministic receipt-reading scorer, 15 scenarios
+(happy path through messy workers and failure injection), repetition with
+rates, `-baseline` regression compare, and `eval/FINDINGS.md` as the
+attribution log. It ran three full measure→fix→re-measure loops within its own
+task window: the F1–F4 product fixes (false-claim and feature-pipeline 2/5 →
+4/5), `ws status` (verify-gate 3/5 → 5/5, workspace-flow 1/5 → 3/5, verb
+adopted 9/10 runs), and its own hardening (F9–F14 all found by running it).
+Total live spend across every batch: ~$11. The auto-research premise the task
+was created to test — that surface/doc changes can be judged by weak-tier
+numbers instead of dogfooding intuition — is demonstrated; remaining
+extensions (tier ladder, codex orchestrator) are their own tasks.

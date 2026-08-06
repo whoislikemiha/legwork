@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"fake-exporter"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"implementing the exporter core"}]}}
+#write exporter.txt exporter-core v1: batching and flush loop implemented
+#sleep 800
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":160,"output_tokens":80},"session_id":"fake-exporter","result":"Implemented the exporter core (batching + flush loop) in exporter.txt.\n\nstate: done"}

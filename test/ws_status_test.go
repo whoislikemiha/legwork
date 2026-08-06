@@ -19,6 +19,20 @@ func wsStatusJSON(t *testing.T, e *env, wsID string) map[string]any {
 	return m
 }
 
+// writeReviewScript scripts one fake reviewer turn whose result carries the
+// given verdict JSON in a fenced block, matching the ws review prompt contract.
+func writeReviewScript(t *testing.T, e *env, session, verdict string) {
+	t.Helper()
+	line, err := json.Marshal(map[string]any{
+		"type": "result", "subtype": "success", "is_error": false, "num_turns": 1, "session_id": session,
+		"result": "review complete\n```json\n" + verdict + "\n```\n\nstate: done",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.writeScript(t, string(line))
+}
+
 func nextActions(t *testing.T, m map[string]any) []string {
 	t.Helper()
 	var out []string
@@ -62,6 +76,93 @@ func TestWSStatusLifecycleAdvice(t *testing.T) {
 	}
 	if !strings.Contains(m["diff_stat"].(string), "file") {
 		t.Fatalf("diff_stat missing: %v", m["diff_stat"])
+	}
+}
+
+// The review-gate advice sequence: FIX -> fix-findings, SHIP -> commit,
+// committed -> close, with the ahead-of-base fact tracking the commit.
+func TestWSStatusReviewAndLandingAdvice(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	e.writeScript(t, "#write feature.txt done", resultDone)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "add feature"))
+	e.waitState(t, id, "done")
+
+	m := wsStatusJSON(t, e, wsID)
+	if got := m["commits_ahead"].(float64); got != 0 {
+		t.Fatalf("commits_ahead before commit = %v, want 0", got)
+	}
+
+	// Reviewer returns FIX -> the next step is relaying findings.
+	writeReviewScript(t, e, "s-fix",
+		`{"verdict":"FIX","findings":[{"file":"feature.txt","line":1,"severity":"high","detail":"needs a test"}]}`)
+	rid := strings.TrimSpace(e.legwork(t, "ws", "review", wsID, "--agent", "fake"))
+	e.waitState(t, rid, "done")
+	m = wsStatusJSON(t, e, wsID)
+	if got := nextActions(t, m); len(got) != 1 || got[0] != "fix-findings" {
+		t.Fatalf("FIX verdict next = %v, want [fix-findings]", got)
+	}
+
+	// Re-review returns SHIP -> commit as the orchestrator.
+	writeReviewScript(t, e, "s-ship", `{"verdict":"SHIP","findings":[]}`)
+	rid = strings.TrimSpace(e.legwork(t, "ws", "review", wsID, "--agent", "fake"))
+	e.waitState(t, rid, "done")
+	m = wsStatusJSON(t, e, wsID)
+	if got := nextActions(t, m); len(got) != 1 || got[0] != "commit" {
+		t.Fatalf("SHIP verdict next = %v, want [commit]", got)
+	}
+
+	// Committed -> close, and the branch is ahead of base.
+	e.legwork(t, "ws", "commit", wsID, "-m", "add feature")
+	m = wsStatusJSON(t, e, wsID)
+	if got := nextActions(t, m); len(got) != 1 || got[0] != "close" {
+		t.Fatalf("committed next = %v, want [close]", got)
+	}
+	if got := m["commits_ahead"].(float64); got != 1 {
+		t.Fatalf("commits_ahead after commit = %v, want 1", got)
+	}
+}
+
+// Job status shares the workspace vocabulary; blocked verify points at
+// verification with the requested command inlined, never at a generic resume.
+func TestJobStatusAdvice(t *testing.T) {
+	e := newEnv(t)
+	repo := initRepo(t)
+	ws := e.wsNew(t, repo)
+	wsID := ws["id"].(string)
+	e.writeScript(t, resultBlockedVerify)
+	id := strings.TrimSpace(e.legwork(t, "run", "--agent", "fake", "--workspace", wsID, "build it"))
+	e.waitState(t, id, "blocked")
+
+	var st map[string]any
+	if err := json.Unmarshal([]byte(e.legwork(t, "status", id, "--json")), &st); err != nil {
+		t.Fatal(err)
+	}
+	acts := st["next_actions"].([]any)
+	if len(acts) != 1 {
+		t.Fatalf("next_actions = %v", acts)
+	}
+	a := acts[0].(map[string]any)
+	if a["action"] != "verify" || !strings.Contains(a["command"].(string), "legwork verify "+id+" --") {
+		t.Fatalf("blocked-verify advice wrong: %+v", a)
+	}
+	human := e.legwork(t, "status", id)
+	if !strings.Contains(human, "next: verify") {
+		t.Fatalf("human status missing verify advice:\n%s", human)
+	}
+
+	// Done workspace job routes to the workspace, not ack.
+	e.writeScript(t, resultDone)
+	e.legwork(t, "resume", id, "verified externally; finish up")
+	e.waitState(t, id, "done")
+	if err := json.Unmarshal([]byte(e.legwork(t, "status", id, "--json")), &st); err != nil {
+		t.Fatal(err)
+	}
+	a = st["next_actions"].([]any)[0].(map[string]any)
+	if a["action"] != "workspace" || !strings.Contains(a["command"].(string), "ws status "+wsID) {
+		t.Fatalf("done workspace-job advice wrong: %+v", a)
 	}
 }
 

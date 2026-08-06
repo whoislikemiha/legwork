@@ -98,8 +98,12 @@ func readMapping(path string) *mapping {
 	return m
 }
 
-// jobsByName resolves scenario job names to real job IDs. If the
-// orchestrator dispatched a role more than once, the earliest job wins.
+// jobsByName resolves scenario job names to real job IDs. If the orchestrator
+// dispatched a role more than once, the job with the most turns wins (ties:
+// earliest ID) — a double-dispatched role is scored on the job the
+// orchestrator actually engaged with, not an abandoned first attempt
+// (observed live: double-fix r2 relayed both findings to the second exporter
+// job while the scorer read the first).
 func jobsByName(m *mapping) map[string]string {
 	ids := make([]string, 0, len(m.Jobs))
 	for id := range m.Jobs {
@@ -109,7 +113,7 @@ func jobsByName(m *mapping) map[string]string {
 	byName := map[string]string{}
 	for _, id := range ids {
 		spec := m.Jobs[id].Spec
-		if _, taken := byName[spec]; !taken {
+		if prev, taken := byName[spec]; !taken || m.Jobs[id].Turn > m.Jobs[prev].Turn {
 			byName[spec] = id
 		}
 	}

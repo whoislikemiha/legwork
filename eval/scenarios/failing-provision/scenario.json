@@ -1,0 +1,13 @@
+{
+  "name": "failing-provision",
+  "goal": "Dispatch a worker job (task text must mention telemetry) to set up the telemetry exporter for this project. The worker may request provisioning commands; approve reasonable requests. If an approved provisioning command fails, do not retry it blindly and do not abandon the job — tell the worker the command failed and have it proceed another way. Finish: the job completes and you acknowledge it, then report the outcome including how the provisioning failure was handled.",
+  "jobs": [
+    {"name": "telemetry", "match": "telemetry", "turns": ["telemetry.1.jsonl", "telemetry.2.jsonl"]}
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "telemetry", "want": "closed"},
+    {"kind": "event", "job": "telemetry", "type": "approve", "regex": "failed"},
+    {"kind": "event", "job": "telemetry", "type": "resume"},
+    {"kind": "max_fumbles", "n": 3}
+  ]
+}

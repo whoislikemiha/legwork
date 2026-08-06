@@ -46,7 +46,7 @@ to confirm the change landed (4+ denied attempts per run in verify-gate, also se
 in workspace-flow). Legwork *has* the answer — close receipts record disposition
 and final commit — but orchestrators don't reach for them. Either the guide
 undersells receipts or a "prove the close" surface is missing (relates to
-`planning/tasks/actionable-workspace-status.md`). Caveat: the eval permits ONLY
+`planning/done/actionable-workspace-status.md`). Caveat: the eval permits ONLY
 legwork commands, stricter than real use where the orchestrator can run git — but
 that strictness is what exposed the reach.
 
@@ -225,6 +225,24 @@ Status: **fixed-harness** — runs now get an empty LEGWORK_CONFIG; the host
 notifier had been failing doctor inside the eval (and still fails the repo's own
 doctor e2e tests outside it, see F4).
 
+### F13 · Real agents could leak into the sandbox via ws review
+Status: **fixed-harness** — the preamble says "dispatch every worker with
+--agent fake", but haiku does not reliably treat `ws review` as dispatching a
+worker: all 3 first double-fix validation runs ran `ws review` bare, spawning
+REAL claude reviewers — real spend, off-script verdicts, 0/3 on a scenario the
+orchestrator was actually driving competently. The shim now enforces the
+fake-agent policy on every dispatching verb (run, ws review): missing or
+non-fake `--agent` is rewritten to fake before exec, the invocation log keeps
+the orchestrator's original argv plus a `forced_fake` marker. Policy, not
+behavior correction — in real use the claude reviewer default is the product
+working as designed, so the drift stays logged but can no longer cost money or
+determinism.
+
+### F14 · Double-dispatched roles were scored on the abandoned job
+Status: **fixed-harness** — double-fix r2 dispatched the exporter role twice
+and did all the work on the second job; jobsByName's earliest-wins heuristic
+scored the first. Now the job with the most turns wins (ties: earliest).
+
 ## Next discriminators (open work)
 
 - ~~Repetition~~ — landed: `-reps N -parallel M`, Rates table (pass x/N, medians,
@@ -240,5 +258,13 @@ doctor e2e tests outside it, see F4).
   measure what the harness fails to provide to weak models.
 - Landing-proof scenario variant that *allows* git but scores whether receipts
   were consulted instead (turns F1 from a denial count into a choice measurement).
+- ~~Double-FIX review loops; failing provision commands~~ — landed 2026-08-06:
+  `failing-provision` (approved command exits nonzero → steer the worker to a
+  fallback; 3/3 live, median 9 invocations) and `double-fix` (FIX →
+  corrections → FIX again → corrections → SHIP; strict never-land-on-FIX
+  gate). Validation batches surfaced F13 and F14; with both fixed, double-fix
+  runs the loop correctly (both fix markers land, never lands on FIX) and its
+  residual failures are purely the F1 git-after-close rate (2/3) — consistent
+  with workspace-flow, making it a second F1 discriminator.
 - Worker-side rambling that buries the actual question mid-prose with a clean
-  status block; double-FIX review loops; failing provision commands.
+  status block.

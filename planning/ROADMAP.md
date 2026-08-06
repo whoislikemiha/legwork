@@ -21,15 +21,10 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-- [ ] [Orchestration eval harness (Layer 0/1)](tasks/orchestration-eval.md) — **P1.** Measure
-  orchestrator models driving the CLI against scripted fake workers: deterministic checks,
-  fumble rate, response latency, model-tier ladder. Harness + 4 scenarios landed 2026-08-01;
-  first haiku run 4/4 PASS and already surfaced two fumble findings.
+None.
 
 ## Next
 
-- [ ] [Actionable workspace and job status](tasks/actionable-workspace-status.md) — **P1.** Add
-  `ws status` with truthful attention and copyable next actions across the landing lifecycle.
 - [ ] [Transient provider failure recovery](tasks/transient-provider-recovery.md) — **P1.** Classify
   temporary provider failures, preserve useful progress, and make replay safety explicit.
 - [ ] [Truthful live job health](tasks/codex-health-signal.md) — **P1.** Stop false Codex context
@@ -54,6 +49,12 @@ stream-json`; claude-shaped surface, fixtures never assumed):
 
 ## Later
 
+- [ ] [Eval tier ladder](tasks/eval-tier-ladder.md) — **P2.** Full suite on sonnet/opus with
+  `-baseline` deltas vs same-commit haiku; attributes failures to interface debt vs product gaps.
+  Split from orchestration-eval at its 2026-08-06 close. Spend needs a go-ahead (~$25–80).
+- [ ] [Eval codex orchestrator driver](tasks/eval-codex-orchestrator.md) — **P2.** Measure a codex
+  orchestrator via the existing `cmd:` seam. Split from orchestration-eval at its close;
+  blocked on codex login.
 - [ ] [Orchestrator profiles](tasks/orchestrator-profiles.md) — **P1.** Named, inspectable presets
   for agent/model/effort/access/timeout policy, with explicit resolved dispatch values.
 - [ ] [Stable structured operation surface](tasks/native-operation-surface.md) — **P1.** Versioned

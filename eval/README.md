@@ -1,7 +1,7 @@
 # Orchestration eval harness
 
 Measures an orchestrator model driving the real legwork CLI against scripted fake
-workers. Design, metrics, and open items: [planning/tasks/orchestration-eval.md](../planning/tasks/orchestration-eval.md).
+workers. Design, metrics, and open items: [planning/done/orchestration-eval.md](../planning/done/orchestration-eval.md).
 
 ```bash
 # harness self-test, zero spend (scripted orchestrator, deterministic)

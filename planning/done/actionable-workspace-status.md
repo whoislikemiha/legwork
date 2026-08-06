@@ -1,6 +1,6 @@
 # Actionable workspace and job status
 
-Status: next · Priority: P1 · Origin: 2026-07-10 orchestration dogfood · Depends: quality-receipts, external-verification-receipts · Workspace: —
+Status: landed 2026-08-06 · Priority: P1 · Origin: 2026-07-10 orchestration dogfood · Depends: quality-receipts, external-verification-receipts · Workspace: —
 
 ## Goal
 
@@ -65,3 +65,24 @@ inspect/dispatch/review/fix-findings/commit/close/none) with copyable commands.
 Read-only, receipts-only, per this spec. Still open from the spec: job
 `status` sharing the attention/action vocabulary; ahead/behind git facts;
 fixtures for FIX/SHIP/conflicted states beyond the current e2e coverage.
+
+2026-08-06 (second pass) — remaining spec items landed: job `status` ends with
+the same `attention`/`next_actions` vocabulary (JSON additive on `metaOut`;
+`blocked.kind=verify` points at `legwork verify` with the requested command
+inlined, never a generic resume); `ws status` reports commits-ahead-of-base
+(unknown shown as `commits_ahead_unknown` with the reason, never guessed);
+e2e fixtures now cover fresh/needs-input/unreviewed/FIX/SHIP/committed/closed
+plus blocked-verify and done-workspace-job on the job side.
+
+## Verdict
+
+Landed. The measured effect (orchestration-eval FINDINGS, F1): with `ws status`
+as the confirmation surface, verify-gate went 3/5 → 5/5 and workspace-flow
+1/5 → 3/5 at the weak tier, with the verb adopted in 9/10 runs from the skill
+text alone. Deliberate deviations from the original spec, accepted at close:
+ahead/behind is reported as ahead-of-base only (behind/`ws refresh` territory
+is its own roadmap item); a conflicted-state fixture is not modeled because
+conflicts surface at `close --merge-into` time with their own exit path, not
+as a workspace state; `next_actions` names the next *gate*, one at a time,
+rather than a full plan — review/verification/merge/close remain separate
+gates per the truth-and-safety rules.

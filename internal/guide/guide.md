@@ -246,11 +246,14 @@ legwork events ws-N --workspace [--since N] [--json]
 ```
 
 `ws status` is the "where are we" command: identity, attached jobs, diff stat,
-latest review verdict and verification receipt, final commit, close receipt,
-plus deterministic `attention` and `next_actions` (wait, answer, verify,
-approve, review, fix-findings, commit, close) with a copyable command each.
-It is strictly read-only and reads persisted receipts only — it never infers a
-verdict from prose and never advances state.
+commits ahead of base, latest review verdict and verification receipt, final
+commit, close receipt, plus deterministic `attention` and `next_actions` (wait,
+answer, verify, approve, review, fix-findings, commit, close) with a copyable
+command each. It is strictly read-only and reads persisted receipts only — it
+never infers a verdict from prose and never advances state; facts it cannot
+read are named unknown, not guessed. Job `status` ends with the same
+`attention`/`next_actions` vocabulary for job-local states — in particular
+`blocked.kind=verify` points at `legwork verify`, never at a generic resume.
 
 **You own git history; workers never commit.** The injected contract forbids
 worker commits — do not override it in your prompts ("commit when done" turns a

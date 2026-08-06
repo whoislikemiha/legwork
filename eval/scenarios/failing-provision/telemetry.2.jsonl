@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-telemetry"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"switching to the vendored fallback SDK"}]}}
+#sleep 500
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":210,"output_tokens":90},"session_id":"fake-telemetry","result":"Understood — the installer is broken here. I configured the exporter against the vendored fallback SDK instead; no host install needed. Exporter is set up and emitting to the local collector stub.\n\nstate: done"}

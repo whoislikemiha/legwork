@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"fake-exporter"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"adding checksum validation per review finding C-7"}]}}
+#write exporter.txt exporter-core v1: batching and flush loop implemented; checksum-C7 validation added on every batch
+#sleep 600
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":220,"output_tokens":90},"session_id":"fake-exporter","result":"Addressed finding C-7: checksum validation now runs on every batch (see checksum-C7 marker in exporter.txt).\n\nstate: done"}

@@ -676,13 +676,83 @@ func runProvision(workDir, command string, timeout time.Duration) (string, int, 
 
 // metaOut wraps a persisted Meta with the derived context_high signal, so
 // --json carries it without touching the persisted struct. omitempty means the
-// field only appears when high — additive, no schema break.
+// field only appears when high — additive, no schema break. Attention and
+// NextActions share ws status's vocabulary (additive; only status populates
+// them, ls stays a compact listing).
 type metaOut struct {
 	*job.Meta
-	ContextHigh  bool   `json:"context_high,omitempty"`
-	Selector     string `json:"selector"`
-	SelectorKind string `json:"selector_kind"`
-	ResolvedJob  string `json:"resolved_job"`
+	ContextHigh  bool             `json:"context_high,omitempty"`
+	Selector     string           `json:"selector"`
+	SelectorKind string           `json:"selector_kind"`
+	ResolvedJob  string           `json:"resolved_job"`
+	Attention    []string         `json:"attention,omitempty"`
+	NextActions  []wsStatusAction `json:"next_actions,omitempty"`
+}
+
+// jobStatusAdvice derives the deterministic attention/next_actions codes for
+// one job, in the same vocabulary ws status uses for a whole workspace. In
+// particular, blocked.kind=verify points at verification — never at a generic
+// resume that would rewrite the worker's blocked turn.
+func jobStatusAdvice(m *job.Meta, contextHigh bool) (attention []string, next []wsStatusAction) {
+	switch {
+	case m.State == job.StateActive || m.State == job.StateQueued:
+		next = append(next, wsStatusAction{Action: "wait",
+			Reason: m.ID + " is " + string(m.State), Command: "legwork wait " + m.ID})
+	case m.State == job.StateNeedsInput:
+		attention = append(attention, "needs-input")
+		next = append(next, wsStatusAction{Action: "answer",
+			Reason:  m.ID + " asked: " + events.Truncate(m.Question),
+			Command: "legwork answer " + m.ID + " \"<decision>\""})
+	case m.State == job.StateBlocked && m.Blocked != nil && m.Blocked.Kind == "verify":
+		attention = append(attention, "blocked-verify")
+		cmd := "legwork verify " + m.ID + " -- <argv...>"
+		if m.Blocked.Command != "" {
+			cmd = shellCommand([]string{"legwork", "verify", m.ID, "--", "sh", "-lc", m.Blocked.Command})
+		}
+		next = append(next, wsStatusAction{Action: "verify",
+			Reason: m.ID + " requested host verification", Command: cmd})
+	case m.State == job.StateBlocked && m.Blocked != nil && m.Blocked.Kind == "provision":
+		attention = append(attention, "needs-provision")
+		next = append(next, wsStatusAction{Action: "approve",
+			Reason:  m.ID + " wants: " + events.Truncate(m.Blocked.Command),
+			Command: "legwork approve " + m.ID})
+	case m.State == job.StateBlocked:
+		attention = append(attention, "blocked")
+		reason := "worker is blocked"
+		if m.Blocked != nil {
+			reason = "worker is blocked (" + m.Blocked.Kind + "): " + events.Truncate(m.Blocked.Detail)
+		}
+		next = append(next, wsStatusAction{Action: "inspect", Reason: reason,
+			Command: "legwork events " + m.ID})
+	case m.State == job.StateAuthNeeded:
+		attention = append(attention, "auth-required")
+		next = append(next, wsStatusAction{Action: "escalate",
+			Reason: "agent login needed on this machine (human action)"})
+	case m.State == job.StateInterrupted:
+		attention = append(attention, "interrupted")
+		next = append(next, wsStatusAction{Action: "resume",
+			Reason:  "turn died mid-flight; the session survives",
+			Command: "legwork resume " + m.ID + " \"<instruction>\""})
+	case m.State == job.StateFailed:
+		attention = append(attention, "failed")
+		next = append(next, wsStatusAction{Action: "inspect",
+			Reason:  "read the events, then retry as a fresh job or resume",
+			Command: "legwork events " + m.ID})
+	case m.State == job.StateDone && m.Workspace != "":
+		next = append(next, wsStatusAction{Action: "workspace",
+			Reason:  "turn done; review and land via the workspace",
+			Command: "legwork ws status " + m.Workspace})
+	case m.State == job.StateDone:
+		next = append(next, wsStatusAction{Action: "ack",
+			Reason:  "verify the result first, then acknowledge",
+			Command: "legwork ack " + m.ID})
+	case m.State == job.StateClosed:
+		next = append(next, wsStatusAction{Action: "none", Reason: "job is closed"})
+	}
+	if contextHigh {
+		attention = append(attention, "context-high")
+	}
+	return attention, next
 }
 
 // waitOut is deliberately a small envelope around the persisted job record:
@@ -792,6 +862,7 @@ func statusCmd() *cobra.Command {
 				return err
 			}
 			high := m.ContextHigh(health.ContextThreshold)
+			attention, next := jobStatusAdvice(m, high)
 			if asJSON {
 				// latest_verification is a current rollup in the public status
 				// surface. Do not make an old-turn receipt look current to JSON
@@ -801,7 +872,8 @@ func statusCmd() *cobra.Command {
 					out.LatestVerification = nil
 				}
 				return printJSON(metaOut{Meta: &out, ContextHigh: high, Selector: sel.Selector,
-					SelectorKind: string(sel.Kind), ResolvedJob: m.ID})
+					SelectorKind: string(sel.Kind), ResolvedJob: m.ID,
+					Attention: attention, NextActions: next})
 			}
 			resolutionNotice(cmd, sel, m)
 			fmt.Printf("job:    %s (%s)\nstate:  %s\ntask:   %s\n", m.ID, m.Agent, m.State, m.Task)
@@ -847,6 +919,13 @@ func statusCmd() *cobra.Command {
 			}
 			if m.Result != "" {
 				fmt.Printf("result:\n%s\n", m.Result)
+			}
+			for _, a := range next {
+				line := "next: " + a.Action + " — " + a.Reason
+				if a.Command != "" {
+					line += "\n      " + a.Command
+				}
+				fmt.Println(line)
 			}
 			return nil
 		},

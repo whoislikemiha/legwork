@@ -254,22 +254,26 @@ type wsStatusJob struct {
 }
 
 type wsStatusOut struct {
-	Workspace    string                   `json:"workspace"`
-	Repo         string                   `json:"repo"`
-	Branch       string                   `json:"branch"`
-	BaseOID      string                   `json:"base_oid"`
-	State        string                   `json:"state"`
-	Disposition  string                   `json:"disposition,omitempty"`
-	MergedInto   string                   `json:"merged_into,omitempty"`
-	Checkpoints  int                      `json:"checkpoints"`
-	Jobs         []wsStatusJob            `json:"jobs"`
-	DiffStat     string                   `json:"diff_stat,omitempty"`
-	FinalCommit  *workspace.CommitInfo    `json:"final_commit,omitempty"`
-	CloseReceipt *workspace.CloseReceipt  `json:"close_receipt,omitempty"`
-	Review       *workspace.ReviewReceipt `json:"latest_review,omitempty"`
-	Verification *job.VerificationReceipt `json:"latest_verification,omitempty"`
-	Attention    []string                 `json:"attention"`
-	NextActions  []wsStatusAction         `json:"next_actions"`
+	Workspace    string        `json:"workspace"`
+	Repo         string        `json:"repo"`
+	Branch       string        `json:"branch"`
+	BaseOID      string        `json:"base_oid"`
+	State        string        `json:"state"`
+	Disposition  string        `json:"disposition,omitempty"`
+	MergedInto   string        `json:"merged_into,omitempty"`
+	Checkpoints  int           `json:"checkpoints"`
+	Jobs         []wsStatusJob `json:"jobs"`
+	DiffStat     string        `json:"diff_stat,omitempty"`
+	CommitsAhead *int          `json:"commits_ahead,omitempty"`
+	// CommitsAheadUnknown carries the reason when the fact cannot be read —
+	// unknown facts are named, never guessed (or silently dropped).
+	CommitsAheadUnknown string                   `json:"commits_ahead_unknown,omitempty"`
+	FinalCommit         *workspace.CommitInfo    `json:"final_commit,omitempty"`
+	CloseReceipt        *workspace.CloseReceipt  `json:"close_receipt,omitempty"`
+	Review              *workspace.ReviewReceipt `json:"latest_review,omitempty"`
+	Verification        *job.VerificationReceipt `json:"latest_verification,omitempty"`
+	Attention           []string                 `json:"attention"`
+	NextActions         []wsStatusAction         `json:"next_actions"`
 }
 
 // wsStatusCmd is the one-command workspace rollup (see
@@ -338,6 +342,11 @@ func buildWSStatus(s *job.Store, wss *workspace.Store, m *workspace.Meta) (*wsSt
 		} else {
 			lines := strings.Split(stat, "\n")
 			out.DiffStat = strings.TrimSpace(lines[len(lines)-1])
+		}
+		if n, err := wss.CommitsAhead(m); err != nil {
+			out.CommitsAheadUnknown = err.Error()
+		} else {
+			out.CommitsAhead = &n
 		}
 	}
 	wsStatusAdvice(out, m, attached)
@@ -441,6 +450,11 @@ func printWSStatus(out *wsStatusOut) {
 	}
 	if out.DiffStat != "" {
 		fmt.Printf("diff: %s\n", out.DiffStat)
+	}
+	if out.CommitsAhead != nil {
+		fmt.Printf("ahead of base: %d commit(s)\n", *out.CommitsAhead)
+	} else if out.CommitsAheadUnknown != "" {
+		fmt.Printf("ahead of base: unknown (%s)\n", out.CommitsAheadUnknown)
 	}
 	if r := out.Review; r != nil {
 		if r.Parsed {

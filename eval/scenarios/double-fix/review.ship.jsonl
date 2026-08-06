@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-review-3"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":340,"output_tokens":80},"session_id":"fake-review-3","result":"Checksum validation and retry with backoff are both in place; no remaining blockers.\n```json\n{\"verdict\":\"SHIP\",\"findings\":[]}\n```\n\nstate: done"}

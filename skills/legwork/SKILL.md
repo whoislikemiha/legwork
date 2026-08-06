@@ -156,7 +156,8 @@ bypass it reflexively.
 `legwork ws status "$ws" [--json]` is the one-command rollup: facts, attached
 jobs, latest review/verification receipts, final commit, close receipt, plus
 `attention` and `next_actions` codes with a copyable command each. Reach for it
-whenever the question is "where is this workspace / what do I do next".
+whenever the question is "where is this workspace / what do I do next". Job
+`status` ends with the same `next_actions` vocabulary for job-local states.
 
 A successful close prints the landing proof — landed target, merge commit, receipt
 ID (`--json` carries the full `close_receipt`). To confirm a landing (including

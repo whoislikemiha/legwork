@@ -1,0 +1,20 @@
+{
+  "name": "double-fix",
+  "goal": "Deliver the exporter hardening on the git repository at ./repo via a strict implement -> review gate. Create a workspace, dispatch an implementation job attached to it (task text must mention exporter), and review the workspace when it finishes. If the review verdict is FIX, relay the findings to the implementation worker as a correction, let it address them, and run a fresh review. Repeat as many rounds as it takes — never land while the latest verdict is FIX. Only on a SHIP verdict: commit the workspace and close it merged into main. Report how many review rounds it took and what each round found.",
+  "git_fixture": true,
+  "review_scripts": ["review.fix1.jsonl", "review.fix2.jsonl", "review.ship.jsonl"],
+  "timeout_s": 900,
+  "jobs": [
+    {"name": "exporter", "match": "exporter", "turns": ["exporter.1.jsonl", "exporter.2.jsonl", "exporter.3.jsonl"]}
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "exporter", "want": "closed"},
+    {"kind": "file_contains", "path": "repo/exporter.txt", "regex": "checksum-C7"},
+    {"kind": "file_contains", "path": "repo/exporter.txt", "regex": "retry-R9"},
+    {"kind": "event", "job": "exporter", "type": "resume", "regex": "C-7|checksum"},
+    {"kind": "event", "job": "exporter", "type": "resume", "regex": "R-9|retry"},
+    {"kind": "min_jobs", "n": 4},
+    {"kind": "max_fumbles", "n": 2},
+    {"kind": "no_git_after_close"}
+  ]
+}

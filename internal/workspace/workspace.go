@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -474,6 +475,16 @@ func (s *Store) ReviewSnapshot(m *Meta) (*ReviewSnapshot, error) {
 	sum := sha256.Sum256([]byte(diff))
 	return &ReviewSnapshot{CheckpointRef: ref, CheckpointOID: oid, Diff: diff,
 		DiffSHA256: hex.EncodeToString(sum[:])}, nil
+}
+
+// CommitsAhead counts commits on the workspace branch that are not reachable
+// from its base — the "is anything committed yet" fact for status rollups.
+func (s *Store) CommitsAhead(m *Meta) (int, error) {
+	out, err := gitOutput(m.Tree, "rev-list", "--count", m.BaseOID+"..HEAD")
+	if err != nil {
+		return 0, err
+	}
+	return strconv.Atoi(strings.TrimSpace(out))
 }
 
 // Dirty reports whether the workspace differs from its base.

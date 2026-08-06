@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-telemetry"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"scaffolding the telemetry exporter"}]}}
+#sleep 800
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":150,"output_tokens":70},"session_id":"fake-telemetry","result":"The telemetry SDK is not available in the sandbox and the installer needs host access.\n\nstate: blocked\nblocked: {\"kind\":\"provision\",\"command\":\"false\",\"detail\":\"install telemetry-sdk via the vendor installer (note: this installer exits nonzero in this environment)\"}"}

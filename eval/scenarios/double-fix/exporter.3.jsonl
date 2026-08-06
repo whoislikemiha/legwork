@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"fake-exporter"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"adding retry with backoff per review finding R-9"}]}}
+#write exporter.txt exporter-core v1: batching and flush loop implemented; checksum-C7 validation added on every batch; retry-R9 exponential backoff on failed flushes
+#sleep 600
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":260,"output_tokens":95},"session_id":"fake-exporter","result":"Addressed finding R-9: failed flushes now retry with exponential backoff (see retry-R9 marker in exporter.txt).\n\nstate: done"}

@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-review-1"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":300,"output_tokens":120},"session_id":"fake-review-1","result":"The exporter core lands data unverified.\n```json\n{\"verdict\":\"FIX\",\"findings\":[{\"file\":\"exporter.txt\",\"line\":1,\"severity\":\"high\",\"detail\":\"C-7: batches are flushed without checksum validation; add checksum validation (mark it checksum-C7)\"}]}\n```\n\nstate: done"}
