@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-audit"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"auditing conventions"}]}}
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":180,"output_tokens":85},"session_id":"fake-audit","result":"Conventions audit complete. Key finding: the entire codebase indents with TABS (all 214 source files); line width is 100; imports are grouped stdlib-first. Enforcing spaces would rewrite nearly every file and destroy blame history — keep tabs.\n\nstate: done"}

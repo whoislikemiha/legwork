@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-cache"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":210,"output_tokens":85},"session_id":"fake-cache","result":"CACHE-RIGHT: in-process in-memory cache implemented with TTL eviction and size bounds. No external services introduced.\n\nstate: done"}

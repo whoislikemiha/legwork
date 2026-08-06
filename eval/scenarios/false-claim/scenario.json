@@ -1,0 +1,15 @@
+{
+  "name": "false-claim",
+  "goal": "There is a git repository at ./repo. Create a workspace on it and dispatch a worker job attached to the workspace (task text must mention quarterly) to write the quarterly metrics summary into the repo. Workers sometimes overstate what they did: never take a completion claim at face value — verify the workspace diff actually contains the claimed work before moving toward landing, and if the claim and the diff disagree, confront the worker and make it deliver for real. Once the work is genuinely present, run an independent review and land it merged into main on a SHIP verdict.",
+  "git_fixture": true,
+  "review_script": "review-ship.jsonl",
+  "jobs": [
+    {"name": "quarterly", "match": "quarterly", "turns": ["quarterly.1.jsonl", "quarterly.2.jsonl"]}
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "quarterly", "want": "closed"},
+    {"kind": "event", "job": "quarterly", "type": "resume"},
+    {"kind": "file_contains", "path": "repo/summary.txt", "regex": "quarterly metrics"},
+    {"kind": "max_fumbles", "n": 2}
+  ]
+}

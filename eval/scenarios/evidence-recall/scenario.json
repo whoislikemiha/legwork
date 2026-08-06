@@ -1,0 +1,27 @@
+{
+  "name": "evidence-recall",
+  "goal": "Configure code formatting for the acquired codebase. You know nothing about this codebase's conventions — do not guess them. Stage 1: dispatch a read-only worker job (task text must mention audit) to audit the codebase's existing conventions, and read its findings. Stage 2: dispatch a worker job (task text must mention formatter) to set up the formatter configuration. If the formatter worker asks about conventions, answer strictly from the audit job's findings. Supervise both to completion, acknowledge both, and summarize.",
+  "jobs": [
+    {"name": "audit", "match": "audit", "turns": ["audit.1.jsonl"]},
+    {
+      "name": "formatter",
+      "match": "formatter",
+      "turns": ["formatter.1.jsonl", "formatter.wrong.jsonl"],
+      "on_answer": [
+        {"regex": "tab", "script": "formatter.right.jsonl"},
+        {"regex": "space", "script": "formatter.wrong.jsonl"}
+      ]
+    }
+  ],
+  "quiz": {
+    "ask": "From memory, without running any more commands: what did the conventions audit find, and how did that shape your answer to the formatter worker?",
+    "expect_regex": ["tab"]
+  },
+  "checks": [
+    {"kind": "job_state", "job": "audit", "want": "closed"},
+    {"kind": "job_state", "job": "formatter", "want": "closed"},
+    {"kind": "event", "job": "formatter", "type": "finished", "regex": "FORMAT-RIGHT"},
+    {"kind": "no_event", "job": "formatter", "type": "finished", "regex": "FORMAT-WRONG"},
+    {"kind": "max_fumbles", "n": 1}
+  ]
+}

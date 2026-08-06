@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"fake-converter"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"building the converter"}]}}
+#write smoke.txt converter-ok
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":160,"output_tokens":70},"session_id":"fake-converter","result":"Converter implemented; wrote smoke.txt as the build artifact. I cannot run host commands from the sandbox — please verify the artifact exists by running: test -f smoke.txt\n\nstate: blocked\nblocked: {\"kind\":\"verify\",\"detail\":\"run in my working directory: test -f smoke.txt\"}"}

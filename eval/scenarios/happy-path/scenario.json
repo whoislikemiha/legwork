@@ -1,0 +1,11 @@
+{
+  "name": "happy-path",
+  "goal": "Dispatch one worker job (task text must mention README) to draft the project README. Supervise it to completion, read its result, acknowledge the job, then report in one paragraph what the worker produced.",
+  "jobs": [
+    {"name": "readme", "match": "readme", "turns": ["readme.1.jsonl"]}
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "readme", "want": "closed"},
+    {"kind": "max_fumbles", "n": 1}
+  ]
+}

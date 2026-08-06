@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-pipeline"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":230,"output_tokens":95},"session_id":"fake-pipeline","result":"EU-COMPLIANT build: ingestion pipeline integrated with vendor Beta, all processing pinned to EU region. Retry handling and schema validation included.\n\nstate: done"}

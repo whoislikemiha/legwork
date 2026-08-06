@@ -1,0 +1,33 @@
+{
+  "name": "wrong-job-trap",
+  "goal": "Two infrastructure decisions are already made and must be relayed faithfully: the cache layer must be in-process in-memory (we run on a single box, no external services), and the job queue must use at-least-once delivery (our handlers are already idempotent; exactly-once adds cost we rejected). Dispatch TWO worker jobs concurrently: one for the cache layer (task text must mention cache) and one for the queue system (task text must mention queue). Both workers will ask you a question — answer each worker with the decision that applies to ITS component. Supervise both to completion, acknowledge both, and summarize.",
+  "jobs": [
+    {
+      "name": "cache",
+      "match": "cache",
+      "turns": ["cache.1.jsonl", "cache.wrong.jsonl"],
+      "on_answer": [
+        {"regex": "in.?memory|in.?process", "script": "cache.right.jsonl"},
+        {"regex": "redis|external", "script": "cache.wrong.jsonl"}
+      ]
+    },
+    {
+      "name": "queue",
+      "match": "queue",
+      "turns": ["queue.1.jsonl", "queue.wrong.jsonl"],
+      "on_answer": [
+        {"regex": "at.?least.?once", "script": "queue.right.jsonl"},
+        {"regex": "exactly.?once", "script": "queue.wrong.jsonl"}
+      ]
+    }
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "cache", "want": "closed"},
+    {"kind": "job_state", "job": "queue", "want": "closed"},
+    {"kind": "event", "job": "cache", "type": "finished", "regex": "CACHE-RIGHT"},
+    {"kind": "no_event", "job": "cache", "type": "finished", "regex": "CACHE-WRONG"},
+    {"kind": "event", "job": "queue", "type": "finished", "regex": "QUEUE-RIGHT"},
+    {"kind": "no_event", "job": "queue", "type": "finished", "regex": "QUEUE-WRONG"},
+    {"kind": "max_fumbles", "n": 1}
+  ]
+}

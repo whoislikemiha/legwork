@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-persistence"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":200,"output_tokens":90},"session_id":"fake-persistence","result":"Implemented the storage layer on sqlite: schema migrations, a repository interface, and a smoke test. No external services required.\n\nstate: done"}

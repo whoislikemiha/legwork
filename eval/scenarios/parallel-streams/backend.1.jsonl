@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-backend"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"laying out the API"}]}}
+#sleep 2000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":160,"output_tokens":70},"session_id":"fake-backend","result":"state: needs-input\nquestion: Which auth scheme should the API use: session cookies or JWT?"}

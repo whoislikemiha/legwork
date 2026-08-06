@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-review"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"reviewing the workspace diff"}]}}
+#sleep 500
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":300,"output_tokens":70},"session_id":"fake-review","result":"Reviewed the diff: one new file, no concerns.\n```json\n{\"verdict\":\"SHIP\",\"findings\":[]}\n```\n\nstate: done"}

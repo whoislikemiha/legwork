@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-billing"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"splitting out billing"}]}}
+#sleep 3000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":150,"output_tokens":60},"session_id":"fake-billing","result":"state: needs-input\nquestion: Which payment provider should the billing service integrate: Stripe or PayPal?"}

@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-review-1"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"reviewing the workspace diff"}]}}
+#sleep 500
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":320,"output_tokens":90},"session_id":"fake-review-1","result":"The diff implements the parse-render core but the blueprint's mandatory requirement V-42 is missing entirely.\n```json\n{\"verdict\":\"FIX\",\"findings\":[{\"file\":\"validation.txt\",\"line\":1,\"severity\":\"high\",\"detail\":\"missing: requirement V-42 input validation is not implemented anywhere in the diff\"}]}\n```\n\nstate: done"}

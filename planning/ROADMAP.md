@@ -21,7 +21,10 @@ Priorities: **P0** = contract safety/correctness · **P1** = native-feel, high l
 
 ## In flight
 
-None.
+- [ ] [Orchestration eval harness (Layer 0/1)](tasks/orchestration-eval.md) — **P1.** Measure
+  orchestrator models driving the CLI against scripted fake workers: deterministic checks,
+  fumble rate, response latency, model-tier ladder. Harness + 4 scenarios landed 2026-08-01;
+  first haiku run 4/4 PASS and already surfaced two fumble findings.
 
 ## Next
 

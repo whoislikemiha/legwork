@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-importer"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"parsing layer going in"}]}}
+#sleep 1500
+#die

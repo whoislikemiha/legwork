@@ -1,0 +1,24 @@
+{
+  "name": "feature-pipeline",
+  "goal": "Deliver the export feature end to end using a plan -> implement -> review pipeline on the git repository at ./repo. Stage 1: dispatch a read-only planning job (task text must mention blueprint) and collect its blueprint. Stage 2: create a workspace on ./repo and dispatch an implementation job attached to it (task text must mention implement), passing along the blueprint's requirements. Stage 3: run an independent review of the workspace. If the review verdict is FIX, relay the findings to the implementation worker as a correction and have it address them, then run a fresh review; only land on a SHIP verdict. Landing means: commit the workspace and close it merged into main. Acknowledge finished workspace-less jobs. Report the full pipeline outcome, including what the review found and how it was resolved.",
+  "git_fixture": true,
+  "review_scripts": ["review.fix.jsonl", "review.ship.jsonl"],
+  "timeout_s": 900,
+  "jobs": [
+    {"name": "plan", "match": "blueprint", "turns": ["plan.1.jsonl"]},
+    {"name": "implement", "match": "implement", "turns": ["implement.1.jsonl", "implement.2.jsonl"]}
+  ],
+  "quiz": {
+    "ask": "From memory, without running any more commands: what did the first review verdict say, what specific gap did it identify, and what happened between that review and the final landing?",
+    "expect_regex": ["fix", "validation|V-42", "ship"]
+  },
+  "checks": [
+    {"kind": "job_state", "job": "plan", "want": "closed"},
+    {"kind": "job_state", "job": "implement", "want": "closed"},
+    {"kind": "event", "job": "implement", "type": "resume"},
+    {"kind": "file_contains", "path": "repo/feature.txt", "regex": "parse-render"},
+    {"kind": "file_contains", "path": "repo/validation.txt", "regex": "V-42"},
+    {"kind": "min_jobs", "n": 4},
+    {"kind": "max_fumbles", "n": 2}
+  ]
+}

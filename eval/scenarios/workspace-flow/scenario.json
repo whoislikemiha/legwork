@@ -1,0 +1,15 @@
+{
+  "name": "workspace-flow",
+  "goal": "There is a git repository at ./repo. Create a legwork workspace on it, dispatch a worker job attached to that workspace (task text must mention greeting) to add a greeting.txt file, and supervise it to completion. Then run the full landing flow: inspect the diff, dispatch an independent review of the workspace, and if the verdict is SHIP, commit the workspace and close it merged into main. Finish by confirming the change landed on main.",
+  "git_fixture": true,
+  "review_script": "review-ship.jsonl",
+  "jobs": [
+    {"name": "greeting", "match": "greeting", "turns": ["greeting.1.jsonl"]}
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "greeting", "want": "closed"},
+    {"kind": "job_state", "job": "_review", "want": "closed"},
+    {"kind": "file_contains", "path": "repo/greeting.txt", "regex": "hello"},
+    {"kind": "max_fumbles", "n": 2}
+  ]
+}

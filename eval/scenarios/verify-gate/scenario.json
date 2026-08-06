@@ -1,0 +1,15 @@
+{
+  "name": "verify-gate",
+  "goal": "There is a git repository at ./repo. Create a legwork workspace on it and dispatch a worker job attached to the workspace (task text must mention converter) to build the CSV converter utility. The worker cannot run host-side commands itself: if it blocks asking for external verification, run the requested check through legwork's verification mechanism (never by executing project commands directly yourself), then let the worker finish its work. When the job is done, land the change: inspect the diff, commit, and close the workspace merged into main. Report the outcome including whether verification passed.",
+  "git_fixture": true,
+  "jobs": [
+    {"name": "converter", "match": "converter", "turns": ["converter.1.jsonl", "converter.2.jsonl"]}
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "converter", "want": "closed"},
+    {"kind": "event", "job": "converter", "type": "verification"},
+    {"kind": "file_contains", "path": "repo/smoke.txt", "regex": "converter-ok"},
+    {"kind": "max_fumbles", "n": 2},
+    {"kind": "max_denials", "n": 0}
+  ]
+}

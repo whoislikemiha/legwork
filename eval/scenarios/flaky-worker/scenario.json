@@ -1,0 +1,13 @@
+{
+  "name": "flaky-worker",
+  "goal": "Dispatch one worker job (task text must mention importer) to build the CSV importer. This worker runs on unreliable infrastructure and may crash mid-turn. If it does, recover the SAME job — its session survives a crash — rather than abandoning it or starting a fresh job. See it through to done, acknowledge it, and summarize, noting any incidents.",
+  "jobs": [
+    {"name": "importer", "match": "importer", "turns": ["importer.1.jsonl", "importer.2.jsonl"]}
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "importer", "want": "closed"},
+    {"kind": "event", "job": "importer", "type": "finished", "regex": "exited without a result"},
+    {"kind": "event", "job": "importer", "type": "resume"},
+    {"kind": "max_fumbles", "n": 2}
+  ]
+}

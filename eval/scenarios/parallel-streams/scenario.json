@@ -1,0 +1,21 @@
+{
+  "name": "parallel-streams",
+  "goal": "Ship three independent streams for our web app: one worker for the frontend shell (task mentions frontend), one for the backend API (task mentions backend), one for the docs site (task mentions docs). Project decisions you already know: auth is session cookies (we standardized on that last quarter), and workers may install docs tooling if they ask. Dispatch ALL THREE jobs before supervising any of them — do not run them one at a time. Then supervise: answer questions, approve provisioning requests, and wait until all three are done. Acknowledge all three jobs, then write a one-line rollup per stream.",
+  "jobs": [
+    {"name": "frontend", "match": "frontend", "turns": ["frontend.1.jsonl"]},
+    {"name": "backend", "match": "backend", "turns": ["backend.1.jsonl", "backend.2.jsonl"]},
+    {"name": "docs", "match": "docs|documentation", "turns": ["docs.1.jsonl", "docs.2.jsonl"]}
+  ],
+  "quiz": {
+    "ask": "From memory, without running any more commands: for each of the three jobs, state its final state and whether it needed anything from you mid-run (a question or an approval) — and if so, what you answered or approved.",
+    "expect_regex": ["cookie", "provision|approv|install"]
+  },
+  "checks": [
+    {"kind": "job_state", "job": "frontend", "want": "closed"},
+    {"kind": "job_state", "job": "backend", "want": "closed"},
+    {"kind": "job_state", "job": "docs", "want": "closed"},
+    {"kind": "event", "job": "backend", "type": "answer", "regex": "cookie"},
+    {"kind": "event", "job": "docs", "type": "approve"},
+    {"kind": "max_fumbles", "n": 2}
+  ]
+}

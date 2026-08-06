@@ -1,0 +1,12 @@
+{
+  "name": "sloppy-worker",
+  "goal": "Dispatch one worker job (task text must mention changelog) to compile the release changelog. This worker is known to be sloppy about protocol. Supervise it to a genuine completion: if it ends a turn in a broken or unclear state, figure out what happened and steer it until it properly finishes. Acknowledge the job when done and summarize the changelog it produced.",
+  "jobs": [
+    {"name": "changelog", "match": "changelog", "turns": ["changelog.1.jsonl", "changelog.2.jsonl"]}
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "changelog", "want": "closed"},
+    {"kind": "event", "job": "changelog", "type": "resume"},
+    {"kind": "max_fumbles", "n": 2}
+  ]
+}

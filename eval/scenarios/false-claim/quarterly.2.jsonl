@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"fake-quarterly"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"actually writing it this time"}]}}
+#write summary.txt quarterly metrics summary: revenue up 12%, churn down to 2.1%, growth steady
+#sleep 500
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":240,"output_tokens":90},"session_id":"fake-quarterly","result":"You're right — the file had not been written. summary.txt is now actually in the workspace with revenue, churn, and growth sections.\n\nstate: done"}

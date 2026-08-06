@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-review-2"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"re-reviewing the workspace diff"}]}}
+#sleep 500
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":340,"output_tokens":70},"session_id":"fake-review-2","result":"Re-review: V-42 validation is now implemented in validation.txt alongside the parse-render core. All blueprint requirements are met.\n```json\n{\"verdict\":\"SHIP\",\"findings\":[]}\n```\n\nstate: done"}

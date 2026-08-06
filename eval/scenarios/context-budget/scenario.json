@@ -1,0 +1,29 @@
+{
+  "name": "context-budget",
+  "goal": "Kick off the service split for our monolith. Dispatch EIGHT worker jobs, one per service, with the service name in each task text: gateway, auth, billing, search, mail, metrics, uploads, admin. Decisions already made that you should relay if asked: payments go through our existing Stripe account, and search must use the database's built-in full-text search (no new infrastructure). Dispatch all eight before supervising. Supervise all of them: answer any questions, wait until every job is done, acknowledge every job, then report a one-line status per service.",
+  "jobs": [
+    {
+      "name": "billing",
+      "match": "billing",
+      "turns": ["billing.1.jsonl", "billing.2.jsonl"]
+    },
+    {
+      "name": "search",
+      "match": "search",
+      "turns": ["search.1.jsonl", "search.2.jsonl"]
+    }
+  ],
+  "timeout_s": 900,
+  "quiz": {
+    "ask": "From memory, without running any more commands: which of the eight services asked you questions mid-run, what did each ask, and what did you answer? Then state how many of the eight reached done.",
+    "expect_regex": ["stripe", "full.?text|postgres|built.?in", "eight|all 8|8"]
+  },
+  "checks": [
+    {"kind": "min_jobs", "n": 8},
+    {"kind": "job_state", "job": "billing", "want": "closed"},
+    {"kind": "job_state", "job": "search", "want": "closed"},
+    {"kind": "event", "job": "billing", "type": "answer", "regex": "stripe"},
+    {"kind": "event", "job": "search", "type": "answer", "regex": "full.?text|built.?in|postgres"},
+    {"kind": "max_fumbles", "n": 2}
+  ]
+}

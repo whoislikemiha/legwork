@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-readme"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"drafting the README"}]}}
+#sleep 1500
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":120,"output_tokens":80},"session_id":"fake-readme","result":"Drafted README.md with sections: Overview, Install, Usage, Contributing. Flagged that the license is still undecided.\n\nstate: done"}

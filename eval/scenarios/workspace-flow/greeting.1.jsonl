@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"fake-greeting"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"adding the greeting file"}]}}
+#write greeting.txt hello from the worker
+#sleep 500
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":130,"output_tokens":55},"session_id":"fake-greeting","result":"Added greeting.txt containing a hello message.\n\nstate: done"}

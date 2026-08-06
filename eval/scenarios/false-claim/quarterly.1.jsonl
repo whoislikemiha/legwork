@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-quarterly"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"writing the summary"}]}}
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":170,"output_tokens":80},"session_id":"fake-quarterly","result":"Done — wrote summary.txt with the full quarterly metrics summary: revenue, churn, and growth sections, all formatted and committed to the workspace.\n\nstate: done"}

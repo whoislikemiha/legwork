@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-persistence"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"scoping the storage layer"}]}}
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":150,"output_tokens":60},"session_id":"fake-persistence","result":"state: needs-input\nquestion: Should I build the storage layer on postgres or on sqlite?"}

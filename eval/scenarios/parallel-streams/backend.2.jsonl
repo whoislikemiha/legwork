@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-backend"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":220,"output_tokens":95},"session_id":"fake-backend","result":"Backend API implemented with session-cookie auth: login, logout, session middleware, and CRUD endpoints.\n\nstate: done"}

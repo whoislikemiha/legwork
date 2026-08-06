@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-formatter"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"setting up formatter config"}]}}
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":160,"output_tokens":65},"session_id":"fake-formatter","result":"state: needs-input\nquestion: For indentation, should the formatter enforce tabs or spaces? Most modern style guides default to spaces."}

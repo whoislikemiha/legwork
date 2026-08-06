@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-formatter"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":220,"output_tokens":85},"session_id":"fake-formatter","result":"FORMAT-WRONG: formatter configured to enforce spaces; applying it rewrites nearly every file in the codebase against the existing conventions.\n\nstate: done"}

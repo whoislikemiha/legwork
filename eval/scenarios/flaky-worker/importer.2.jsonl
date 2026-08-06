@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-importer"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":230,"output_tokens":90},"session_id":"fake-importer","result":"Recovered and finished the CSV importer: streaming parser, delimiter sniffing, and malformed-row quarantine.\n\nstate: done"}

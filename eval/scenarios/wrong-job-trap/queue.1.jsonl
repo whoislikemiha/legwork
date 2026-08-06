@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-queue"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"designing the queue"}]}}
+#sleep 2500
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":150,"output_tokens":60},"session_id":"fake-queue","result":"state: needs-input\nquestion: For the job queue, which delivery guarantee should I implement: exactly-once or at-least-once? Exactly-once is safer by default."}

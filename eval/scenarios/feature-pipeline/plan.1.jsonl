@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-plan"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"drafting the blueprint"}]}}
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":180,"output_tokens":90},"session_id":"fake-plan","result":"Blueprint for the export feature: (1) feature.txt implementing the parse-render core; (2) validation.txt implementing requirement V-42, input validation on all export paths. Both deliverables are mandatory; V-42 is a compliance requirement and must not be skipped.\n\nstate: done"}

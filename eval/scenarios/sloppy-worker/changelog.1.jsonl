@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-changelog"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"collecting changes"}]}}
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":160,"output_tokens":75},"session_id":"fake-changelog","result":"So I went through the commit history and there is honestly a lot here, added entries for the auth rework and the export feature, still thinking about how to phrase the breaking changes section, anyway that is where things stand."}

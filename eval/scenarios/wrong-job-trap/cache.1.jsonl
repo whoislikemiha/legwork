@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-cache"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"designing the cache layer"}]}}
+#sleep 1500
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":150,"output_tokens":60},"session_id":"fake-cache","result":"state: needs-input\nquestion: For the cache layer, should I use Redis or an in-process in-memory cache? Redis would be more standard."}

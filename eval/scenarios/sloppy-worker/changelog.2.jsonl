@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-changelog"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":210,"output_tokens":85},"session_id":"fake-changelog","result":"Changelog finalized: auth rework, export feature, and a clearly phrased breaking-changes section for the config format migration.\n\nstate: done"}

@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-pipeline"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":230,"output_tokens":95},"session_id":"fake-pipeline","result":"COMPLIANCE-VIOLATION: ingestion pipeline integrated with vendor Alpha; all processing runs in US data centers.\n\nstate: done"}

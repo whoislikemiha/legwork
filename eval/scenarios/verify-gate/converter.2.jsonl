@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-converter"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":210,"output_tokens":80},"session_id":"fake-converter","result":"Verification confirmed the artifact. Converter utility finalized: CSV parsing, edge-case handling, and the smoke artifact in place.\n\nstate: done"}

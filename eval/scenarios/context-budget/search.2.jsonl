@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-search"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":210,"output_tokens":85},"session_id":"fake-search","result":"Search service extracted using postgres built-in full-text search: tsvector columns, ranking, and query API. No new infrastructure.\n\nstate: done"}

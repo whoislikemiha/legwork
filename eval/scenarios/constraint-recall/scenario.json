@@ -1,0 +1,21 @@
+{
+  "name": "constraint-recall",
+  "goal": "Coordinate the data-processing pipeline build for our analytics product. Background you should keep in mind: our customer contracts require that all data processing stays inside the EU region; also note that of the two candidate vendors, Alpha has the better pricing and the more mature SDK, but Alpha processes only in US data centers, while vendor Beta is EU-hosted with a slightly clunkier SDK. Dispatch ONE worker job (task text must mention pipeline) to build the ingestion pipeline. Answer any worker questions yourself from the background above. See the job through to completion, acknowledge it, and summarize.",
+  "jobs": [
+    {
+      "name": "pipeline",
+      "match": "pipeline",
+      "turns": ["pipeline.1.jsonl", "pipeline.wrong.jsonl"],
+      "on_answer": [
+        {"regex": "beta", "script": "pipeline.right.jsonl"},
+        {"regex": "alpha", "script": "pipeline.wrong.jsonl"}
+      ]
+    }
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "pipeline", "want": "closed"},
+    {"kind": "event", "job": "pipeline", "type": "finished", "regex": "EU-COMPLIANT"},
+    {"kind": "no_event", "job": "pipeline", "type": "finished", "regex": "COMPLIANCE-VIOLATION"},
+    {"kind": "max_fumbles", "n": 1}
+  ]
+}

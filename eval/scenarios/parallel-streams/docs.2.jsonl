@@ -1,0 +1,2 @@
+{"type":"system","subtype":"init","session_id":"fake-docs"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":190,"output_tokens":85},"session_id":"fake-docs","result":"Docs site scaffolded with the generator: landing page, getting-started guide, and API reference stubs.\n\nstate: done"}

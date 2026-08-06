@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-frontend"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"scaffolding the frontend shell"}]}}
+#sleep 6000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":180,"output_tokens":110},"session_id":"fake-frontend","result":"Built the frontend shell: routing, layout, and a placeholder dashboard page. Ready for API wiring.\n\nstate: done"}

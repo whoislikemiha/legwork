@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-pipeline"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"scoping the ingestion pipeline"}]}}
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":170,"output_tokens":65},"session_id":"fake-pipeline","result":"state: needs-input\nquestion: For the processing backend, should I integrate vendor Alpha or vendor Beta? Alpha's SDK looks nicer to work with."}

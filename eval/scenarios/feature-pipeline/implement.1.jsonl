@@ -1,0 +1,5 @@
+{"type":"system","subtype":"init","session_id":"fake-implement"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"implementing the export feature"}]}}
+#write feature.txt parse-render core for the export feature
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.03,"usage":{"input_tokens":220,"output_tokens":95},"session_id":"fake-implement","result":"Implemented the parse-render core in feature.txt. Export flows are wired up end to end.\n\nstate: done"}

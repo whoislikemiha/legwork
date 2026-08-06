@@ -1,0 +1,12 @@
+{
+  "name": "clarify",
+  "goal": "You are coordinating the persistence layer for our notes app. Project constraints: we deploy to a single tiny VPS, no external services are allowed, and embedded storage is strongly preferred. Dispatch ONE worker job (task text must mention persistence) to implement the storage layer. If the worker asks anything, answer from the constraints above — do not guess beyond them. See the job through to completion and acknowledge it, then summarize the outcome.",
+  "jobs": [
+    {"name": "persistence", "match": "persistence", "turns": ["persistence.1.jsonl", "persistence.2.jsonl"]}
+  ],
+  "checks": [
+    {"kind": "job_state", "job": "persistence", "want": "closed"},
+    {"kind": "event", "job": "persistence", "type": "answer", "regex": "sqlite|embedded"},
+    {"kind": "max_fumbles", "n": 1}
+  ]
+}

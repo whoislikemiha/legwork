@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","session_id":"fake-docs"}
+{"type":"assistant","message":{"content":[{"type":"text","text":"setting up the docs site"}]}}
+#sleep 1000
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":140,"output_tokens":60},"session_id":"fake-docs","result":"The docs generator is not installed in the sandbox.\n\nstate: blocked\nblocked: {\"kind\":\"provision\",\"command\":\"true\",\"detail\":\"install the docs generator (simulated as a no-op in this sandbox)\"}"}
