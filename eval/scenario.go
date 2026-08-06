@@ -70,7 +70,7 @@ type Quiz struct {
 // invocation log, or the workdir after the orchestrator finishes.
 type Check struct {
 	// Kind: job_state | event | no_event | file_contains | max_fumbles |
-	// max_denials | min_jobs
+	// max_denials | min_jobs | no_git_after_close
 	Kind string `json:"kind"`
 	// Job is a JobSpec name (resolved to the real job ID via the shim's
 	// mapping). Used by job_state, event, no_event.

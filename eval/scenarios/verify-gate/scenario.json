@@ -10,6 +10,6 @@
     {"kind": "event", "job": "converter", "type": "verification"},
     {"kind": "file_contains", "path": "repo/smoke.txt", "regex": "converter-ok"},
     {"kind": "max_fumbles", "n": 2},
-    {"kind": "max_denials", "n": 0}
+    {"kind": "no_git_after_close"}
   ]
 }

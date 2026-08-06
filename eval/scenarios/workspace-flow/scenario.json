@@ -10,6 +10,7 @@
     {"kind": "job_state", "job": "greeting", "want": "closed"},
     {"kind": "job_state", "job": "_review", "want": "closed"},
     {"kind": "file_contains", "path": "repo/greeting.txt", "regex": "hello"},
-    {"kind": "max_fumbles", "n": 2}
+    {"kind": "max_fumbles", "n": 2},
+    {"kind": "no_git_after_close"}
   ]
 }

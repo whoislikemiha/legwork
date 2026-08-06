@@ -172,11 +172,69 @@ func runCheck(c Check, d *runDirs, byName map[string]string, jobsDispatched, den
 		if jobsDispatched < c.N {
 			return fail("%d jobs dispatched, want at least %d", jobsDispatched, c.N)
 		}
+	case "no_git_after_close":
+		// The F1 measurement, scoped to what the close receipt is supposed to
+		// obviate: reaching for git AFTER legwork close to confirm the landing.
+		// Pre-dispatch repo exploration is out of legwork's scope by design and
+		// deliberately not counted here.
+		if cmd := gitAfterClose(filepath.Join(filepath.Dir(d.shimCfg), "orchestrator-raw.json")); cmd != "" {
+			return fail("git after close: %s", firstN(cmd, 120))
+		}
 	default:
 		return fail("unknown check kind %q", c.Kind)
 	}
 	out.OK = true
 	return out
+}
+
+var gitCommand = regexp.MustCompile(`(^|[\s;&|(])git(\s|$)`)
+
+// gitAfterClose walks the orchestrator transcript's Bash tool calls in order
+// and returns the first git command attempted after a `legwork close`
+// invocation ("" when none, including when no transcript exists — the cmd:
+// driver keeps none and its script is the trusted harness self-test).
+// Denied attempts count: the reach is the signal, not whether the sandbox
+// let it through.
+func gitAfterClose(rawPath string) string {
+	raw, err := os.ReadFile(rawPath)
+	if err != nil {
+		return ""
+	}
+	var msgs []struct {
+		Type    string `json:"type"`
+		Message struct {
+			Content []struct {
+				Type  string `json:"type"`
+				Name  string `json:"name"`
+				Input struct {
+					Command string `json:"command"`
+				} `json:"input"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+	if json.Unmarshal(raw, &msgs) != nil {
+		return ""
+	}
+	seenClose := false
+	for _, m := range msgs {
+		if m.Type != "assistant" {
+			continue
+		}
+		for _, c := range m.Message.Content {
+			if c.Type != "tool_use" || c.Name != "Bash" {
+				continue
+			}
+			cmd := c.Input.Command
+			if strings.Contains(cmd, "legwork close") {
+				seenClose = true
+				continue
+			}
+			if seenClose && !strings.Contains(cmd, "legwork") && gitCommand.MatchString(cmd) {
+				return cmd
+			}
+		}
+	}
+	return ""
 }
 
 func findEvent(evs []eventLine, typ, pattern string) *eventLine {

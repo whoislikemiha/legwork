@@ -12,11 +12,24 @@ behavior to track) · **fixed-harness** (eval bug, resolved) · **observation**
 ## Product findings (legwork)
 
 ### F1 · Landing confirmation gap — orchestrators reach for git after close
-Status: **open-product, fix landed 2026-08-06 (pending re-measure)** · seen: every
-live workspace run (2026-08-01, haiku) · Fix: close now prints the landing proof
-(landed target, merge commit, receipt ID) in human output, and the guide/skill
-state explicitly that the close receipt IS the proof — no git check needed.
-Re-run verify-gate/workspace-flow to confirm the denial count drops.
+Status: **open-product, partially fixed 2026-08-06** · seen: every live
+workspace run (2026-08-01, haiku) · Fix: close prints the landing proof
+(landed target, merge commit, receipt ID; `--json` carries `close_receipt`),
+and the guide/skill state the close receipt IS the proof.
+
+Re-measure (2026-08-06, haiku, sharper `no_git_after_close` check — see F12)
+splits the finding in two:
+- **Spontaneous verification: fixed.** verify-gate, whose goal never asks for
+  confirmation, went from every-run git reaching to 8/10 runs clean across the
+  two 5-rep batches.
+- **Instructed confirmation: still git.** workspace-flow's goal says "confirm
+  the change landed on main" — and 4/5 runs answered that instruction with
+  `git log`/`git show` after close, despite holding the close receipt in the
+  `--json` output and the skill text saying not to. At the weak tier, an
+  explicit "confirm" instruction outweighs the doc note. Open question: a
+  receipt-shaped confirmation surface (e.g. pointing at `events ws --workspace`
+  or a close-receipt read verb) may be needed for the reach to have a natural
+  in-tool answer.
 
 After `close --merge-into main`, haiku consistently tries `git log` / `git status`
 to confirm the change landed (4+ denied attempts per run in verify-gate, also seen
@@ -158,7 +171,33 @@ context 60k (highest observed anywhere), and only 2/5 landing the corrected work
 F2 is not cosmetic: it breaks recovery workflows at the weak tier. This is the
 strongest argument yet for the flag-consistency pass.
 
+## Re-measure — haiku, 5 reps, 2026-08-06, post F1–F4 fixes
+
+`/tmp/eval-remeasure/20260806-091056` (~$2.60) and
+`/tmp/eval-remeasure2/20260806-092112` (~$1.20, after the F12 check change):
+
+| scenario | baseline | now | notes |
+|---|---|---|---|
+| false-claim | 2/5 | **4/5** | fumbles med 1 (was near-every-invocation); the one failure is worker-steering (file never renamed), not surface friction |
+| feature-pipeline | 2/5 | **4/5** | quiz 5/5; `resume --run` and `diff --json` used successfully in timelines |
+| verify-gate | 0/5 | **3/5** | old max_denials=0 was measuring pre-dispatch exploration; on the F1-scoped check, 8/10 runs across both batches had no post-close git |
+| workspace-flow | 5/5* | 1/5 | *not comparable: the new no_git_after_close check is stricter than the old checks; failures are all instructed-confirmation git (see F1) |
+
+The F2 fix is confirmed by texture, not just rates: recovery runs stopped
+dying of fumble compound interest (false-claim med invocations 22 vs 32–50,
+peak-ctx 54k vs 60k, and the remaining failures are judgment/steering, which
+is the model's job, not the surface's).
+
 ## Harness findings (fixed)
+
+### F12 · max_denials=0 conflated exploration with post-close distrust
+Status: **fixed-harness** — verify-gate's zero-denials check counted
+pre-dispatch `git status`/`ls` exploration (out of legwork's scope by design)
+together with the F1 post-close reach. Replaced with `no_git_after_close`:
+walks the orchestrator transcript's Bash calls in order and fails only on a
+git command after `legwork close` (denied attempts count — the reach is the
+signal). Also added to workspace-flow, whose "confirm it landed" goal makes it
+the F1 choice measurement the Open list asked for.
 
 ### F9 · claude -p JSON output is a message array in CLI ≥2.1.x
 Status: **fixed-harness** — parser accepts both shapes; raw transcript kept per run.

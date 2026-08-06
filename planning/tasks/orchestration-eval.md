@@ -82,12 +82,24 @@ wrong guesses produce detectably wrong outcomes), sequential review scripts
 Live haiku: 8/9 pass; the one stable failure is the F1 landing-confirmation gap
 (orchestrators reach for git after close instead of receipts) — product signal.
 
+## Landed (2026-08-06)
+
+First full loop iteration: the F1–F4 product fixes landed and were re-measured
+(FINDINGS.md "Re-measure" table). false-claim and feature-pipeline doubled
+(2/5 → 4/5); verify-gate 0/5 → 3/5 once the denial check was rescoped
+(`no_git_after_close`, F12 — walks the transcript for git-after-close instead
+of counting all denials). Residual F1: an *instructed* "confirm it landed"
+still routes to git 4/5 despite the receipt being in hand — spontaneous
+re-verification is gone, instructed confirmation needs a receipt-shaped surface.
+
 ## Open
 
-- Repetition + variance reporting (N runs per scenario, pass rates). Top priority:
-  nothing at n=1–3 is trustworthy (see F5).
+- ~~Repetition~~ · ~~Landing-proof measurement~~ — landed (F12 turns F1 into a
+  choice measurement inside verify-gate/workspace-flow).
 - Tier ladder runs (sonnet/opus) + report deltas vs haiku.
 - Failure-injection scenarios (mid-turn death, failing provision, double-FIX).
-- Landing-proof variant that allows git but measures receipt use (F1 as a choice).
+- Receipt-shaped confirmation surface for the residual F1 (instructed
+  confirmation) — product side, then re-measure workspace-flow.
 - Codex orchestrator driver via `cmd:`.
-- Results history/regression compare across runs (à la money_intelligence evals).
+- Results history/regression compare across runs (à la money_intelligence evals)
+  — still the blocker for hands-off auto-research iteration.
