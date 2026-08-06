@@ -55,7 +55,8 @@ type invocation struct {
 // scenario spawns must be the scripted fake agent — a real agent dispatch
 // burns money and takes the scenario off-script (first hit: ws review without
 // --agent fake spawned real claude reviewers in all 3 double-fix validation
-// runs). The rewrite is transparent to the orchestrator; the invocation log
+// runs). The rewrite happens without erroring the command (though the
+// substituted agent remains visible in job metadata); the invocation log
 // keeps the original argv plus a forced_fake marker so the drift stays
 // measurable instead of silently absorbed.
 func enforceFakeAgent(args []string) ([]string, bool) {
@@ -83,8 +84,9 @@ func enforceFakeAgent(args []string) ([]string, bool) {
 }
 
 // runShim is the process entrypoint when argv[0] is "legwork". It never
-// prompts and mirrors the real binary's stdio and exit code exactly — the
-// orchestrator must not be able to tell it is shimmed.
+// prompts and mirrors the real binary's stdio and exit code exactly, so the
+// command surface behaves unshimmed. (Full invisibility is not claimed: a
+// dispatch whose agent enforceFakeAgent rewrote shows agent=fake in status.)
 func runShim() int {
 	cfgPath := os.Getenv(ShimConfigEnv)
 	cfg, err := loadShimConfig(cfgPath)
