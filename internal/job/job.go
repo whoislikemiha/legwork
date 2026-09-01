@@ -249,6 +249,29 @@ func OpenStore() (*Store, error) {
 
 func (s *Store) JobDir(id string) string { return filepath.Join(s.Root, "jobs", id) }
 
+// EventsPath is the job's event index (the run counterpart is RunEventsPath).
+func (s *Store) EventsPath(id string) string { return filepath.Join(s.JobDir(id), "events.jsonl") }
+
+// ActiveJobIn enforces the one-active-job-per-workspace lock: it returns the
+// ID of the job currently holding the workspace (active, queued, or running a
+// live host verification), or "" when the workspace is free.
+func (s *Store) ActiveJobIn(wsID string) (string, error) {
+	metas, err := s.List()
+	if err != nil {
+		return "", err
+	}
+	for _, m := range metas {
+		if m.Workspace != wsID {
+			continue
+		}
+		s.Reconcile(m)
+		if m.State == StateActive || m.State == StateQueued || m.VerificationLeaseLive(time.Now().UTC()) {
+			return m.ID, nil
+		}
+	}
+	return "", nil
+}
+
 func (s *Store) TempDir(id string) string { return filepath.Join(s.JobDir(id), "tmp") }
 
 func (s *Store) CleanTemp(id string) error { return os.RemoveAll(s.TempDir(id)) }
@@ -579,7 +602,7 @@ func (s *Store) Reconcile(m *Meta) bool {
 		return false
 	}
 	*m = *fresh
-	if log, err := events.Open(filepath.Join(s.JobDir(m.ID), "events.jsonl")); err == nil {
+	if log, err := events.Open(s.EventsPath(m.ID)); err == nil {
 		_, _ = log.Append(events.Event{Type: events.TypeInterrupted, Actor: "runner",
 			Preview: interruptedReason})
 	}
@@ -626,7 +649,7 @@ func (s *Store) Close(m *Meta) error {
 	if err := s.SaveMeta(m); err != nil {
 		return err
 	}
-	if log, err := events.Open(filepath.Join(s.JobDir(m.ID), "events.jsonl")); err == nil {
+	if log, err := events.Open(s.EventsPath(m.ID)); err == nil {
 		_, _ = log.Append(events.Event{Type: events.TypeClosed, Actor: "orchestrator",
 			Preview: "job acknowledged", Fields: map[string]any{"previous_state": string(prev), "outcome": m.LastOutcome}})
 	}
@@ -660,7 +683,7 @@ func (m *Meta) captureOutcome(at time.Time) {
 }
 
 func (s *Store) backfillOutcome(m *Meta) *Outcome {
-	evs, err := events.Read(filepath.Join(s.JobDir(m.ID), "events.jsonl"), 0)
+	evs, err := events.Read(s.EventsPath(m.ID), 0)
 	if err != nil {
 		return nil
 	}
@@ -712,7 +735,7 @@ func terminalWorkerState(state State) bool {
 
 func (s *Store) cleanTempBestEffort(id string) {
 	if err := s.CleanTemp(id); err != nil {
-		if log, lerr := events.Open(filepath.Join(s.JobDir(id), "events.jsonl")); lerr == nil {
+		if log, lerr := events.Open(s.EventsPath(id)); lerr == nil {
 			_, _ = log.Append(events.Event{Type: events.TypeProgress, Actor: "orchestrator",
 				Preview: "temp cleanup failed: " + err.Error()})
 		}

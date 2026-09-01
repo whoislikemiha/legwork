@@ -137,7 +137,7 @@ func dashboardCmd() *cobra.Command {
 			// a terminal. Fail cleanly toward the plain alternative.
 			if !isatty.IsTerminal(os.Stdout.Fd()) && !isatty.IsCygwinTerminal(os.Stdout.Fd()) {
 				fmt.Fprintln(os.Stderr, "dashboard needs a TTY; try `legwork tail`")
-				os.Exit(2)
+				return commandError{code: 2, silent: true}
 			}
 			s, err := openStore()
 			if err != nil {

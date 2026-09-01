@@ -129,7 +129,7 @@ func (t *Timeline) Poll() ([]Item, error) {
 // --- source discovery ---
 
 func jobEventsPath(s *job.Store, id string) string {
-	return filepath.Join(s.JobDir(id), "events.jsonl")
+	return s.EventsPath(id)
 }
 
 func runEventsPath(s *job.Store, label string) string {

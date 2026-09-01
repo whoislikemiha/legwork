@@ -4,14 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
+	"github.com/whoislikemiha/legwork/internal/dispatch"
 	"github.com/whoislikemiha/legwork/internal/events"
 	"github.com/whoislikemiha/legwork/internal/job"
+	"github.com/whoislikemiha/legwork/internal/verify"
 	"github.com/whoislikemiha/legwork/internal/workspace"
 )
 
@@ -25,24 +26,6 @@ func openWorkspaces() (*job.Store, *workspace.Store, error) {
 		return nil, nil, err
 	}
 	return s, ws, nil
-}
-
-// activeJobIn enforces the one-active-job-per-workspace lock.
-func activeJobIn(s *job.Store, wsID string) (string, error) {
-	metas, err := s.List()
-	if err != nil {
-		return "", err
-	}
-	for _, m := range metas {
-		if m.Workspace != wsID {
-			continue
-		}
-		s.Reconcile(m)
-		if m.State == job.StateActive || m.State == job.StateQueued || m.VerificationLeaseLive(time.Now().UTC()) {
-			return m.ID, nil
-		}
-	}
-	return "", nil
 }
 
 func wsCmd() *cobra.Command {
@@ -140,7 +123,7 @@ func wsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if id, err := activeJobIn(s, m.ID); err != nil {
+			if id, err := s.ActiveJobIn(m.ID); err != nil {
 				return err
 			} else if id != "" {
 				return fmt.Errorf("%s has active job %s; wait for the turn or cancel it before committing", m.ID, id)
@@ -184,7 +167,7 @@ func wsCmd() *cobra.Command {
 		Short: "Dispatch a read-only independent reviewer over the workspace diff",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resolvedAppendPrompt, err := resolveAppendPrompt(reviewAppendPrompt, reviewAppendPromptFile, cmd.InOrStdin())
+			resolvedAppendPrompt, err := dispatch.ResolveAppendPrompt(reviewAppendPrompt, reviewAppendPromptFile, cmd.InOrStdin())
 			if err != nil {
 				return err
 			}
@@ -199,7 +182,7 @@ func wsCmd() *cobra.Command {
 			if m.State == "closed" {
 				return fmt.Errorf("%s is closed", m.ID)
 			}
-			if active, err := activeJobIn(s, m.ID); err != nil {
+			if active, err := s.ActiveJobIn(m.ID); err != nil {
 				return err
 			} else if active != "" {
 				return fmt.Errorf("%s already has active job %s (one active job per workspace)", m.ID, active)
@@ -208,7 +191,7 @@ func wsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			jm, err := dispatchJob(dispatchOptions{
+			jm, err := dispatch.Dispatch(dispatch.Options{
 				Agent: reviewAgent, Task: workspaceReviewPrompt(m.ID, snapshot.Diff),
 				Workspace: m.ID, RunLabel: reviewRun, Timeout: reviewTimeout,
 				Model: reviewModel, Effort: reviewEffort,
@@ -411,7 +394,7 @@ func wsStatusAdvice(out *wsStatusOut, m *workspace.Meta, attached []*job.Meta) {
 		out.Attention = append(out.Attention, "verification-failed")
 		out.NextActions = append(out.NextActions, wsStatusAction{Action: "verify",
 			Reason:  "latest verification did not pass",
-			Command: shellCommand(verifyRetry(v.Job, v.Argv))})
+			Command: shellCommand(verify.RetryArgv(v.Job, v.Argv))})
 		return
 	}
 	switch {
@@ -567,13 +550,13 @@ func appendWorkspaceCommitEvents(s *job.Store, m *workspace.Meta, message string
 		if jm.Run != "" {
 			runs[jm.Run] = true
 		}
-		log, err := events.Open(filepath.Join(s.JobDir(jm.ID), "events.jsonl"))
+		log, err := events.Open(s.EventsPath(jm.ID))
 		if err != nil {
-			historyErrs = append(historyErrs, fmt.Errorf("open job %s event %s: %w", jm.ID, filepath.Join(s.JobDir(jm.ID), "events.jsonl"), err))
+			historyErrs = append(historyErrs, fmt.Errorf("open job %s event %s: %w", jm.ID, s.EventsPath(jm.ID), err))
 			continue
 		}
 		if _, err := log.Append(ev); err != nil {
-			historyErrs = append(historyErrs, fmt.Errorf("append job %s event %s: %w", jm.ID, filepath.Join(s.JobDir(jm.ID), "events.jsonl"), err))
+			historyErrs = append(historyErrs, fmt.Errorf("append job %s event %s: %w", jm.ID, s.EventsPath(jm.ID), err))
 		}
 	}
 	for run := range runs {
@@ -680,7 +663,7 @@ func closeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if id, err := activeJobIn(s, m.ID); err != nil {
+			if id, err := s.ActiveJobIn(m.ID); err != nil {
 				return err
 			} else if id != "" {
 				return fmt.Errorf("%s has active job %s; cancel it or wait", m.ID, id)
@@ -725,8 +708,7 @@ func closeCmd() *cobra.Command {
 						if mergeErr.Kind == workspace.MergeErrorConflict {
 							exit = 1
 						}
-						closeFail(asJSON, m.ID, string(mergeErr.Kind), mergeErr.Error(), exit)
-						return nil
+						return closeFail(asJSON, m.ID, string(mergeErr.Kind), mergeErr.Error(), exit)
 					}
 					return err
 				}
@@ -849,7 +831,7 @@ type closeBlocked struct {
 	Detail string `json:"detail"`
 }
 
-func closeFail(asJSON bool, workspaceID, kind, detail string, code int) {
+func closeFail(asJSON bool, workspaceID, kind, detail string, code int) error {
 	if asJSON {
 		_ = printJSON(closeOutput{
 			OK:        false,
@@ -860,5 +842,5 @@ func closeFail(asJSON bool, workspaceID, kind, detail string, code int) {
 	} else {
 		fmt.Fprintf(os.Stderr, "legwork: %s\n", detail)
 	}
-	os.Exit(code)
+	return commandError{code: code, silent: true}
 }

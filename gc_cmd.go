@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/spf13/cobra"
 
@@ -67,7 +66,7 @@ workspaces are always left for human review.`,
 				printGCSummary(rep, dryRun)
 			}
 			if rep.Failed > 0 {
-				os.Exit(1)
+				return commandError{code: 1, silent: true}
 			}
 			return nil
 		},

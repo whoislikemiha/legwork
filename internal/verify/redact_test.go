@@ -1,4 +1,4 @@
-package main
+package verify
 
 import (
 	"strings"
@@ -34,5 +34,24 @@ func TestRedactingOutputMarksSourceAndPostRedactionTruncation(t *testing.T) {
 	_, cut = b.Result()
 	if !cut {
 		t.Fatal("source truncation was not reported")
+	}
+}
+
+func TestSecretValuesOrdersLongestFirst(t *testing.T) {
+	t.Setenv("LEGWORK_TEST_TOKEN", "short-secret")
+	t.Setenv("LEGWORK_TEST_API_KEY", "a-much-longer-secret-value")
+	values := secretValues()
+	seen := -1
+	for i, v := range values {
+		if v == "a-much-longer-secret-value" {
+			seen = i
+		}
+		if v == "short-secret" && seen == -1 {
+			t.Fatal("shorter secret ordered before longer one")
+		}
+		_ = i
+	}
+	if seen == -1 {
+		t.Fatal("secret env value not collected")
 	}
 }

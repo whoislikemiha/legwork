@@ -41,12 +41,17 @@ argument. "Nothing to report" is a fine outcome; invented feedback is worse than
 
 ## Layout
 
-- `main.go`, `workspace_cmds.go` — thin cobra wiring only; logic lives in `internal/`
+- root `*.go` files (`main.go`, `*_cmd.go`, …) — thin cobra wiring only; logic
+  lives in `internal/`
 - `internal/job` — job store, meta, liveness; `internal/events` — the versioned
   JSONL event index; `internal/adapter` — agent normalization (claude, fake) +
   status-block parser; `internal/runner` — the detached runner (`_runner`);
+  `internal/dispatch` — job dispatch/resume/provision lifecycle;
   `internal/workspace` — worktrees, checkpoints, diff, close;
+  `internal/verify` — host-side verification (leases, redaction, receipts);
+  `internal/transcript` — retained-transcript replay for `result --turn`;
   `internal/rules` — injected worker rules; `internal/notify` — notifier;
+  `internal/skill` — skill install; `internal/artifact` — run artifacts;
   `internal/guide` — embedded orchestrator guide; `internal/fakeagent` — scripted
   test agent behind `_fake-agent`
 - `test/` — e2e contract suite: builds the real binary, drives it like an
