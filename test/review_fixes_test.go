@@ -256,9 +256,14 @@ func TestEffortRejectsBadLevel(t *testing.T) {
 // stays claude-specific and is rejected for codex rather than silently dropped.
 func TestCodexPassthroughs(t *testing.T) {
 	e := newEnv(t)
-	if out, err := e.legworkErr("run", "--agent", "codex", "--effort", "max", "x"); err != nil {
+	// Only flag validation is under test: hide any installed codex so the
+	// accepted job fails fast instead of starting a real agent turn.
+	raw, err := e.cmdEnv([]string{"PATH=" + t.TempDir()}, "run", "--agent", "codex", "--effort", "max", "x").CombinedOutput()
+	out := string(raw)
+	if err != nil {
 		t.Fatalf("codex rejected --effort:\n%s", out)
 	}
+	e.waitSettled(t, jobIDIn(t, out))
 	if out, err := e.legworkErr("run", "--agent", "codex", "--fallback-model", "sonnet", "x"); err == nil {
 		t.Fatalf("codex accepted --fallback-model:\n%s", out)
 	}

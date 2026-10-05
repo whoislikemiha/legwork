@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io"
 	"os"
 
 	"github.com/spf13/cobra"
@@ -23,10 +24,15 @@ func fakeAgentCmd() *cobra.Command {
 
 func runnerCmd() *cobra.Command {
 	var jobID string
+	var startGate bool
 	c := &cobra.Command{
 		Use:    "_runner",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if startGate {
+				// runner.Spawn closes our stdin once it has saved meta.
+				_, _ = io.Copy(io.Discard, os.Stdin)
+			}
 			s, err := openStore()
 			if err != nil {
 				return err
@@ -35,6 +41,7 @@ func runnerCmd() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&jobID, "job", "", "job id")
+	c.Flags().BoolVar(&startGate, "start-gate", false, "wait for stdin EOF before starting")
 	_ = c.MarkFlagRequired("job")
 	return c
 }

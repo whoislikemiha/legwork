@@ -526,12 +526,28 @@ func (s *Store) saveMetaAt(m *Meta, updated time.Time) error {
 	if err != nil {
 		return err
 	}
-	path := filepath.Join(s.JobDir(m.ID), "meta.json")
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	// A unique temp file per write: with a shared "meta.json.tmp", two
+	// concurrent writers could truncate each other's file before rename
+	// (readers then see empty JSON) or rename it away (ENOENT for the other).
+	dir := s.JobDir(m.ID)
+	f, err := os.CreateTemp(dir, "meta.json.*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmp := f.Name()
+	_, werr := f.Write(data)
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr != nil {
+		_ = os.Remove(tmp)
+		return werr
+	}
+	if err := os.Rename(tmp, filepath.Join(dir, "meta.json")); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	return nil
 }
 
 func (s *Store) LoadMeta(id string) (*Meta, error) {

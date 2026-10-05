@@ -62,10 +62,22 @@ func Spawn(store *job.Store, m *job.Meta) error {
 	}
 	defer logf.Close()
 
-	cmd := exec.Command(self, "_runner", "--job", m.ID)
+	// Start gate: the runner blocks reading stdin until EOF before it loads
+	// meta. We close the write end only after recording the PID below, so
+	// that save can never interleave with (or clobber) the runner's own meta
+	// writes — a fast turn could otherwise finish before Spawn's save lands.
+	// If this process dies first, the kernel closes the pipe and the runner
+	// proceeds.
+	gate, openGate, err := os.Pipe()
+	if err != nil {
+		return err
+	}
+	defer openGate.Close()
+
+	cmd := exec.Command(self, "_runner", "--job", m.ID, "--start-gate")
 	cmd.Stdout = logf
 	cmd.Stderr = logf
-	cmd.Stdin = nil
+	cmd.Stdin = gate
 	cfg, err := notify.Load()
 	if err != nil {
 		return err
@@ -77,13 +89,17 @@ func Spawn(store *job.Store, m *job.Meta) error {
 	cmd.Env = notify.ScrubEnvironment(os.Environ(), scrubNames)
 	// New session: survives the CLI exiting and the ssh connection dropping.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
-	if err := cmd.Start(); err != nil {
+	err = cmd.Start()
+	gate.Close() // the child holds its own copy
+	if err != nil {
 		return err
 	}
 	m.RunnerPID = cmd.Process.Pid
 	m.State = job.StateActive
-	if err := store.SaveMeta(m); err != nil {
-		return err
+	saveErr := store.SaveMeta(m)
+	openGate.Close()
+	if saveErr != nil {
+		return saveErr
 	}
 	return cmd.Process.Release()
 }
