@@ -114,6 +114,28 @@ func (e *env) waitState(t *testing.T, id string, want string) map[string]any {
 	return nil
 }
 
+// waitSettled waits until a job leaves queued/active and its closing event is
+// written, whatever the terminal state. Use it for fire-and-forget jobs so the
+// detached runner is not still writing while t.TempDir is removed.
+func (e *env) waitSettled(t *testing.T, id string) string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		var m map[string]any
+		out := e.legwork(t, "status", id, "--json")
+		if err := json.Unmarshal([]byte(out), &m); err != nil {
+			t.Fatalf("bad status json: %v\n%s", err, out)
+		}
+		if s, _ := m["state"].(string); s != "queued" && s != "active" {
+			e.waitTurnClosed(t, id, deadline)
+			return s
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timeout waiting for %s to settle", id)
+	return ""
+}
+
 // waitTurnClosed waits for the closing event (finished/interrupted) of the
 // job's latest terminal turn. The runner persists terminal meta first and
 // only then appends post-turn events and workspace rollups (checkpoint,

@@ -618,8 +618,22 @@ func TestGCAutoGated(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
 		t.Fatalf("run took %v with auto-gc due; the fork must not block", elapsed)
 	}
-	// Let the detached auto-gc child finish before the tempdir is cleaned up.
+	// Let the detached auto-gc child and the runner finish before the
+	// tempdir is cleaned up.
 	waitFor(t, filepath.Join(e.state, ".gc-last"))
+	e.waitSettled(t, jobIDIn(t, string(out)))
+}
+
+// jobIDIn returns the job id a `run` printed, ignoring other output lines.
+func jobIDIn(t *testing.T, out string) string {
+	t.Helper()
+	for _, f := range strings.Fields(out) {
+		if strings.HasPrefix(f, "job-") {
+			return f
+		}
+	}
+	t.Fatalf("no job id in run output:\n%s", out)
+	return ""
 }
 
 // --- small helpers ---
