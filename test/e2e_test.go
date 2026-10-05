@@ -111,6 +111,25 @@ func (e *env) waitState(t *testing.T, id string, want string) map[string]any {
 	return nil
 }
 
+// waitEvent polls the job's event log until it contains want and returns the
+// log. Terminal meta is saved before the runner appends post-turn events
+// (usage, checkpoint, review receipt, finished), so a "done" state alone does
+// not mean those events are on disk yet.
+func (e *env) waitEvent(t *testing.T, id string, want string) string {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	var out string
+	for time.Now().Before(deadline) {
+		out = e.legwork(t, "events", id, "--json")
+		if strings.Contains(out, want) {
+			return out
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timeout waiting for %s event %q:\n%s", id, want, out)
+	return ""
+}
+
 const resultDone = `{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":10,"output_tokens":5},"session_id":"s1","result":"finished\n\nstate: done"}`
 
 // The runner is detached: the CLI returns immediately while the agent is

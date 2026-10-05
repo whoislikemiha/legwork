@@ -305,10 +305,10 @@ func (e *engine) worktreesAndRefs(wss []*workspace.Meta) {
 	// also drop a foreign prunable worktree, so we enumerate and remove each
 	// legwork-owned stale registration by path — the blast-radius rule stays
 	// airtight.
-	wsRoot := filepath.Join(e.js.Root, "workspaces") + string(os.PathSeparator)
+	wsRoots := workspaceRoots(e.js.Root)
 	for repo := range repos {
 		repo := repo
-		for _, wt := range e.stalePrunableWorktrees(repo, wsRoot) {
+		for _, wt := range e.stalePrunableWorktrees(repo, wsRoots) {
 			wt := wt
 			e.do(Action{Kind: KindWorktreePrune, Target: wt, Note: "stale legwork worktree registration"},
 				func() error { _, err := gitOut(repo, "worktree", "remove", "--force", wt); return err })
@@ -381,7 +381,7 @@ func (e *engine) orphanTrees(knownWS map[string]bool) {
 // directory no longer exists on disk (exactly `git worktree prune`'s criterion,
 // e.g. after pass 2 removed a half-created ws dir). Scoping by path guarantees
 // a foreign prunable worktree is never touched.
-func (e *engine) stalePrunableWorktrees(repo, wsRoot string) []string {
+func (e *engine) stalePrunableWorktrees(repo string, wsRoots []string) []string {
 	out, err := gitOut(repo, "worktree", "list", "--porcelain")
 	if err != nil {
 		return nil
@@ -392,7 +392,7 @@ func (e *engine) stalePrunableWorktrees(repo, wsRoot string) []string {
 		if path == line {
 			continue // not a "worktree <path>" line
 		}
-		if !strings.HasPrefix(path, wsRoot) {
+		if !underAny(path, wsRoots) {
 			continue // foreign worktree: never touch
 		}
 		if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -400,6 +400,29 @@ func (e *engine) stalePrunableWorktrees(repo, wsRoot string) []string {
 		}
 	}
 	return stale
+}
+
+// workspaceRoots returns <root>/workspaces/ as configured and, when it differs,
+// with symlinks resolved. git reports worktree paths fully resolved (macOS
+// /var -> /private/var, a symlinked state dir), so a prefix check against the
+// configured path alone would treat legwork's own worktrees as foreign.
+func workspaceRoots(root string) []string {
+	dir := filepath.Join(root, "workspaces")
+	sep := string(os.PathSeparator)
+	roots := []string{dir + sep}
+	if real, err := filepath.EvalSymlinks(dir); err == nil && real+sep != roots[0] {
+		roots = append(roots, real+sep)
+	}
+	return roots
+}
+
+func underAny(path string, roots []string) bool {
+	for _, r := range roots {
+		if strings.HasPrefix(path, r) {
+			return true
+		}
+	}
+	return false
 }
 
 // --- pass 7: orphan branches (report-only) ---

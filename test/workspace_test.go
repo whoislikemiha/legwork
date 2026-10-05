@@ -580,8 +580,8 @@ func TestWorkspaceReviewReceiptFailureKeepsTerminalJob(t *testing.T) {
 	if requireString(t, jm, "result") == "" || requireString(t, jm, "state") != "done" {
 		t.Fatalf("receipt failure lost terminal review metadata: %+v", jm)
 	}
-	events := e.legwork(t, "events", id, "--json")
-	if !strings.Contains(events, "review receipt persistence failed") || !strings.Contains(events, "finished") {
+	events := e.waitEvent(t, id, `"type": "finished"`)
+	if !strings.Contains(events, "review receipt persistence failed") {
 		t.Fatalf("receipt failure did not remain observable and terminal:\n%s", events)
 	}
 }

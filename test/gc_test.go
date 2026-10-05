@@ -465,6 +465,7 @@ func TestGCBlastRadius(t *testing.T) {
 	gitIn(t, repo, "update-ref", "refs/other/y", "HEAD")
 	outsideTree := filepath.Join(t.TempDir(), "other-wt")
 	gitIn(t, repo, "worktree", "add", "-q", outsideTree, "feature/x")
+	outsideTree = realPath(t, outsideTree) // git lists worktrees by resolved path
 
 	// A real workspace so the sweeps have something legit to consider.
 	ws := e.wsNew(t, repo)
@@ -510,6 +511,9 @@ func TestGCWorktreePruneScoped(t *testing.T) {
 	// A foreign worktree whose dir we delete: prunable, but NOT legwork's.
 	foreign := filepath.Join(t.TempDir(), "foreign-wt")
 	gitIn(t, repo, "worktree", "add", "-q", foreign, "-b", "feature/z")
+	// git lists worktrees by resolved path (macOS: /var -> /private/var), so
+	// compare against resolved paths or the assertions below go vacuous.
+	staleTree, foreign, liveTree := realPath(t, staleTree), realPath(t, foreign), realPath(t, ws["tree"].(string))
 	if err := os.RemoveAll(foreign); err != nil {
 		t.Fatal(err)
 	}
@@ -517,14 +521,14 @@ func TestGCWorktreePruneScoped(t *testing.T) {
 	e.gcJSON(t, gcConfig(t, "orphan_grace = \"1s\"\n"))
 
 	list, _ := gitInErr(repo, "worktree", "list", "--porcelain")
-	if strings.Contains(list, staleTree) {
+	if strings.Contains(list, staleTree+"\n") {
 		t.Fatalf("stale legwork worktree registration not pruned:\n%s", list)
 	}
-	if !strings.Contains(list, foreign) {
+	if !strings.Contains(list, foreign+"\n") {
 		t.Fatalf("foreign prunable worktree was wrongly deregistered:\n%s", list)
 	}
 	// The surviving workspace's registration is intact.
-	if !strings.Contains(list, ws["tree"].(string)) {
+	if !strings.Contains(list, liveTree+"\n") {
 		t.Fatalf("live workspace worktree deregistered:\n%s", list)
 	}
 }
@@ -691,4 +695,14 @@ func waitFor(t *testing.T, path string) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
+}
+
+// realPath resolves symlinks in an existing path.
+func realPath(t *testing.T, p string) string {
+	t.Helper()
+	r, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }
