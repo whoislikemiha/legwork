@@ -100,6 +100,9 @@ func (e *env) waitState(t *testing.T, id string, want string) map[string]any {
 			t.Fatalf("bad status json: %v\n%s", err, out)
 		}
 		if m["state"] == want {
+			if want != "queued" && want != "active" {
+				e.waitTurnClosed(t, id, deadline)
+			}
 			return m
 		}
 		if s := m["state"].(string); s != "queued" && s != "active" && s != want {
@@ -111,23 +114,45 @@ func (e *env) waitState(t *testing.T, id string, want string) map[string]any {
 	return nil
 }
 
-// waitEvent polls the job's event log until it contains want and returns the
-// log. Terminal meta is saved before the runner appends post-turn events
-// (usage, checkpoint, review receipt, finished), so a "done" state alone does
-// not mean those events are on disk yet.
-func (e *env) waitEvent(t *testing.T, id string, want string) string {
+// waitTurnClosed waits for the closing event (finished/interrupted) of the
+// job's latest terminal turn. The runner persists terminal meta first and
+// only then appends post-turn events and workspace rollups (checkpoint,
+// review receipt, finished), so a terminal state alone does not mean the
+// turn's side effects are visible yet. The closing event is matched to this
+// turn by timestamp: it is appended after last_outcome.at.
+func (e *env) waitTurnClosed(t *testing.T, id string, deadline time.Time) {
 	t.Helper()
-	deadline := time.Now().Add(10 * time.Second)
-	var out string
-	for time.Now().Before(deadline) {
-		out = e.legwork(t, "events", id, "--json")
-		if strings.Contains(out, want) {
-			return out
-		}
-		time.Sleep(50 * time.Millisecond)
+	var meta struct {
+		LastOutcome *struct {
+			At time.Time `json:"at"`
+		} `json:"last_outcome"`
 	}
-	t.Fatalf("timeout waiting for %s event %q:\n%s", id, want, out)
-	return ""
+	data, err := os.ReadFile(filepath.Join(e.state, "jobs", id, "meta.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(data, &meta); err != nil || meta.LastOutcome == nil {
+		t.Fatalf("job %s terminal meta has no last_outcome (%v):\n%s", id, err, data)
+	}
+	for {
+		raw, _ := os.ReadFile(filepath.Join(e.state, "jobs", id, "events.jsonl"))
+		for _, line := range strings.Split(string(raw), "\n") {
+			var ev struct {
+				Type string    `json:"type"`
+				TS   time.Time `json:"ts"`
+			}
+			if json.Unmarshal([]byte(line), &ev) != nil {
+				continue
+			}
+			if (ev.Type == "finished" || ev.Type == "interrupted") && !ev.TS.Before(meta.LastOutcome.At) {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("job %s: no closing event after terminal meta at %s:\n%s", id, meta.LastOutcome.At, raw)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
 }
 
 const resultDone = `{"type":"result","subtype":"success","is_error":false,"num_turns":1,"total_cost_usd":0.02,"usage":{"input_tokens":10,"output_tokens":5},"session_id":"s1","result":"finished\n\nstate: done"}`
